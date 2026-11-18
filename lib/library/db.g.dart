@@ -1402,12 +1402,407 @@ class LoudnessCompanion extends UpdateCompanion<LoudnessData> {
   }
 }
 
+class $AccountRowsTable extends AccountRows
+    with TableInfo<$AccountRowsTable, AccountRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AccountRowsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _baseMeta = const VerificationMeta('base');
+  @override
+  late final GeneratedColumn<String> base = GeneratedColumn<String>(
+    'base',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userMeta = const VerificationMeta('user');
+  @override
+  late final GeneratedColumn<String> user = GeneratedColumn<String>(
+    'user',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, type, name, base, user, position];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'accounts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AccountRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('base')) {
+      context.handle(
+        _baseMeta,
+        base.isAcceptableOrUnknown(data['base']!, _baseMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_baseMeta);
+    }
+    if (data.containsKey('user')) {
+      context.handle(
+        _userMeta,
+        user.isAcceptableOrUnknown(data['user']!, _userMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AccountRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AccountRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      base: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}base'],
+      )!,
+      user: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+    );
+  }
+
+  @override
+  $AccountRowsTable createAlias(String alias) {
+    return $AccountRowsTable(attachedDatabase, alias);
+  }
+}
+
+class AccountRow extends DataClass implements Insertable<AccountRow> {
+  final String id;
+  final String type;
+  final String name;
+  final String base;
+  final String user;
+  final int position;
+  const AccountRow({
+    required this.id,
+    required this.type,
+    required this.name,
+    required this.base,
+    required this.user,
+    required this.position,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['type'] = Variable<String>(type);
+    map['name'] = Variable<String>(name);
+    map['base'] = Variable<String>(base);
+    map['user'] = Variable<String>(user);
+    map['position'] = Variable<int>(position);
+    return map;
+  }
+
+  AccountRowsCompanion toCompanion(bool nullToAbsent) {
+    return AccountRowsCompanion(
+      id: Value(id),
+      type: Value(type),
+      name: Value(name),
+      base: Value(base),
+      user: Value(user),
+      position: Value(position),
+    );
+  }
+
+  factory AccountRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AccountRow(
+      id: serializer.fromJson<String>(json['id']),
+      type: serializer.fromJson<String>(json['type']),
+      name: serializer.fromJson<String>(json['name']),
+      base: serializer.fromJson<String>(json['base']),
+      user: serializer.fromJson<String>(json['user']),
+      position: serializer.fromJson<int>(json['position']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'type': serializer.toJson<String>(type),
+      'name': serializer.toJson<String>(name),
+      'base': serializer.toJson<String>(base),
+      'user': serializer.toJson<String>(user),
+      'position': serializer.toJson<int>(position),
+    };
+  }
+
+  AccountRow copyWith({
+    String? id,
+    String? type,
+    String? name,
+    String? base,
+    String? user,
+    int? position,
+  }) => AccountRow(
+    id: id ?? this.id,
+    type: type ?? this.type,
+    name: name ?? this.name,
+    base: base ?? this.base,
+    user: user ?? this.user,
+    position: position ?? this.position,
+  );
+  AccountRow copyWithCompanion(AccountRowsCompanion data) {
+    return AccountRow(
+      id: data.id.present ? data.id.value : this.id,
+      type: data.type.present ? data.type.value : this.type,
+      name: data.name.present ? data.name.value : this.name,
+      base: data.base.present ? data.base.value : this.base,
+      user: data.user.present ? data.user.value : this.user,
+      position: data.position.present ? data.position.value : this.position,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AccountRow(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('name: $name, ')
+          ..write('base: $base, ')
+          ..write('user: $user, ')
+          ..write('position: $position')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, type, name, base, user, position);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AccountRow &&
+          other.id == this.id &&
+          other.type == this.type &&
+          other.name == this.name &&
+          other.base == this.base &&
+          other.user == this.user &&
+          other.position == this.position);
+}
+
+class AccountRowsCompanion extends UpdateCompanion<AccountRow> {
+  final Value<String> id;
+  final Value<String> type;
+  final Value<String> name;
+  final Value<String> base;
+  final Value<String> user;
+  final Value<int> position;
+  final Value<int> rowid;
+  const AccountRowsCompanion({
+    this.id = const Value.absent(),
+    this.type = const Value.absent(),
+    this.name = const Value.absent(),
+    this.base = const Value.absent(),
+    this.user = const Value.absent(),
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AccountRowsCompanion.insert({
+    required String id,
+    required String type,
+    required String name,
+    required String base,
+    required String user,
+    required int position,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       type = Value(type),
+       name = Value(name),
+       base = Value(base),
+       user = Value(user),
+       position = Value(position);
+  static Insertable<AccountRow> custom({
+    Expression<String>? id,
+    Expression<String>? type,
+    Expression<String>? name,
+    Expression<String>? base,
+    Expression<String>? user,
+    Expression<int>? position,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (type != null) 'type': type,
+      if (name != null) 'name': name,
+      if (base != null) 'base': base,
+      if (user != null) 'user': user,
+      if (position != null) 'position': position,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AccountRowsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? type,
+    Value<String>? name,
+    Value<String>? base,
+    Value<String>? user,
+    Value<int>? position,
+    Value<int>? rowid,
+  }) {
+    return AccountRowsCompanion(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      name: name ?? this.name,
+      base: base ?? this.base,
+      user: user ?? this.user,
+      position: position ?? this.position,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (base.present) {
+      map['base'] = Variable<String>(base.value);
+    }
+    if (user.present) {
+      map['user'] = Variable<String>(user.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AccountRowsCompanion(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('name: $name, ')
+          ..write('base: $base, ')
+          ..write('user: $user, ')
+          ..write('position: $position, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LibraryDb extends GeneratedDatabase {
   _$LibraryDb(QueryExecutor e) : super(e);
   $LibraryDbManager get managers => $LibraryDbManager(this);
   late final $TracksTable tracks = $TracksTable(this);
   late final $PlayCountsTable playCounts = $PlayCountsTable(this);
   late final $LoudnessTable loudness = $LoudnessTable(this);
+  late final $AccountRowsTable accountRows = $AccountRowsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1416,6 +1811,7 @@ abstract class _$LibraryDb extends GeneratedDatabase {
     tracks,
     playCounts,
     loudness,
+    accountRows,
   ];
 }
 
@@ -2155,6 +2551,231 @@ typedef $$LoudnessTableProcessedTableManager =
       LoudnessData,
       PrefetchHooks Function()
     >;
+typedef $$AccountRowsTableCreateCompanionBuilder =
+    AccountRowsCompanion Function({
+      required String id,
+      required String type,
+      required String name,
+      required String base,
+      required String user,
+      required int position,
+      Value<int> rowid,
+    });
+typedef $$AccountRowsTableUpdateCompanionBuilder =
+    AccountRowsCompanion Function({
+      Value<String> id,
+      Value<String> type,
+      Value<String> name,
+      Value<String> base,
+      Value<String> user,
+      Value<int> position,
+      Value<int> rowid,
+    });
+
+class $$AccountRowsTableFilterComposer
+    extends Composer<_$LibraryDb, $AccountRowsTable> {
+  $$AccountRowsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get base => $composableBuilder(
+    column: $table.base,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get user => $composableBuilder(
+    column: $table.user,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AccountRowsTableOrderingComposer
+    extends Composer<_$LibraryDb, $AccountRowsTable> {
+  $$AccountRowsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get base => $composableBuilder(
+    column: $table.base,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get user => $composableBuilder(
+    column: $table.user,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AccountRowsTableAnnotationComposer
+    extends Composer<_$LibraryDb, $AccountRowsTable> {
+  $$AccountRowsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get base =>
+      $composableBuilder(column: $table.base, builder: (column) => column);
+
+  GeneratedColumn<String> get user =>
+      $composableBuilder(column: $table.user, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+}
+
+class $$AccountRowsTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDb,
+          $AccountRowsTable,
+          AccountRow,
+          $$AccountRowsTableFilterComposer,
+          $$AccountRowsTableOrderingComposer,
+          $$AccountRowsTableAnnotationComposer,
+          $$AccountRowsTableCreateCompanionBuilder,
+          $$AccountRowsTableUpdateCompanionBuilder,
+          (
+            AccountRow,
+            BaseReferences<_$LibraryDb, $AccountRowsTable, AccountRow>,
+          ),
+          AccountRow,
+          PrefetchHooks Function()
+        > {
+  $$AccountRowsTableTableManager(_$LibraryDb db, $AccountRowsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AccountRowsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AccountRowsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AccountRowsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> base = const Value.absent(),
+                Value<String> user = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AccountRowsCompanion(
+                id: id,
+                type: type,
+                name: name,
+                base: base,
+                user: user,
+                position: position,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String type,
+                required String name,
+                required String base,
+                required String user,
+                required int position,
+                Value<int> rowid = const Value.absent(),
+              }) => AccountRowsCompanion.insert(
+                id: id,
+                type: type,
+                name: name,
+                base: base,
+                user: user,
+                position: position,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$AccountRowsTable, AccountRow>(table),
+                  BaseReferences<_$LibraryDb, $AccountRowsTable, AccountRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AccountRowsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDb,
+      $AccountRowsTable,
+      AccountRow,
+      $$AccountRowsTableFilterComposer,
+      $$AccountRowsTableOrderingComposer,
+      $$AccountRowsTableAnnotationComposer,
+      $$AccountRowsTableCreateCompanionBuilder,
+      $$AccountRowsTableUpdateCompanionBuilder,
+      (AccountRow, BaseReferences<_$LibraryDb, $AccountRowsTable, AccountRow>),
+      AccountRow,
+      PrefetchHooks Function()
+    >;
 
 class $LibraryDbManager {
   final _$LibraryDb _db;
@@ -2165,4 +2786,6 @@ class $LibraryDbManager {
       $$PlayCountsTableTableManager(_db, _db.playCounts);
   $$LoudnessTableTableManager get loudness =>
       $$LoudnessTableTableManager(_db, _db.loudness);
+  $$AccountRowsTableTableManager get accountRows =>
+      $$AccountRowsTableTableManager(_db, _db.accountRows);
 }

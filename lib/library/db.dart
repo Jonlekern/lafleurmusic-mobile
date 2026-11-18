@@ -42,28 +42,33 @@ class Loudness extends Table {
   Set<Column> get primaryKey => {path};
 }
 
-@DriftDatabase(tables: [Tracks, PlayCounts, Loudness])
+/// Comptes serveur. Ni mot de passe ni en-têtes ici : ils vivent dans le stockage sécurisé.
+@DataClassName('AccountRow')
+class AccountRows extends Table {
+  @override
+  String get tableName => 'accounts';
+
+  TextColumn get id => text()();
+  TextColumn get type => text()(); // AccountType.name
+  TextColumn get name => text()();
+  TextColumn get base => text()();
+  TextColumn get user => text()();
+  IntColumn get position => integer()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [Tracks, PlayCounts, Loudness, AccountRows])
 class LibraryDb extends _$LibraryDb {
   LibraryDb(super.e);
 
+  // Base neuve du téléphone : pas de migration depuis le Mac.
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 1;
 
   @override
-  MigrationStrategy get migration => MigrationStrategy(
-    onUpgrade: (m, from, to) async {
-      if (from < 2) {
-        await m.addColumn(tracks, tracks.genre); // plan 2 : genres
-        // le scan saute les fichiers inchangés : date à zéro pour qu'il relise les genres
-        await customStatement('UPDATE tracks SET mtime = 0');
-      }
-      if (from < 3) {
-        // plan 5 : Top 100 et Volume égal
-        await m.createTable(playCounts);
-        await m.createTable(loudness);
-      }
-    },
-  );
+  MigrationStrategy get migration =>
+      MigrationStrategy(onCreate: (m) => m.createAll());
 
   Track _fromRow(TrackRow r) => Track(
     id: r.id,
