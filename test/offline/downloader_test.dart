@@ -836,6 +836,20 @@ void main() {
     expect(part.existsSync(), isTrue);
   });
 
+  test('an iCloud placeholder of that name is taken: ours gets (2)', () async {
+    final ph = File('${root.path}/Art/Alb/.01 Song 1.mp3.icloud')
+      ..createSync(recursive: true);
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    expect(
+      (await db.offlineOf('subsonic://acc/1'))!.filePath,
+      'Art/Alb/01 Song 1 (2).mp3',
+    );
+    expect(ph.existsSync(), isTrue);
+  });
+
   test('two tracks with the same name get (2)', () async {
     final d = make();
     await add(_t('1'));
@@ -1197,6 +1211,19 @@ void main() {
         );
       },
     );
+
+    test('moving: an iCloud placeholder at the target is not reused', () async {
+      final d = await withDone(['1']);
+      final to = Directory('${tmp.path}/sd');
+      File('${to.path}/Art/Alb/.01 Song 1.mp3.icloud')
+        ..createSync(recursive: true);
+      final r = await d.moveRoot(from: device.root, to: to);
+      expect(r.ok, isTrue);
+      expect(
+        (await db.offlineOf('subsonic://acc/1'))!.filePath,
+        'Art/Alb/01 Song 1 (2).mp3',
+      );
+    });
 
     test('a done row whose file is gone is failed with no path', () async {
       final d = await withDone(['1', '2']);

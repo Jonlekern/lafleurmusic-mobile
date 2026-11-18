@@ -528,7 +528,7 @@ class Downloader extends ChangeNotifier {
       ),
       (c) =>
           _reserved.contains(c.toLowerCase()) ||
-          File(p.join(root.path, c)).existsSync() ||
+          fileOrPlaceholderExists(p.join(root.path, c)) ||
           File(partialPath(p.join(root.path, c))).existsSync(),
     );
     _reserved.add(rel.toLowerCase());
@@ -772,7 +772,7 @@ class Downloader extends ChangeNotifier {
           r.filePath!,
           (c) =>
               taken.contains(c.toLowerCase()) ||
-              File(p.join(to.path, c)).existsSync(),
+              fileOrPlaceholderExists(p.join(to.path, c)),
         );
         final dst = _inside(to, rel);
         if (dst == null) continue;
