@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'app_scope.dart';
+import 'demo/demo_app.dart';
 import 'l10n/strings.dart';
 import 'library/covers.dart';
 import 'library/db.dart';
@@ -25,6 +26,11 @@ import 'ui/phone/phone_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // --dart-define=LAFLEUR_DEMO=true : bibliothèque inventée des maquettes, sans serveur ni son (debug seulement)
+  if (kDebugMode && const bool.fromEnvironment('LAFLEUR_DEMO')) {
+    runApp(await demoApp());
+    return;
+  }
   MpvAudioKit.ensureInitialized();
   // LAFLEURMUSIC_SUPPORT_DIR : dossier de bibliothèque à part, pour essayer une copie sans toucher à la vraie
   final override = Platform.environment['LAFLEURMUSIC_SUPPORT_DIR'];
