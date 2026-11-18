@@ -5,7 +5,6 @@
 //
 // Avec --dart-define=HOLD_SECONDS=90, le dernier essai laisse la musique tourner en boucle : le temps de
 // verrouiller l'écran et de regarder la pochette et les boutons (étape 3 de la tâche).
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -42,19 +41,27 @@ void main() {
   // et fermer mpv pendant que la sortie audio bouge a déjà fait planter le Mac.
   final mpv = Player(configuration: const PlayerConfiguration(autoPlay: true));
   final bytes = base64Decode(aFlacBase64);
-  late final String localPath;
+  late final String dir;
   late final HttpServer server;
-  late final String url;
+  late final String base;
   final asked = <String?>[];
 
+  /// Une copie de a.flac sous un nom à elle (écrites au début) : chaque essai a son propre
+  /// morceau, pour qu'une position venue du morceau d'avant ne puisse pas compter.
+  String localCopy(String name) => '$dir/$name.flac';
+
+  /// Même idée sur le serveur, qui sert a.flac à n'importe quel chemin.
+  String urlOf(String name) => '$base/$name.flac';
+
   setUpAll(() async {
-    final dir = await getApplicationDocumentsDirectory();
-    localPath = '${dir.path}/a.flac';
-    await File(localPath).writeAsBytes(bytes, flush: true);
+    dir = (await getApplicationDocumentsDirectory()).path;
+    for (final name in ['a', 'c', 'd']) {
+      await File(localCopy(name)).writeAsBytes(bytes, flush: true);
+    }
 
     // Un petit serveur à la Navidrome : il ne sert le morceau qu'avec le bon en-tête.
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    url = 'http://127.0.0.1:${server.port}/a.flac';
+    base = 'http://127.0.0.1:${server.port}';
     server.listen((req) async {
       final value = req.headers.value(header);
       asked.add(value);
@@ -80,51 +87,41 @@ void main() {
     );
   });
 
-  /// Ouvre [media] et exige, en 5 s **en tout**, que ce morceau-là dépasse 1 s de lecture.
-  /// Le signal « prêt » de mpv ne suffit pas seul : on veut aussi voir la position repartir
-  /// de zéro (nouveau fichier, pas la position restée du morceau d'avant) puis passer 1 s,
-  /// et le bon morceau en cours dans la liste de mpv.
+  /// Ouvre [media] et exige, en 5 s **en tout**, que **ce** morceau dépasse 1 s de lecture :
+  /// on attend le « prêt » de mpv pour cette ouverture-ci, puis une position > 1 s
+  /// relevée pendant que le morceau en cours de mpv est bien [media] (nom unique par essai).
   Future<void> playsPastOneSecond(WidgetTester tester, Media media) async {
+    bool isCurrent() {
+      final list = mpv.state.playlist;
+      return list.index >= 0 &&
+          list.index < list.items.length &&
+          list.items[list.index].uri == media.uri;
+    }
+
     await tester.runAsync(() async {
-      var armed = false;
-      final restarted = Completer<void>();
-      final pastOne = Completer<void>();
-      final sub = mpv.stream.position.listen((d) {
-        // valeur rejouée à l'abonnement : celle du morceau d'avant
-        if (!armed) return;
-        if (d < const Duration(milliseconds: 500)) {
-          if (!restarted.isCompleted) restarted.complete();
-        } else if (restarted.isCompleted &&
-            d > const Duration(seconds: 1) &&
-            !pastOne.isCompleted) {
-          pastOne.complete();
-        }
-      });
-      try {
-        await Future<void>.delayed(Duration.zero);
-        armed = true;
-        final ready = mpv.stream.seekCompleted.first;
-        await () async {
-          await mpv.open(media);
-          await ready;
-          await pastOne.future;
-        }().timeout(const Duration(seconds: 5));
-      } finally {
-        await sub.cancel();
-      }
+      final ready = mpv.stream.seekCompleted.first;
+      await () async {
+        await mpv.open(media);
+        await ready;
+        await mpv.stream.position.firstWhere(
+          (d) => d > const Duration(seconds: 1) && isCurrent(),
+        );
+      }().timeout(const Duration(seconds: 5));
     });
-    final list = mpv.state.playlist;
-    expect(list.items[list.index].uri, media.uri);
+    expect(isCurrent(), isTrue);
     expect(mpv.state.playing, isTrue);
   }
 
   testWidgets('(a) un fichier du dossier de l’appli joue', (tester) async {
-    await playsPastOneSecond(tester, Media(localPath));
+    await playsPastOneSecond(tester, Media(localCopy('a')));
   });
 
   testWidgets('(b) un flux http joue avec l’en-tête demandé', (tester) async {
     asked.clear();
-    await playsPastOneSecond(tester, Media(url, httpHeaders: {header: 'ok'}));
+    await playsPastOneSecond(
+      tester,
+      Media(urlOf('b'), httpHeaders: {header: 'ok'}),
+    );
     expect(asked, isNotEmpty);
     expect(asked, everyElement('ok'));
   });
@@ -138,14 +135,14 @@ void main() {
       final end = mpv.stream.endFile.firstWhere(
         (e) => e.reason != MpvEndFileReason.stop,
       );
-      await mpv.open(Media(url));
+      await mpv.open(Media(urlOf('c')));
       ended = await end.timeout(const Duration(seconds: 10));
     });
     expect(asked, isNotEmpty);
     expect(asked, everyElement(isNull)); // le serveur a bien répondu 403
     expect(ended.reason, MpvEndFileReason.error);
     // l'appli tient : le même lecteur rejoue juste après
-    await playsPastOneSecond(tester, Media(localPath));
+    await playsPastOneSecond(tester, Media(localCopy('c')));
   });
 
   testWidgets('(d) session multimédia publiée, (e) fréquence de sortie', (
@@ -153,8 +150,8 @@ void main() {
   ) async {
     await mpv.setLoop(Loop.file);
     // même si une vérification échoue, la boucle ne doit pas rester pour la suite
-    addTearDown(() => mpv.setLoop(Loop.off));
-    await playsPastOneSecond(tester, Media(localPath));
+    addTearDown(() => tester.runAsync(() => mpv.setLoop(Loop.off)));
+    await playsPastOneSecond(tester, Media(localCopy('d')));
     expect(mpv.state.mediaSession, isNotNull);
 
     // la publication vers le système suit le chargement du fichier : on la guette un instant
