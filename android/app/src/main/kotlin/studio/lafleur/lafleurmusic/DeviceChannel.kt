@@ -103,15 +103,14 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
             result.error("not_local", null, null)
             return true
         }
-        // Android 11+ refuse l'écriture de fichiers dans bien des dossiers (Download, racine SD…).
-        val probe = File(dir, ".lafleur_probe")
+        // Android 11+ refuse l'écriture de fichiers dans bien des dossiers (Download, racine SD…),
+        // et dans Music tout fichier qui n'est pas de l'audio : l'essai est un .mp3, nom unique.
         val writable = try {
-            probe.createNewFile() && probe.delete()
+            File.createTempFile("lafleur-probe", ".mp3", dir).delete()
         } catch (e: Exception) {
             false
         }
         if (!writable) {
-            probe.delete()
             result.error("not_writable", null, null)
             return true
         }

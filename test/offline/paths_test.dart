@@ -123,4 +123,24 @@ void main() {
       expect(uniquePath('A/T', {'A/T'}.contains), 'A/T (2)');
     });
   });
+
+  group('partial downloads', () {
+    test('keep the audio extension (Android only lets audio into Music)', () {
+      expect(partialPath('A/B/01 T.mp3'), 'A/B/01 T.lafleur-part.mp3');
+      expect(partialPath('/x/A.b/T.flac'), '/x/A.b/T.lafleur-part.flac');
+      expect(partialPath('A/T'), 'A/T.lafleur-part');
+    });
+    test('ours are recognized, new and old names', () {
+      expect(isPartialName('A/B/01 T.lafleur-part.mp3'), isTrue);
+      expect(isPartialName('01 T.LAFLEUR-PART.FLAC'), isTrue);
+      expect(isPartialName('A/T.lafleur-part'), isTrue);
+      expect(isPartialName('A/B/01 T.mp3.lafleur.part'), isTrue);
+    });
+    test('the others are not', () {
+      expect(isPartialName('A/B/01 T.mp3'), isFalse);
+      expect(isPartialName('Other/movie.mp4.part'), isFalse);
+      expect(isPartialName('A/lafleur-part.mp3'), isFalse);
+      expect(isPartialName('A/x.lafleur-part.y.mp3'), isFalse);
+    });
+  });
 }

@@ -60,3 +60,27 @@ String uniquePath(String rel, bool Function(String) exists) {
     if (!exists(c)) return c;
   }
 }
+
+/// Marque de nos fichiers en cours, avant l'extension : `NN Titre.lafleur-part.mp3`.
+/// Android 11+ ne laisse créer dans Music que des fichiers à extension audio.
+const _partMark = '.lafleur-part';
+
+/// Ancien suffixe (`NN Titre.mp3.lafleur.part`), refusé par Android : encore effacé.
+const _legacyPartSuffix = '.lafleur.part';
+
+final _partName = RegExp(r'\.lafleur-part(\.[^./\\]*)?$', caseSensitive: false);
+
+/// Le fichier en cours de [path] (chemin du fichier final).
+String partialPath(String path) {
+  final slash = path.lastIndexOf('/');
+  final dot = path.lastIndexOf('.');
+  if (dot <= slash + 1) return '$path$_partMark';
+  return '${path.substring(0, dot)}$_partMark${path.substring(dot)}';
+}
+
+/// Vrai pour nos fichiers en cours (nouveau ou ancien nom), jamais pour les `.part` des autres.
+bool isPartialName(String path) =>
+    _partName.hasMatch(path) || path.toLowerCase().endsWith(_legacyPartSuffix);
+
+/// L'ancien nom du fichier en cours de [path], à effacer aussi.
+String legacyPartialPath(String path) => '$path$_legacyPartSuffix';

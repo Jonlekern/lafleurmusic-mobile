@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../offline/paths.dart';
 import '../tags/tag_reader.dart';
 import 'db.dart';
 import 'models.dart';
@@ -48,7 +49,7 @@ class Scanner {
 
   static bool isMusic(String path) {
     final name = p.basename(path);
-    if (name.startsWith('.')) return false;
+    if (name.startsWith('.') || isPartialName(name)) return false;
     final ext = p.extension(name).toLowerCase().replaceFirst('.', '');
     return musicExtensions.contains(ext);
   }

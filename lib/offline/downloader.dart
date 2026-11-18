@@ -35,9 +35,6 @@ class KeepResult {
   final int count, bytes, neededBytes;
 }
 
-/// Suffixe de nos fichiers en cours : on n'efface jamais les `.part` des autres.
-const _partSuffix = '.lafleur.part';
-
 /// Le serveur refuse CE morceau (introuvable, vide, format inconnu) : seul cas compté
 /// comme un échec. Tout le reste (réseau, 5xx, 401/403, page de proxy, disque…) arrête
 /// la file sans rien compter.
@@ -306,7 +303,7 @@ class Downloader extends ChangeNotifier {
     final rel = _chooseName(root, t, ext);
     final file = File(p.join(root.path, rel));
     _target = file.path;
-    final part = File('${file.path}$_partSuffix');
+    final part = File(partialPath(file.path));
     await part.parent.create(recursive: true);
     final sink = part.openWrite();
     var got = 0;
@@ -412,7 +409,7 @@ class Downloader extends ChangeNotifier {
       (c) =>
           _reserved.contains(c.toLowerCase()) ||
           File(p.join(root.path, c)).existsSync() ||
-          File('${p.join(root.path, c)}$_partSuffix').existsSync(),
+          File(partialPath(p.join(root.path, c))).existsSync(),
     );
     _reserved.add(rel.toLowerCase());
     return rel;
@@ -486,7 +483,7 @@ class Downloader extends ChangeNotifier {
             recursive: true,
             followLinks: false,
           )) {
-            if (e is File && e.path.endsWith(_partSuffix)) await _drop(e);
+            if (e is File && isPartialName(e.path)) await _drop(e);
           }
         }
       }
@@ -517,7 +514,8 @@ class Downloader extends ChangeNotifier {
     for (final rel in rels) {
       final file = _inside(root, rel);
       if (file == null) continue; // hors de la racine : on n'y touche pas
-      await _drop(File('${file.path}$_partSuffix'));
+      await _drop(File(partialPath(file.path)));
+      await _drop(File(legacyPartialPath(file.path)));
       await _drop(file);
       _pruneEmpty(root, file.parent);
     }

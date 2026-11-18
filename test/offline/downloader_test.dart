@@ -251,8 +251,8 @@ void main() {
       4,
     ]);
     expect(
-      File('${root.path}/${row.filePath}.lafleur.part').existsSync(),
-      isFalse,
+      Directory('${root.path}/Art/Alb').listSync().map((e) => e.path),
+      ['${root.path}/Art/Alb/01 Song 1.mp3'],
     );
     expect(device.announced, ['${root.path}/Art/Alb/01 Song 1.mp3']);
     expect(device.ensureCalls, 1);
@@ -568,9 +568,11 @@ void main() {
   });
 
   test('resumeAtLaunch wipes .part files and resumes queued rows', () async {
-    final stale = File('${root.path}/Art/Alb/01 Song 1.mp3.lafleur.part')
+    final stale = File('${root.path}/Art/Alb/01 Song 1.lafleur-part.mp3')
       ..createSync(recursive: true)
       ..writeAsStringSync('xx');
+    final legacy = File('${root.path}/Art/Alb/02 Old.mp3.lafleur.part')
+      ..createSync(recursive: true);
     final foreign = File('${root.path}/Other/movie.mp4.part')
       ..createSync(recursive: true);
     await add(_t('1'));
@@ -578,6 +580,7 @@ void main() {
     final d = make();
     await d.resumeAtLaunch();
     expect(stale.existsSync(), isFalse);
+    expect(legacy.existsSync(), isFalse);
     expect(foreign.existsSync(), isTrue, reason: 'only our own .part files');
     await d.whenIdle();
     expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
@@ -653,6 +656,18 @@ void main() {
     expect(await db.offlineBytes(), 12);
   });
 
+  test('a partial file of that name is not taken over', () async {
+    final part = File('${root.path}/Art/Alb/01 Song 1.lafleur-part.mp3')
+      ..createSync(recursive: true);
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    final row = (await db.offlineOf('subsonic://acc/1'))!;
+    expect(row.filePath, 'Art/Alb/01 Song 1 (2).mp3');
+    expect(part.existsSync(), isTrue);
+  });
+
   test('two tracks with the same name get (2)', () async {
     final d = make();
     await add(_t('1'));
@@ -724,7 +739,7 @@ void main() {
   );
 
   test('chosen folder unreachable: no .part sweep, no move', () async {
-    final part = File('${root.path}/x.mp3.lafleur.part')
+    final part = File('${root.path}/x.lafleur-part.mp3')
       ..createSync(recursive: true);
     device.reachable = false;
     final d = make();

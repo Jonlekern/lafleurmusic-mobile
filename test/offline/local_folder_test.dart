@@ -94,7 +94,8 @@ void main() {
     'a kept copy is not duplicated, a partial download is ignored',
     () async {
       final kept = put('A/B/01 x.mp3');
-      put('A/B/02 y.mp3.lafleur.part');
+      put('A/B/02 y.lafleur-part.mp3');
+      put('A/B/03 z.mp3.lafleur.part');
       await db.upsertTrack(
         Track(
           path: 'subsonic://acc/1',

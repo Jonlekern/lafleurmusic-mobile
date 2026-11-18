@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/main.dart';
+import 'package:lafleurmusic/offline/paths.dart' show isPartialName;
 import 'package:path/path.dart' as p;
 
 /// Test-only secure storage: another keychain service on iOS, another preferences file on Android.
@@ -118,7 +119,7 @@ Future<LafleurApp> mountGuarded(Future<LafleurApp> Function() mount) async {
     } finally {
       for (final rel in _filesUnder(root)) {
         if (before.contains(rel)) continue;
-        if (made.contains(rel) || rel.endsWith('.lafleur.part')) {
+        if (made.contains(rel) || isPartialName(rel)) {
           File(p.join(root.path, rel)).deleteSync();
         }
       }

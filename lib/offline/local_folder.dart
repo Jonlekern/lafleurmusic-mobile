@@ -94,7 +94,7 @@ class LocalFolder {
     }
 
     for (final f in await Scanner.listMusic(root)) {
-      if (f.path.endsWith('.lafleur.part') || ours.contains(f.path)) continue;
+      if (ours.contains(f.path)) continue;
       final key = await device.keyFor(f.path);
       seen.add(key);
       try {
