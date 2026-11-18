@@ -526,6 +526,14 @@ class LibraryDb extends _$LibraryDb {
     tracks,
   )..where((t) => t.folderId.equals(folderId))).get()).map(_fromRow).toList();
 
+  /// Tracks of files (not server tracks), whatever folder they live in.
+  Future<List<Track>> localTracks() async => (await (select(
+    tracks,
+  )..where((t) => t.accountId.equals('local'))).get()).map(_fromRow).toList();
+
+  /// Every offline row (to tell our own copies from files placed by hand).
+  Future<List<OfflineRow>> offlineRows() => select(offline).get();
+
   Future<void> markMissing(int folderId, bool missing) =>
       (update(tracks)..where((t) => t.folderId.equals(folderId))).write(
         TracksCompanion(missing: Value(missing)),

@@ -54,7 +54,7 @@ class Scanner {
   }
 
   /// Liste récursive qui saute les sous-dossiers illisibles au lieu de tout arrêter.
-  static Future<List<File>> _list(Directory dir) async {
+  static Future<List<File>> listMusic(Directory dir) async {
     final out = <File>[];
     final pending = [dir];
     while (pending.isNotEmpty) {
@@ -77,7 +77,7 @@ class Scanner {
   Stream<ScanProgress> scan(MusicFolder folder) async* {
     final dir = Directory(folder.path);
     final known = {for (final t in await db.folderTracks(folder.id)) t.path: t};
-    final files = await dir.exists() ? await _list(dir) : <File>[];
+    final files = await dir.exists() ? await listMusic(dir) : <File>[];
     // Dossier absent, ou vide alors qu'on y connaissait des morceaux (NAS démonté, point de montage resté vide) :
     // on garde tout, grisé, plutôt que d'effacer la bibliothèque.
     if (files.isEmpty && (known.isNotEmpty || !await dir.exists())) {
@@ -104,7 +104,7 @@ class Scanner {
           } on Object {
             tags = null; // fichier illisible pour TagLib : on le garde avec son nom
           }
-          batch.add(_track(folder.id, f.path, tags, mtime, st.size));
+          batch.add(build(folder.id, f.path, tags, mtime, st.size));
         }
       } on FileSystemException {
         // fichier disparu pendant le scan
@@ -122,7 +122,8 @@ class Scanner {
     yield ScanProgress(files.length, files.length);
   }
 
-  static Track _track(
+  /// Une ligne de bibliothèque à partir des tags lus (null : le nom du fichier sert de titre).
+  static Track build(
     int folderId,
     String path,
     TrackTags? t,

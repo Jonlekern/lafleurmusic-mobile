@@ -16,6 +16,7 @@ import 'library/covers.dart';
 import 'library/db.dart';
 import 'library/play_counter.dart';
 import 'offline/device.dart';
+import 'offline/local_folder.dart';
 import 'player/equalizer.dart';
 import 'player/loudness.dart';
 import 'player/media_resolver.dart';
@@ -24,6 +25,7 @@ import 'settings.dart';
 import 'sources/account_service.dart';
 import 'sources/accounts.dart';
 import 'sources/secret_store.dart';
+import 'tags/tag_reader.dart';
 import 'theme/lafleur_theme.dart';
 import 'ui/phone/phone_shell.dart';
 
@@ -89,6 +91,20 @@ Future<LafleurApp> buildLafleurApp({
     device: device, // …mais ses copies gardées restent, en morceaux locaux
   );
   await accountService.watchOffline();
+  // fichiers posés à la main dans le dossier : relus au lancement, au retour au premier plan
+  // et quand le dossier change (déplacement ou nouveau choix : refreshRoot prévient)
+  final localFolder = LocalFolder(
+    db: db,
+    device: device,
+    reader: TagLibReader(),
+  );
+  String? scannedRoot;
+  accountService.addListener(() async {
+    final path = (await device.musicRoot()).path;
+    if (path == scannedRoot) return;
+    scannedRoot = path;
+    unawaited(localFolder.rescan());
+  });
   final player = LafleurPlayer(resolver: resolver)
     // écran verrouillé : la pochette du serveur en octets, jamais une URL
     // serveur perdu : on saute aux morceaux gardés
@@ -127,6 +143,7 @@ Future<LafleurApp> buildLafleurApp({
     resolver: resolver,
     accounts: accounts,
     accountService: accountService,
+    localFolder: localFolder,
     player: player,
     equalizer: equalizer,
     artistGrid: artistGrid,
@@ -151,12 +168,14 @@ class LafleurApp extends StatefulWidget {
     required this.resolver,
     required this.accounts,
     required this.accountService,
+    required this.localFolder,
   });
   final LoudnessService loudness;
   final MediaResolver resolver;
   // le même pour le lecteur (MediaResolver) et les écrans
   final Accounts accounts;
   final AccountService accountService;
+  final LocalFolder localFolder;
   final AppSettings settings;
   final VoidCallback saveSettings;
   final ValueNotifier<bool> artistGrid;
@@ -170,7 +189,7 @@ class LafleurApp extends StatefulWidget {
   State<LafleurApp> createState() => _LafleurAppState();
 }
 
-class _LafleurAppState extends State<LafleurApp> {
+class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
   late final PlayCounter _plays = PlayCounter(
     widget.player.state,
     widget.db,
@@ -181,12 +200,22 @@ class _LafleurAppState extends State<LafleurApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(widget.localFolder.rescan());
     // au lancement : la bibliothèque des serveurs est remise à jour en arrière-plan
     unawaited(widget.accountService.syncAll());
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(widget.localFolder.rescan());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _plays.dispose();
     super.dispose();
   }
