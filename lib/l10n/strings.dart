@@ -443,13 +443,21 @@ class Strings {
     "Le dossier choisi n'est pas disponible. Branche-le ou choisis-en un autre dans ${onDevice(iphone)}.",
     "The chosen folder isn't available. Reconnect it or pick another one in ${onDevice(iphone)}.",
   );
-  String get oldFolderUnavailable => _t(
-    "L'ancien dossier n'est pas disponible",
-    "The old folder isn't available",
+  String get oldFolderMissing =>
+      _t("L'ancien dossier est introuvable", "The old folder can't be found");
+  String get oldFolderMissingExplain => _t(
+    "L'appli ne peut pas y prendre tes morceaux gardés. Ils restent là-bas. Dans ce nouveau dossier, tu pourras les retélécharger avec « Réessayer ».",
+    "The app can't take your kept songs from it. They stay there. In this new folder you can download them again with “Retry”.",
   );
-  String get oldFolderExplain => _t(
-    'Les morceaux gardés ne peuvent pas en être déplacés : ils passeront dans « À réessayer » pour ce dossier.',
-    "The kept songs can't be moved out of it: they'll go to “To retry” for this folder.",
+  String get findOldFolder =>
+      _t("Chercher l'ancien dossier", 'Find the old folder');
+  String get relinkNotFound => _t(
+    'Ce dossier ne contient pas tes morceaux gardés.',
+    "This folder doesn't contain your kept songs.",
+  );
+  String get relinked => _t(
+    'Ancien dossier retrouvé. Choisis maintenant le nouveau dossier.',
+    'Old folder found. Now pick the new folder.',
   );
   String get useThisFolder => _t('Utiliser ce dossier', 'Use this folder');
   String get folderMoveFailed => _t(

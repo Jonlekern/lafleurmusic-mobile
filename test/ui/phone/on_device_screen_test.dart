@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/demo/demo_offline.dart';
 import 'package:lafleurmusic/library/db.dart';
@@ -238,21 +240,26 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  phoneTest('Réessayer au-delà de la limite : « Pas assez de place »', TargetPlatform.iOS, (
-    tester,
-  ) async {
-    final r = await pumpOnDevice(
-      tester,
-      downloader: DemoDownloader(result: const KeepResult.tooBig(gib)),
-    );
-    await tester.tap(find.text('Réessayer'));
-    await done(tester);
-    expect(find.text('Pas assez de place : il faut encore 1 Go.'), findsOneWidget);
-    final row = (await tester.runAsync(
-      () => r.f.db.offlineOf('subsonic://demo/Ports/1'),
-    ))!;
-    expect(row.state, OfflineState.failed.name);
-  });
+  phoneTest(
+    'Réessayer au-delà de la limite : « Pas assez de place »',
+    TargetPlatform.iOS,
+    (tester) async {
+      final r = await pumpOnDevice(
+        tester,
+        downloader: DemoDownloader(result: const KeepResult.tooBig(gib)),
+      );
+      await tester.tap(find.text('Réessayer'));
+      await done(tester);
+      expect(
+        find.text('Pas assez de place : il faut encore 1 Go.'),
+        findsOneWidget,
+      );
+      final row = (await tester.runAsync(
+        () => r.f.db.offlineOf('subsonic://demo/Ports/1'),
+      ))!;
+      expect(row.state, OfflineState.failed.name);
+    },
+  );
 
   group('limite', () {
     phoneTest('la place utilisée et la limite', TargetPlatform.iOS, (
@@ -415,7 +422,7 @@ void main() {
         r.device.reachable = false;
         r.device.picked = const PickedFolder('/x/Cloud/LAFLEURMUSIC', 'b64');
         await choose(tester);
-        expect(find.text("L'ancien dossier n'est pas disponible"), findsOneWidget);
+        expect(find.text("L'ancien dossier est introuvable"), findsOneWidget);
         await tester.tap(find.text('Utiliser ce dossier'));
         await done(tester);
         expect(r.f.downloader.moves, isEmpty);
@@ -442,6 +449,101 @@ void main() {
         expect(r.device.released, 1);
       },
     );
+
+    group('chercher l\'ancien dossier', () {
+      Future<Directory> keptFolder({required bool withFile}) async {
+        final dir = Directory.systemTemp.createTempSync('lm_relink');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        if (withFile) {
+          File(p.join(dir.path, 'kept', 'other.mp3'))
+            ..createSync(recursive: true)
+            ..writeAsStringSync('x');
+        }
+        return dir;
+      }
+
+      Future<void> openRelink(WidgetTester tester, DemoDevice device) async {
+        device.reachable = false;
+        await scrollTo(tester, find.byKey(const Key('chooseFolder')));
+        await tester.tap(find.byKey(const Key('chooseFolder')));
+        await done(tester);
+        await tester.tap(find.text("Chercher l'ancien dossier"));
+        await done(tester);
+      }
+
+      phoneTest(
+        'retrouvé : adopté tel quel, rien ne bouge',
+        TargetPlatform.iOS,
+        (tester) async {
+          final dir = await keptFolder(withFile: true);
+          final r = await pumpOnDevice(tester);
+          final before = await r.f.db.offlineRows();
+          r.device.pickQueue.addAll([
+            const PickedFolder('/x/Nouveau/LAFLEURMUSIC'),
+            PickedFolder(dir.path, 'old'),
+          ]);
+          await openRelink(tester, r.device);
+          expect(r.device.picks, 2);
+          expect(r.device.released, 1); // le nouveau candidat
+          expect(r.device.committed.single.path, dir.path);
+          expect(r.f.downloader.adopted, 0);
+          expect(r.f.downloader.moves, isEmpty);
+          expect(r.f.downloader.starts, 1);
+          expect(r.services.single.refreshes, 1);
+          expect(r.folder.rescans, 1);
+          expect(await r.f.db.offlineRows(), before);
+          expect(
+            find.text(
+              'Ancien dossier retrouvé. Choisis maintenant le nouveau dossier.',
+            ),
+            findsOneWidget,
+          );
+        },
+      );
+
+      phoneTest(
+        'pas les bons morceaux : abandonné, rien ne change',
+        TargetPlatform.iOS,
+        (tester) async {
+          final dir = await keptFolder(withFile: false);
+          final r = await pumpOnDevice(tester);
+          final before = await r.f.db.offlineRows();
+          r.device.pickQueue.addAll([
+            const PickedFolder('/x/Nouveau/LAFLEURMUSIC'),
+            PickedFolder(dir.path),
+          ]);
+          await openRelink(tester, r.device);
+          expect(r.device.committed, isEmpty);
+          expect(r.device.released, 2);
+          expect(r.f.downloader.adopted, 0);
+          expect(r.services.single.refreshes, 0);
+          expect(await r.f.db.offlineRows(), before);
+          expect(
+            find.text('Ce dossier ne contient pas tes morceaux gardés.'),
+            findsOneWidget,
+          );
+        },
+      );
+
+      phoneTest(
+        'annulé dans le sélecteur : rien ne change',
+        TargetPlatform.iOS,
+        (tester) async {
+          final r = await pumpOnDevice(tester);
+          final before = await r.f.db.offlineRows();
+          r.device.pickQueue.addAll([
+            const PickedFolder('/x/Nouveau/LAFLEURMUSIC'),
+            null,
+          ]);
+          await openRelink(tester, r.device);
+          expect(r.device.committed, isEmpty);
+          expect(r.device.released, 1);
+          expect(r.f.downloader.adopted, 0);
+          expect(await r.f.db.offlineRows(), before);
+          expect(find.byType(SnackBar), findsNothing);
+        },
+      );
+    });
 
     phoneTest(
       'pendant le déplacement : « Déplacement… », bouton éteint',

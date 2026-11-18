@@ -10,13 +10,17 @@ import '../../l10n/strings.dart';
 import '../../library/db.dart' show OfflineRow;
 import '../../library/models.dart';
 import '../../offline/device.dart';
-import '../../offline/downloader.dart' show KeepResult, unknownTrackSize;
+import '../../offline/downloader.dart'
+    show Downloader, KeepResult, unknownTrackSize;
+import '../../offline/paths.dart' show fileOrPlaceholderExists;
 import '../../settings.dart';
 import '../../theme/colors.dart';
 import '../cover_image.dart';
 import '../keep_actions.dart';
 import 'home_screen.dart' show PhoneSection;
 import 'phone_shell.dart';
+
+enum _Missing { cancel, find, adopt }
 
 const _gib = 1024 * 1024 * 1024;
 const _red = Color(0xFFFF6B6B);
@@ -225,9 +229,17 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     } on Object {
       reachable = true; // moveRoot le redemandera
     }
-    if (!reachable && (!await _askAdopt(s) || !mounted)) {
-      await _release(device);
-      return;
+    if (!reachable) {
+      final choice = await _askAdopt(s);
+      if (choice == _Missing.find) {
+        await _release(device);
+        if (mounted) await _relink(app, device, downloader, messenger);
+        return;
+      }
+      if (choice != _Missing.adopt || !mounted) {
+        await _release(device);
+        return;
+      }
     }
     setState(() => _moving = true);
     KeepResult? r;
@@ -262,13 +274,14 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   }
 
   /// « Utiliser ce dossier » : les copies de l'ancien passeront dans « À réessayer ».
-  Future<bool> _askAdopt(Strings s) async {
-    final yes = await showDialog<bool>(
+  /// « Chercher l'ancien dossier » : on le retrouve au lieu d'en adopter un autre.
+  Future<_Missing> _askAdopt(Strings s) async {
+    final yes = await showDialog<_Missing>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF232323),
         title: Text(
-          s.oldFolderUnavailable,
+          s.oldFolderMissing,
           style: const TextStyle(
             color: LafleurColors.text,
             fontSize: 17,
@@ -276,19 +289,26 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           ),
         ),
         content: Text(
-          s.oldFolderExplain,
+          s.oldFolderMissingExplain,
           style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 14),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(_Missing.cancel),
             child: Text(
               s.cancel,
               style: const TextStyle(color: LafleurColors.text),
             ),
           ),
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(_Missing.find),
+            child: Text(
+              s.findOldFolder,
+              style: const TextStyle(color: LafleurColors.text),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(_Missing.adopt),
             child: Text(
               s.useThisFolder,
               style: const TextStyle(
@@ -300,7 +320,64 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
         ],
       ),
     );
-    return yes == true;
+    return yes ?? _Missing.cancel;
+  }
+
+  /// L'utilisateur désigne l'ancien dossier : s'il contient au moins une copie finie,
+  /// il redevient le dossier courant. Rien n'est déplacé, changé ni effacé.
+  Future<void> _relink(
+    AppScope app,
+    Device device,
+    Downloader downloader,
+    ScaffoldMessengerState messenger,
+  ) async {
+    final s = app.strings;
+    final PickedFolder? found;
+    try {
+      found = await device.pickFolder();
+    } on FolderNotLocalException {
+      say(messenger, s.folderNotLocal);
+      return;
+    } on FolderNotWritableException {
+      say(messenger, s.folderNotWritable);
+      return;
+    } on Object {
+      say(messenger, s.folderMoveFailed);
+      return;
+    }
+    if (found == null) return;
+    var has = false;
+    try {
+      final rows = await app.db.offlineRows();
+      has = rows.any(
+        (o) =>
+            o.state == OfflineState.done.name &&
+            o.filePath != null &&
+            fileOrPlaceholderExists(p.join(found!.path, o.filePath!)),
+      );
+    } on Object {
+      has = false;
+    }
+    if (!has || !mounted) {
+      await _release(device);
+      if (mounted) say(messenger, s.relinkNotFound);
+      return;
+    }
+    setState(() => _moving = true);
+    try {
+      await device.commitFolder(found);
+    } on Object {
+      await _release(device);
+      say(messenger, s.folderMoveFailed);
+      if (mounted) setState(() => _moving = false);
+      return;
+    }
+    downloader.start();
+    await app.accountService?.refreshRoot();
+    unawaited(app.localFolder?.rescan());
+    if (mounted) await _loadFolder();
+    say(messenger, s.relinked);
+    if (mounted) setState(() => _moving = false);
   }
 
   Future<void> _release(Device device) async {

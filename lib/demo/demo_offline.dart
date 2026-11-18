@@ -158,6 +158,9 @@ class DemoDevice implements Device {
   String root;
   int free;
   PickedFolder? picked;
+
+  /// Réponses suivantes de [pickFolder] avant de revenir à [picked].
+  final pickQueue = <PickedFolder?>[];
   Object? pickError;
   bool reachable = true;
 
@@ -184,6 +187,7 @@ class DemoDevice implements Device {
     await pickGate?.future;
     final e = pickError;
     if (e != null) throw e;
+    if (pickQueue.isNotEmpty) return pickQueue.removeAt(0);
     return picked;
   }
 
