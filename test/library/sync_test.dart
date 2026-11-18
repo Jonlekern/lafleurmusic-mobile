@@ -218,4 +218,77 @@ void main() {
     );
     expect(r.added, 2);
   });
+
+  group('kept copies of tracks that leave the server', () {
+    late Directory tmp;
+    setUp(() => tmp = Directory.systemTemp.createTempSync('sync'));
+    tearDown(() => tmp.deleteSync(recursive: true));
+
+    LibrarySync syncer() => LibrarySync(db, musicRoot: () async => tmp.path);
+
+    Future<void> keep(String id, {String state = 'done', bool file = true}) async {
+      final path = trackKey('acc1', id);
+      await db.queueOffline([path], OfflineReason.user);
+      if (state == 'done') {
+        await db.markOfflineDone(path, 'Art/Album/$id.mp3', 3);
+        if (file) {
+          File('${tmp.path}/Art/Album/$id.mp3')
+            ..createSync(recursive: true)
+            ..writeAsBytesSync([1, 2, 3]);
+        }
+      }
+    }
+
+    test('a done copy outlives its track: local track, plays follow, row gone', () async {
+      await syncer().run(FakeSource('acc1', lib3x()));
+      await keep('s3');
+      await db.addPlay(trackKey('acc1', 's3'), DateTime(2026));
+      final r = await syncer().run(FakeSource('acc1', lib3x(drop: 's3')));
+      expect(r.removed, 1);
+      expect(await db.trackByPath(trackKey('acc1', 's3')), isNull);
+      final abs = '${tmp.path}/Art/Album/s3.mp3';
+      final t = (await db.trackByPath(abs))!;
+      expect((t.accountId, t.remoteId, t.title, t.album), ('local', '', 'T', 'Album'));
+      expect(t.coverId, 'cs3'); // tags and cover fields kept
+      expect(t.size, 3);
+      expect(await db.offlineOf(trackKey('acc1', 's3')), isNull);
+      final plays = await db.select(db.playCounts).get();
+      expect([for (final p in plays) p.path], [abs]);
+      expect(File(abs).existsSync(), isTrue); // never deleted
+    });
+
+    test('queued, failed and file-less rows go with their track', () async {
+      await syncer().run(FakeSource('acc1', lib3x()));
+      await keep('s1', state: 'queued');
+      await keep('s2', state: 'queued');
+      await db.markOfflineFailed(trackKey('acc1', 's2'));
+      await keep('s4', file: false); // done, but the file was deleted by hand
+      await syncer().run(FakeSource('acc1', lib3x(drop: 's1')));
+      await syncer().run(FakeSource('acc1', lib3x(drop: 's2')));
+      await syncer().run(FakeSource('acc1', lib3x(drop: 's4')));
+      expect(await db.select(db.offline).get(), isEmpty);
+      expect(await db.select(db.tracks).get().then((l) => l.where((t) => t.accountId == 'local')), isEmpty);
+    });
+
+    test('incomplete sync deletes nothing, copies included (R3)', () async {
+      await syncer().run(FakeSource('acc1', lib3x()));
+      await keep('s3');
+      await syncer().run(FakeSource('acc1', {}));
+      expect(await db.trackByPath(trackKey('acc1', 's3')), isNotNull);
+      expect((await db.offlineOf(trackKey('acc1', 's3')))!.state, 'done');
+    });
+
+    test('removing the account: kept copies stay as local tracks', () async {
+      await syncer().run(FakeSource('acc1', lib3x()));
+      await keep('s3');
+      await keep('s5', state: 'queued');
+      await db.deleteAccountTracks('acc1', root: tmp.path);
+      expect(await db.trackByPath('${tmp.path}/Art/Album/s3.mp3'), isNotNull);
+      expect(await db.select(db.offline).get(), isEmpty);
+      expect(
+        await db.select(db.tracks).get().then((l) => l.map((t) => t.accountId).toSet()),
+        {'local'},
+      );
+    });
+  });
 }

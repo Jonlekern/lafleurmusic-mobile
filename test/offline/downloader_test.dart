@@ -197,6 +197,19 @@ void main() {
     expect(device.ensureCalls, 1);
   });
 
+  test('a queued row whose track is gone is dropped, the loop goes on', () async {
+    final d = make();
+    await add(_t('1'));
+    await add(_t('2'));
+    await db.queueOffline(['subsonic://acc/1', 'subsonic://acc/2'], OfflineReason.user);
+    await db.deletePaths(['subsonic://acc/1']); // vanished from the server
+    d.start();
+    await d.whenIdle();
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+    expect(seen, hasLength(1)); // nothing requested for the vanished one
+  });
+
   test('every request carries the account headers', () async {
     handler = (r) async =>
         r.url.path.endsWith('download') ? _ok([], code: 403) : _ok([1, 2]);

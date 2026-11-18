@@ -132,6 +132,21 @@ class QueueSync<T> {
     if (d != null) await port.remove(d);
   }
 
+  /// Le morceau en cours n'est pas jouable (serveur perdu, copie effacée) : passe au prochain jouable,
+  /// comme pour un fichier illisible. [skipped] : le morceau laissé (null s'il était jouable) ;
+  /// [stopped] : plus rien de jouable derrière, le lecteur doit se mettre en pause.
+  Future<({T? skipped, bool stopped})> skipUnplayable(
+    PlayQueue<T> q,
+    bool Function(T) ok,
+  ) async {
+    final cur = q.current;
+    if (cur == null || ok(cur)) return (skipped: null, stopped: false);
+    final i = firstPlayable(q, ok, after: true);
+    if (i == null) return (skipped: cur, stopped: true);
+    await jumpTo(q, i);
+    return (skipped: cur, stopped: false);
+  }
+
   /// mpv est passé tout seul au morceau [mpvIndex].
   Future<void> advanced(PlayQueue<T> q, int mpvIndex) async {
     if (mpvIndex == q.position) return;

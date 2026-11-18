@@ -163,4 +163,29 @@ void main() {
     await idle();
     expect(measured, ['/a']);
   });
+
+  test('morceau du serveur avec copie : mesuré (EBU R128) sur le fichier, clé = chemin du fichier', () async {
+    svc = LoudnessService(
+      db,
+      player,
+      measure: (p) async {
+        measured.add(p);
+        return -8;
+      },
+      copyOf: (p) async => p == 'subsonic://acc1/s1' ? '/root/A/s1.mp3' : null,
+    );
+    svc.enabled = true;
+    player.show(PlayerState(track: server('s1', -3)));
+    await idle();
+    expect(measured, ['/root/A/s1.mp3']);
+    expect(await db.loudnessOf('/root/A/s1.mp3', 0), -8);
+    player.show(PlayerState(track: server('s2', -6.5))); // pas de copie : flux
+    await idle();
+    expect(measured, ['/root/A/s1.mp3']);
+    expect(player.trackGain, -6.5);
+    player.show(PlayerState(track: server('s1', -3)));
+    await idle();
+    expect(player.trackGain, -10); // mesure gardée : gain de la copie, pas le ReplayGain
+    svc.dispose();
+  });
 }

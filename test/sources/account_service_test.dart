@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
@@ -174,6 +176,96 @@ void main() {
       );
       await service.remove(a.id);
       expect(forgotten, [a.id]);
+    });
+
+    test('remove keeps the done copies as local tracks, drops the other rows', () async {
+      final tmp = Directory.systemTemp.createTempSync('rm');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final k = 'subsonic://${a.id}/s1', q = 'subsonic://${a.id}/s2';
+      for (final p in [k, q]) {
+        await db.upsertTrack(Track(
+          path: p,
+          accountId: a.id,
+          remoteId: p.split('/').last,
+          title: 'T',
+          artist: 'A',
+          album: 'B',
+          durationMs: 1,
+          hasCover: false,
+          size: 1,
+        ));
+      }
+      await db.queueOffline([k, q], OfflineReason.user);
+      await db.markOfflineDone(k, 'A/B/T.mp3', 1);
+      File('${tmp.path}/A/B/T.mp3')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([1]);
+      final service = AccountService(
+        accounts,
+        db: db,
+        musicRoot: () async => tmp,
+      );
+      await service.remove(a.id);
+      expect(await db.select(db.offline).get(), isEmpty);
+      final left = await db.select(db.tracks).get();
+      expect([for (final t in left) (t.path, t.accountId)], [('${tmp.path}/A/B/T.mp3', 'local')]);
+    });
+
+    group('playableNow', () {
+      late Directory tmp;
+      late AccountService service;
+      Track tr(String path, {String acc = 'local'}) => Track(
+        path: path,
+        accountId: acc,
+        title: 'T',
+        artist: 'A',
+        album: 'B',
+        durationMs: 1,
+        hasCover: false,
+        size: 1,
+      );
+      setUp(() async {
+        tmp = Directory.systemTemp.createTempSync('play');
+        service = AccountService(
+          accounts,
+          db: db,
+          musicRoot: () async => tmp,
+          sourceOf: (id) async => GatedSource(id, albumCount: 0, answer: TestResult.unreachable),
+        );
+        await service.watchOffline();
+      });
+      tearDown(() async {
+        service.dispose();
+        tmp.deleteSync(recursive: true);
+      });
+
+      test('local file: playable while the file exists', () {
+        File('${tmp.path}/x.mp3').writeAsBytesSync([1]);
+        expect(service.playableNow(tr('${tmp.path}/x.mp3')), isTrue);
+        expect(service.playableNow(tr('${tmp.path}/nope.mp3')), isFalse);
+      });
+
+      test('server track: a done copy with its file, whatever the account says', () async {
+        final k = 'subsonic://${a.id}/s1';
+        await service.checkAll([a.id]); // unreachable → absent
+        expect(service.stateOf(a.id), AccountState.absent);
+        expect(service.playableNow(tr(k, acc: a.id)), isFalse);
+        await db.queueOffline([k], OfflineReason.user);
+        await db.markOfflineDone(k, 'A/s1.mp3', 1);
+        await pumpEventQueue();
+        expect(service.playableNow(tr(k, acc: a.id)), isFalse, reason: 'file missing');
+        File('${tmp.path}/A/s1.mp3')
+          ..createSync(recursive: true)
+          ..writeAsBytesSync([1]);
+        expect(service.playableNow(tr(k, acc: a.id)), isTrue);
+      });
+
+      test('server track without copy: playable unless the account is absent', () async {
+        final k = tr('subsonic://${a.id}/s9', acc: a.id);
+        expect(service.playableNow(k), isTrue, reason: 'not tested yet');
+        await service.checkAll([a.id]);
+        expect(service.playableNow(k), isFalse);
+      });
     });
 
     test('remove invalidates the player source', () async {

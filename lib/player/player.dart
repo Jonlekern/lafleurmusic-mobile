@@ -115,6 +115,7 @@ class LafleurPlayer implements PlayerController {
         if (q != null && p.index >= 0 && p.index != q.position) {
           await _sync.advanced(q, p.index); // mpv est passé au suivant
           _ends.mpvIndex = q.position;
+          await _skipUnplayable(); // serveur perdu : on saute au prochain gardé
           _queueChanged.add(null);
         }
         _emit();
@@ -154,6 +155,26 @@ class LafleurPlayer implements PlayerController {
 
   @override
   Stream<void> get queueChanged => _queueChanged.stream;
+
+  /// Le morceau est-il jouable maintenant (copie gardée, fichier présent, serveur joignable) ?
+  /// Sans réponse, tout l'est. Ne sert qu'au CHOIX du morceau suivant : celui qui joue finit.
+  bool Function(Track track)? playable;
+
+  /// mpv vient de passer à un morceau non jouable : même chemin qu'un fichier illisible
+  /// (signalé, puis le prochain jouable) ; plus aucun jouable : pause.
+  Future<void> _skipUnplayable() async {
+    final q = _queue, ok = playable;
+    if (q == null || ok == null) return;
+    _editing++;
+    try {
+      final r = await _sync.skipUnplayable(q, ok);
+      if (r.skipped case final t?) _skipped.add(t.path);
+      if (r.stopped) await _mpv.pause();
+    } finally {
+      _editing--;
+    }
+    _ends.mpvIndex = q.position;
+  }
 
   /// Un changement de file fait par l'appli : mpv et la file restent d'accord.
   Future<void> _edit(Future<void> Function(PlayQueue<Track> q) op) async {
@@ -404,16 +425,23 @@ class LafleurPlayer implements PlayerController {
     bool shuffle = false,
   }) async {
     final old = _queue;
-    final playable = tracks.where((t) => !t.missing).toList();
-    if (playable.isEmpty) return;
+    final candidates = tracks.where((t) => !t.missing).toList();
+    if (candidates.isEmpty) return;
     // bouton Aléatoire : départ au hasard, liste ouverte une seule fois
     final start = shuffle
-        ? _rand.nextInt(playable.length)
-        : playable.indexOf(tracks[index]).clamp(0, playable.length - 1);
-    final q = PlayQueue<Track>(playable, index: start);
+        ? _rand.nextInt(candidates.length)
+        : candidates.indexOf(tracks[index]).clamp(0, candidates.length - 1);
+    final q = PlayQueue<Track>(candidates, index: start);
     if (old != null) q.repeat = old.repeat;
     if (shuffle || (old?.shuffle ?? false)) {
       q.toggleShuffle(_rand.nextInt(1 << 30));
+    }
+    final ok = playable;
+    if (ok != null) {
+      // départ sur un morceau injouable : le premier jouable à sa suite ; aucun : on ne lance rien
+      final first = firstPlayable(q, ok);
+      if (first == null) return;
+      q.jumpTo(first);
     }
     _queue = q;
     await _stopFade();
@@ -433,6 +461,7 @@ class LafleurPlayer implements PlayerController {
     await _stopFade();
     var moved = false;
     await _edit((q) async => moved = await _sync.next(q));
+    if (moved) await _skipUnplayable();
     if (!moved) {
       // fin de la liste : on reste sur le dernier morceau, en pause (stop viderait la liste de mpv)
       await _mpv.pause();

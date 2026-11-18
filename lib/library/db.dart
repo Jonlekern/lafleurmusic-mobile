@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
+import 'package:path/path.dart' as p;
 
 import 'models.dart';
 
@@ -327,17 +330,76 @@ class LibraryDb extends _$LibraryDb {
   }
 
   /// Deletes all tracks of one account, plus those tracks' play counts and loudness rows.
-  Future<void> deleteAccountTracks(String accountId) => transaction(() async {
-    final paths =
-        await (selectOnly(tracks)
-              ..addColumns([tracks.path])
-              ..where(tracks.accountId.equals(accountId)))
-            .map((r) => r.read(tracks.path)!)
-            .get();
-    for (var i = 0; i < paths.length; i += 500) {
-      await deletePaths(paths.skip(i).take(500).toList());
-    }
-  });
+  /// [root]: the kept copies (see [dropServerTracks]) stay as local tracks.
+  Future<void> deleteAccountTracks(String accountId, {String? root}) =>
+      transaction(() async {
+        final paths =
+            await (selectOnly(tracks)
+                  ..addColumns([tracks.path])
+                  ..where(tracks.accountId.equals(accountId)))
+                .map((r) => r.read(tracks.path)!)
+                .get();
+        await dropServerTracks(paths, root: root);
+      });
+
+  /// Server tracks [paths] that are gone (removed from the server, or their account removed).
+  /// Their offline rows go; a finished copy whose file still exists under [root] is not lost:
+  /// it becomes a local track (absolute path, plays follow), the file itself is never touched.
+  /// Without [root] nothing is kept.
+  Future<void> dropServerTracks(List<String> paths, {String? root}) =>
+      transaction(() async {
+        for (var i = 0; i < paths.length; i += 500) {
+          final chunk = paths.skip(i).take(500).toList();
+          final rows = {
+            for (final o in await (select(
+              offline,
+            )..where((o) => o.trackPath.isIn(chunk))).get())
+              o.trackPath: o,
+          };
+          for (final path in chunk) {
+            final o = rows[path];
+            final rel = o?.filePath;
+            if (root == null ||
+                o == null ||
+                rel == null ||
+                o.state != OfflineState.done.name) {
+              continue;
+            }
+            final abs = p.join(root, rel);
+            final file = File(abs);
+            if (!file.existsSync()) continue;
+            final row = await (select(
+              tracks,
+            )..where((t) => t.path.equals(path))).getSingleOrNull();
+            if (row == null) continue;
+            final t = _fromRow(row);
+            await upsertTracks([
+              Track(
+                path: abs,
+                accountId: 'local',
+                remoteId: '',
+                albumArtist: t.albumArtist,
+                disc: t.disc,
+                coverId: t.coverId,
+                suffix: t.suffix,
+                replayGain: t.replayGain,
+                title: t.title,
+                artist: t.artist,
+                album: t.album,
+                genre: t.genre,
+                trackNo: t.trackNo,
+                durationMs: t.durationMs,
+                hasCover: t.hasCover,
+                mtime: file.statSync().modified.millisecondsSinceEpoch,
+                size: file.lengthSync(),
+              ),
+            ]);
+            await movePlays(path, abs);
+          }
+          await deletePaths(chunk);
+          await removeOffline(chunk);
+        }
+      });
 
   /// Raises counts to [counts] (path -> count) where higher; never lowers one.
   Future<void> raisePlayCounts(Map<String, int> counts) async {

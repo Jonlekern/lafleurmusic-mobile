@@ -15,6 +15,7 @@ import 'l10n/strings.dart';
 import 'library/covers.dart';
 import 'library/db.dart';
 import 'library/play_counter.dart';
+import 'offline/device.dart';
 import 'player/equalizer.dart';
 import 'player/loudness.dart';
 import 'player/media_resolver.dart';
@@ -62,7 +63,13 @@ Future<LafleurApp> buildLafleurApp({
   );
   // morceaux du serveur : flux et pochettes avec les en-têtes du compte (une source par compte)
   final accounts = Accounts(db, secrets);
-  final resolver = MediaResolver(accounts.source);
+  // dossier des copies gardées : un morceau qui en a une se lit depuis son fichier
+  final device = ChannelDevice(
+    settings: settings,
+    saveSettings: () => settings.save(settingsFile),
+  );
+  final keptCopy = keptFile(db, device.musicRoot);
+  final resolver = MediaResolver(accounts.source, localCopy: keptCopy);
   final covers = Covers(
     cacheDir: Directory(p.join(support.path, 'covers')),
     remote: remoteCovers(resolver, db.trackByPath),
@@ -74,9 +81,13 @@ Future<LafleurApp> buildLafleurApp({
     db: db,
     resolver: resolver,
     forgetCovers: covers.forgetAccount, // compte retiré : ses pochettes aussi
+    musicRoot: device.musicRoot, // …mais ses copies gardées restent, en morceaux locaux
   );
+  await accountService.watchOffline();
   final player = LafleurPlayer(resolver: resolver)
     // écran verrouillé : la pochette du serveur en octets, jamais une URL
+    // serveur perdu : on saute aux morceaux gardés
+    ..playable = accountService.playableNow
     ..artworkOf = (t) async => (await covers.get(t.path, 600))?.readAsBytes();
   await player.setEqualizer(settings.equalizer);
   await player.setCrossfade(
@@ -96,7 +107,7 @@ Future<LafleurApp> buildLafleurApp({
     settings.save(settingsFile);
   });
   // Volume égal : mesures gardées dans la base, allumé si on l'avait laissé allumé
-  final loudness = LoudnessService(db, player)..enabled = settings.equalVolume;
+  final loudness = LoudnessService(db, player, copyOf: keptCopy)..enabled = settings.equalVolume;
   player.gainOf =
       loudness.gainOf; // le 2e lecteur du fondu démarre au bon niveau
   return LafleurApp(

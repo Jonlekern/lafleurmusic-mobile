@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../library/db.dart';
+import '../library/models.dart';
 import '../library/sync.dart';
 import '../player/media_resolver.dart';
 import 'accounts.dart';
@@ -90,8 +93,23 @@ class AccountService extends ChangeNotifier {
     Future<MusicSource> Function(String id)? sourceOf,
     Future<SyncResult> Function(MusicSource source)? sync,
     this.forgetCovers,
-  }) : _sourceOf = sourceOf ?? resolver?.source ?? accounts.source,
-       _sync = sync ?? LibrarySync(db).run;
+    this.musicRoot,
+  }) : _db = db,
+       _sourceOf = sourceOf ?? resolver?.source ?? accounts.source,
+       _sync =
+           sync ??
+           LibrarySync(
+             db,
+             musicRoot: musicRoot == null
+                 ? null
+                 : () async => (await musicRoot()).path,
+           ).run;
+
+  final LibraryDb _db;
+
+  /// Where the kept copies live (main: [Device.musicRoot]). Without it nothing is kept
+  /// when a track leaves the server or an account is removed.
+  final Future<Directory> Function()? musicRoot;
 
   final Accounts accounts;
   final MediaResolver? resolver;
@@ -130,6 +148,44 @@ class AccountService extends ChangeNotifier {
     final r = _results[id];
     if (r == null) return null;
     return r == TestResult.ok ? AccountState.connected : AccountState.absent;
+  }
+
+  Map<String, OfflineRow> _kept = const {};
+  String? _root;
+  StreamSubscription<Map<String, OfflineRow>>? _keptSub;
+
+  /// Follows the offline rows (and the copies' folder) so [playableNow] can answer at once.
+  Future<void> watchOffline() async {
+    _root = (await musicRoot?.call())?.path;
+    await _keptSub?.cancel();
+    _keptSub = _db.watchOffline().listen((m) {
+      _kept = m;
+      notifyListeners();
+    });
+  }
+
+  /// Can this track start now? A local file: it exists. A server track: its finished copy
+  /// exists, or its account hasn't been found unreachable. The track playing is never
+  /// asked: it finishes if it is in memory; only the NEXT choice uses this.
+  bool playableNow(Track t) {
+    if (parseRemoteKey(t.path) == null) return File(t.path).existsSync();
+    final row = _kept[t.path];
+    final rel = row?.filePath;
+    final root = _root;
+    if (row != null &&
+        row.state == OfflineState.done.name &&
+        rel != null &&
+        root != null &&
+        File(p.join(root, rel)).existsSync()) {
+      return true;
+    }
+    return stateOf(t.accountId) != AccountState.absent;
+  }
+
+  @override
+  void dispose() {
+    _keptSub?.cancel();
+    super.dispose();
   }
 
   /// Every account tried so far failed to answer at all.
@@ -234,7 +290,8 @@ class AccountService extends ChangeNotifier {
     _cancel[id]?.cancelled = true;
     final running = _syncing[id];
     if (running != null) await running.catchError((Object _) {});
-    await accounts.remove(id);
+    final root = await musicRoot?.call();
+    await accounts.remove(id, root: root?.path);
     resolver?.invalidate(id);
     try {
       await forgetCovers?.call(id);

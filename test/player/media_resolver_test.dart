@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lafleurmusic/library/covers.dart';
+import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/sources/source.dart';
@@ -59,6 +61,42 @@ void main() {
         expect(m.httpHeaders, {'CF-Access-Client-Id': 'id1'});
       },
     );
+
+    test('a kept copy that exists plays from the file, no headers, no source', () async {
+      final copy = MediaResolver(
+        (id) async {
+          asked.add(id);
+          return source(id);
+        },
+        localCopy: (p) async => p == 'subsonic://acc1/s1' ? '/root/Art/Alb/01 T.mp3' : null,
+      );
+      final m = await copy.media('subsonic://acc1/s1');
+      expect(m.uri, '/root/Art/Alb/01 T.mp3');
+      expect(m.httpHeaders, isNull);
+      expect(asked, isEmpty);
+      // no copy for s2: the stream, as before
+      final s = await copy.media('subsonic://acc1/s2');
+      expect(Uri.parse(s.uri).path, '/rest/stream.view');
+      expect(s.httpHeaders, {'CF-Access-Client-Id': 'id1'});
+    });
+
+    test('keptFile: done row with its file → absolute path; file deleted by hand or not done → null', () async {
+      final tmp = Directory.systemTemp.createTempSync('kept');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final db = LibraryDb(NativeDatabase.memory());
+      addTearDown(db.close);
+      File('${tmp.path}/A/b.mp3')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([1]);
+      await db.queueOffline(['subsonic://acc1/a', 'subsonic://acc1/b', 'subsonic://acc1/c'], OfflineReason.user);
+      await db.markOfflineDone('subsonic://acc1/a', 'A/b.mp3', 1);
+      await db.markOfflineDone('subsonic://acc1/b', 'A/gone.mp3', 1);
+      final find = keptFile(db, () async => tmp);
+      expect(await find('subsonic://acc1/a'), '${tmp.path}/A/b.mp3');
+      expect(await find('subsonic://acc1/b'), isNull);
+      expect(await find('subsonic://acc1/c'), isNull);
+      expect(await find('subsonic://acc1/none'), isNull);
+    });
 
     test('local file → Media(path) without headers', () async {
       final m = await r.media('/x/a.flac');

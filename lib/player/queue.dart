@@ -241,3 +241,19 @@ class PlayQueue<T> {
     return out;
   }
 }
+
+/// Place du premier morceau jouable à partir du morceau en cours (compris), ou juste après si
+/// [after] ; la liste reprend au début en « répéter tout ». Null s'il n'y en a pas.
+int? firstPlayable<T>(
+  PlayQueue<T> q,
+  bool Function(T) ok, {
+  bool after = false,
+}) {
+  final n = q.order.length;
+  for (var k = after ? 1 : 0; k < n; k++) {
+    final i = q.position + k;
+    if (i >= n && q.repeat != Repeat.all) return null;
+    if (ok(q.order[i % n])) return i % n;
+  }
+  return null;
+}

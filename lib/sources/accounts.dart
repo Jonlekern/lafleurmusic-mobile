@@ -138,12 +138,13 @@ class Accounts {
     );
   }
 
-  /// Erases the account row, its tracks and its secrets.
-  Future<void> remove(String id) async {
+  /// Erases the account row, its tracks and its secrets. [root]: the kept copies under it stay
+  /// as local tracks (see [LibraryDb.dropServerTracks]).
+  Future<void> remove(String id, {String? root}) async {
     // row first: a leftover secret is invisible, a row without secrets is a broken account
     await _db.transaction(() async {
       await (_db.delete(_db.accountRows)..where((t) => t.id.equals(id))).go();
-      await _db.deleteAccountTracks(id);
+      await _db.deleteAccountTracks(id, root: root);
     });
     await _secrets.delete(_pwKey(id));
     await _secrets.delete(_hdrKey(id));

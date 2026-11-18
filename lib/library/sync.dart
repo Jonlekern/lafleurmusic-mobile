@@ -18,8 +18,10 @@ class SyncResult {
 
 /// Copies a server library into the local tracks table, one album at a time.
 class LibrarySync {
-  LibrarySync(this._db);
+  /// [musicRoot]: where the kept copies live; a copy of a track that left the server stays playable.
+  LibrarySync(this._db, {this.musicRoot});
   final LibraryDb _db;
+  final Future<String> Function()? musicRoot;
 
   Future<SyncResult> run(MusicSource s) async {
     var added = 0, updated = 0, removed = 0;
@@ -138,8 +140,9 @@ class LibrarySync {
           .getSingleOrNull() !=
       null;
 
-  Future<int> _removeUnseen(String acc, Set<String> seen) =>
-      _db.transaction(() async {
+  Future<int> _removeUnseen(String acc, Set<String> seen) async {
+    final root = await musicRoot?.call();
+    return _db.transaction(() async {
         final all =
             await (_db.selectOnly(_db.tracks)
                   ..addColumns([_db.tracks.path])
@@ -150,9 +153,8 @@ class LibrarySync {
           for (final p in all)
             if (!seen.contains(p)) p,
         ];
-        for (var i = 0; i < gone.length; i += 500) {
-          await _db.deletePaths(gone.skip(i).take(500).toList());
-        }
+        await _db.dropServerTracks(gone, root: root);
         return gone.length;
       });
+  }
 }

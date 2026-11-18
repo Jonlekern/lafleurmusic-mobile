@@ -177,6 +177,11 @@ class Downloader extends ChangeNotifier {
       while (!_paused && !_moving) {
         final row = await db.nextQueued();
         if (row == null) break;
+        if (await db.trackByPath(row.trackPath) == null) {
+          // le morceau a disparu (synchro, compte retiré) : plus rien à copier, ni à compter
+          await db.removeOffline([row.trackPath]);
+          continue;
+        }
         if (!_accessOk) {
           if (!await device.ensureAccess()) {
             _accessDenied = true; // refusé : rien n'est marqué en échec

@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' hide Track;
+import 'package:path/path.dart' as p;
 
+import '../library/db.dart';
 import '../library/models.dart';
 import '../sources/source.dart';
 
@@ -18,6 +21,21 @@ const _scheme = 'subsonic://';
   return (rest.substring(0, slash), rest.substring(slash + 1));
 }
 
+/// Absolute path of the finished copy of server track [trackPath], if its file is still there
+/// (deleted by hand: null, the stream is used).
+Future<String?> Function(String trackPath) keptFile(
+  LibraryDb db,
+  Future<Directory> Function() musicRoot,
+) => (trackPath) async {
+  final row = await db.offlineOf(trackPath);
+  final rel = row?.filePath;
+  if (row == null || rel == null || row.state != OfflineState.done.name) {
+    return null;
+  }
+  final file = p.join((await musicRoot()).path, rel);
+  return await File(file).exists() ? file : null;
+};
+
 /// Turns a library path into what mpv opens: the file itself, or the server
 /// stream with the account headers. Never logs the stream URL (it carries the token).
 class MediaResolver {
@@ -25,13 +43,18 @@ class MediaResolver {
     this._sourceOf, {
     DateTime Function()? clock,
     this.sourceTimeout = const Duration(seconds: 10),
+    this.localCopy,
   }) : _clock = clock ?? DateTime.now;
+
+  /// The kept copy of a server track (see [keptFile]); null: play the stream.
+  final Future<String?> Function(String trackPath)? localCopy;
 
   /// Plays local files only (no account known).
   MediaResolver.localOnly()
     : _sourceOf = ((id) async => throw StateError('No account $id')),
       _clock = DateTime.now,
-      sourceTimeout = const Duration(seconds: 10);
+      sourceTimeout = const Duration(seconds: 10),
+      localCopy = null;
 
   /// A failed account (password missing, database error…) is not asked again before this.
   static const retryAfter = Duration(minutes: 1);
@@ -78,6 +101,12 @@ class MediaResolver {
   Future<Media> media(String path) async {
     final key = parseRemoteKey(path);
     if (key == null) return Media(path);
+    try {
+      final copy = await localCopy?.call(path);
+      if (copy != null) return Media(copy); // the file itself: no network, no headers
+    } on Object {
+      // database or folder unreadable: the stream still works
+    }
     final MusicSource s;
     try {
       s = await source(key.$1).timeout(sourceTimeout);
