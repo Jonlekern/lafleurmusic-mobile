@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:lafleurmusic/library/db.dart';
@@ -42,13 +43,17 @@ class _Device implements Device {
   int released = 0;
   int free = 100 * 1024 * _mb;
   bool access = true;
+  Object? accessError;
   int ensureCalls = 0;
   final announced = <String>[];
+  void Function()? onReachable;
   @override
   Future<Directory> musicRoot() async => root;
   @override
   Future<bool> ensureAccess({bool readOthers = false}) async {
     ensureCalls++;
+    final e = accessError;
+    if (e != null) throw e;
     return access;
   }
 
@@ -62,7 +67,10 @@ class _Device implements Device {
   Future<void> announce(String path) async => announced.add(path);
   bool reachable = true;
   @override
-  Future<bool> rootReachable() async => reachable;
+  Future<bool> rootReachable() async {
+    onReachable?.call();
+    return reachable;
+  }
   @override
   Future<PickedFolder?> pickFolder() async => null;
   @override
@@ -97,14 +105,15 @@ class _IO implements TagFileIO {
 
 Track _t(
   String id, {
+  String acc = 'acc',
   int size = 4,
   String? suffix = 'mp3',
   int? no = 1,
   String album = 'Alb',
   String? cover,
 }) => Track(
-  path: 'subsonic://acc/$id',
-  accountId: 'acc',
+  path: 'subsonic://$acc/$id',
+  accountId: acc,
   remoteId: id,
   title: 'Song $id',
   artist: 'Art',
@@ -130,9 +139,20 @@ http.StreamedResponse _ok(
   headers: {'content-type': type},
 );
 
+/// [LibraryDb] whose folder-move write can be made to fail.
+class _Db extends LibraryDb {
+  _Db() : super(NativeDatabase.memory());
+  bool failMove = false;
+  @override
+  Future<void> applyOfflineMove(Map<String, String> newRel, List<String> lost) {
+    if (failMove) throw StateError('db closed');
+    return super.applyOfflineMove(newRel, lost);
+  }
+}
+
 void main() {
   late Directory tmp, root;
-  late LibraryDb db;
+  late _Db db;
   late _Device device;
   late _Reader reader;
   late _IO io;
@@ -161,7 +181,7 @@ void main() {
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('dl');
     root = Directory('${tmp.path}/LAFLEURMUSIC');
-    db = LibraryDb(NativeDatabase.memory());
+    db = _Db();
     device = _Device(root);
     reader = _Reader()
       ..result = const TrackTags(
@@ -481,7 +501,11 @@ void main() {
     await d.whenIdle();
     final row = (await db.offlineOf('subsonic://acc/1'))!;
     expect((row.state, row.failures), ('queued', 0));
-    expect(File(root.path).existsSync() && root.listSync().isNotEmpty, isFalse);
+    expect(
+      root.existsSync() &&
+          root.listSync(recursive: true).whereType<File>().isNotEmpty,
+      isFalse,
+    );
   });
 
   test('octet-stream and missing content type are accepted', () async {
@@ -493,7 +517,7 @@ void main() {
     expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
   });
 
-  test('pause then start at once does not stall', () async {
+  test('pause then resume at once does not stall', () async {
     final gate = Completer<void>();
     handler = (r) async {
       await gate.future;
@@ -507,7 +531,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
     d.pause();
-    d.start();
+    d.resume();
     gate.complete();
     await Future<void>.delayed(const Duration(milliseconds: 100));
     await d.whenIdle();
@@ -794,6 +818,188 @@ void main() {
     expect(logs.join().contains('SECRET'), isFalse);
   });
 
+  group('chosen folder unreachable', () {
+    test('keep is refused, nothing queued', () async {
+      device.reachable = false;
+      final d = make();
+      await add(_t('1'));
+      final r = await d.keep([_t('1')]);
+      expect((r.ok, r.folderUnavailable), (false, true));
+      expect(await db.offlineOf('subsonic://acc/1'), isNull);
+      expect(seen, isEmpty);
+    });
+
+    test('the loop stops before a row, nothing counted, nothing written', () async {
+      final d = make();
+      await add(_t('1'));
+      await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+      device.reachable = false;
+      d.start();
+      await d.whenIdle();
+      final row = (await db.offlineOf('subsonic://acc/1'))!;
+      expect((row.state, row.failures), ('queued', 0));
+      expect(seen, isEmpty);
+      expect(root.existsSync(), isFalse, reason: 'never the default folder');
+      device.reachable = true;
+      d.start();
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+    });
+  });
+
+  test('one row the server refuses (500): sent to the back uncounted, its '
+      'account skipped this run, other accounts download', () async {
+    handler = (r) async => r.url.queryParameters['id'] == '1'
+        ? _ok([], code: 500)
+        : _ok([1, 2, 3, 4]);
+    final d = make();
+    await add(_t('1'));
+    await add(_t('2', no: 2));
+    await add(_t('3', acc: 'other', album: 'Other'));
+    await d.keep([_t('1'), _t('2', no: 2), _t('3', acc: 'other', album: 'Other')]);
+    await d.whenIdle();
+    final one = (await db.offlineOf('subsonic://acc/1'))!;
+    expect((one.state, one.failures), ('queued', 0));
+    expect((await db.offlineOf('subsonic://other/3'))!.state, 'done');
+    expect(
+      (await db.offlineOf('subsonic://acc/2'))!.state,
+      'queued',
+      reason: 'same account: skipped for this run',
+    );
+    // next run: 1 went behind, so 2 goes first
+    d.start();
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+    expect((await db.offlineOf('subsonic://acc/1'))!.failures, 0);
+  });
+
+  test('a source that cannot be built skips its account, not the queue', () async {
+    final d = Downloader(
+      db: db,
+      resolver: MediaResolver((id) async =>
+          id == 'broken' ? throw StateError('no password') : _Source()),
+      device: device,
+      settings: () async => settings,
+      client: () => _Client((r) async {
+        seen.add(r);
+        return _ok([1, 2, 3, 4]);
+      }),
+      tags: io,
+      reader: reader,
+    );
+    await add(_t('1', acc: 'broken'));
+    await add(_t('2', album: 'B'));
+    await d.keep([_t('1', acc: 'broken'), _t('2', album: 'B')]);
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://broken/1'))!.failures, 0);
+    expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+  });
+
+  group('user pause', () {
+    test('sticks until Resume: automatic starts are ignored', () async {
+      final d = make();
+      await add(_t('1'));
+      await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+      d.pause();
+      d.start(); // app back to the foreground, server back, at home…
+      await d.whenIdle();
+      expect(seen, isEmpty);
+      expect(d.userPaused, isTrue);
+      await add(_t('2', no: 2));
+      await d.keep([_t('2', no: 2)], reason: OfflineReason.top100);
+      await d.whenIdle();
+      expect(seen, isEmpty, reason: 'a Top 100 keep is automatic');
+      d.resume();
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+      expect(d.userPaused, isFalse);
+    });
+
+    test('a new keep by the user resumes', () async {
+      final d = make();
+      d.pause();
+      await add(_t('1'));
+      await d.keep([_t('1')]);
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+    });
+  });
+
+  test('ensureAccess throwing ends the run quietly, with its error', () async {
+    device.accessError = PlatformException(code: 'busy');
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    expect(d.lastError, isNotNull);
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'queued');
+    device.accessError = null;
+    d.start();
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+  });
+
+  test('resumeAtLaunch: a start() during the sweep waits for it', () async {
+    final stale = File('${root.path}/Art/Alb/01 Song 1.lafleur-part.mp3')
+      ..createSync(recursive: true);
+    await add(_t('1'));
+    await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+    final d = make();
+    bool? sweptFirst;
+    handler = (r) async {
+      sweptFirst ??= !stale.existsSync();
+      return _ok([1, 2, 3, 4]);
+    };
+    device.onReachable = () {
+      device.onReachable = null;
+      d.start(); // the app comes back while the folder is listed
+    };
+    await d.resumeAtLaunch();
+    await d.whenIdle();
+    expect(sweptFirst, isTrue);
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+  });
+
+  test('forget tells the media library about the removed file', () async {
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    device.announced.clear();
+    await d.forget(['subsonic://acc/1']);
+    expect(device.announced, ['${root.path}/Art/Alb/01 Song 1.mp3']);
+  });
+
+  group('adoptRoot (old folder unreachable)', () {
+    test('done copies become failed without a path, then the folder is committed', () async {
+      final d = make();
+      await add(_t('1'));
+      await d.keep([_t('1')]);
+      await d.whenIdle();
+      device.reachable = false;
+      var committed = false;
+      final r = await d.adoptRoot(commit: () async => committed = true);
+      expect((r.ok, committed), (true, true));
+      final row = (await db.offlineOf('subsonic://acc/1'))!;
+      expect((row.state, row.filePath, row.size), ('failed', null, 0));
+    });
+
+    test('a failed commit changes no row', () async {
+      final d = make();
+      await add(_t('1'));
+      await d.keep([_t('1')]);
+      await d.whenIdle();
+      device.reachable = false;
+      final r = await d.adoptRoot(
+        commit: () async => throw const FileSystemException('no'),
+      );
+      expect(r.ok, isFalse);
+      expect(device.released, 1);
+      final row = (await db.offlineOf('subsonic://acc/1'))!;
+      expect((row.state, row.filePath), ('done', 'Art/Alb/01 Song 1.mp3'));
+    });
+  });
+
   group('moveRoot', () {
     Future<Downloader> withDone(List<String> ids) async {
       final d = make();
@@ -849,6 +1055,74 @@ void main() {
         'user',
       );
       expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+    });
+
+    test('the rows are written before the commit; a failed write commits nothing', () async {
+      final d = await withDone(['1']);
+      final to = Directory('${tmp.path}/sd');
+      File('${to.path}/Art/Alb/01 Song 1.mp3')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('user'); // ours would be renamed (2)
+      db.failMove = true;
+      var committed = false;
+      final r = await d.moveRoot(
+        from: device.root,
+        to: to,
+        commit: () async => committed = true,
+      );
+      expect((r.ok, committed), (false, false));
+      expect(
+        (await db.offlineOf('subsonic://acc/1'))!.filePath,
+        'Art/Alb/01 Song 1.mp3',
+      );
+      expect(File('${root.path}/Art/Alb/01 Song 1.mp3').existsSync(), isTrue);
+      expect(File('${to.path}/Art/Alb/01 Song 1 (2).mp3').existsSync(), isFalse);
+      expect(device.released, 1);
+    });
+
+    test('a failed commit puts the old paths back', () async {
+      final d = await withDone(['1']);
+      final to = Directory('${tmp.path}/sd');
+      File('${to.path}/Art/Alb/01 Song 1.mp3')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('user');
+      final r = await d.moveRoot(
+        from: device.root,
+        to: to,
+        commit: () async => throw const FileSystemException('refused'),
+      );
+      expect(r.ok, isFalse);
+      final row = (await db.offlineOf('subsonic://acc/1'))!;
+      expect((row.state, row.filePath), ('done', 'Art/Alb/01 Song 1.mp3'));
+    });
+
+    test('same folder: nothing moves, the candidate is released', () async {
+      final d = await withDone(['1']);
+      final r = await d.moveRoot(from: device.root, to: Directory(root.path));
+      expect(r.ok, isTrue);
+      expect(device.released, 1);
+    });
+
+    test('moved files are announced, old and new', () async {
+      final d = await withDone(['1']);
+      device.announced.clear();
+      final to = Directory('${tmp.path}/sd');
+      await d.moveRoot(from: device.root, to: to);
+      expect(device.announced, unorderedEquals([
+        '${to.path}/Art/Alb/01 Song 1.mp3',
+        '${root.path}/Art/Alb/01 Song 1.mp3',
+      ]));
+    });
+
+    test('an iCloud placeholder (not downloaded) stops the move, nothing lost', () async {
+      final d = await withDone(['1']);
+      final f = File('${root.path}/Art/Alb/01 Song 1.mp3');
+      f.renameSync('${root.path}/Art/Alb/.01 Song 1.mp3.icloud');
+      final to = Directory('${tmp.path}/sd');
+      final r = await d.moveRoot(from: device.root, to: to);
+      expect(r.ok, isFalse);
+      final row = (await db.offlineOf('subsonic://acc/1'))!;
+      expect((row.state, row.filePath), ('done', 'Art/Alb/01 Song 1.mp3'));
     });
 
     test('a failed move releases the candidate', () async {

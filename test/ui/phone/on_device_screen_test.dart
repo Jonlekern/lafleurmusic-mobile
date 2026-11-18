@@ -164,7 +164,7 @@ void main() {
       expect(find.byKey(const Key('pause')), findsNothing);
       await tester.tap(find.byKey(const Key('resume')));
       await done(tester);
-      expect(r.f.downloader.starts, 1);
+      expect(r.f.downloader.resumes, 1, reason: 'Reprendre lève la pause');
     });
 
     phoneTest(
@@ -231,11 +231,27 @@ void main() {
     );
     await tester.tap(find.text('Réessayer'));
     await done(tester);
-    final row = (await tester.runAsync(() => r.f.db.offlineOf(harbour)))!;
-    expect(row.state, OfflineState.queued.name);
-    expect(row.failures, 0);
-    expect(r.f.downloader.starts, 1);
-    expect(find.text('À RÉESSAYER'), findsNothing);
+    // par « Garder » : la limite et le dossier sont vérifiés
+    expect(r.f.downloader.kept, [
+      [harbour],
+    ]);
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
+  phoneTest('Réessayer au-delà de la limite : « Pas assez de place »', TargetPlatform.iOS, (
+    tester,
+  ) async {
+    final r = await pumpOnDevice(
+      tester,
+      downloader: DemoDownloader(result: const KeepResult.tooBig(gib)),
+    );
+    await tester.tap(find.text('Réessayer'));
+    await done(tester);
+    expect(find.text('Pas assez de place : il faut encore 1 Go.'), findsOneWidget);
+    final row = (await tester.runAsync(
+      () => r.f.db.offlineOf('subsonic://demo/Ports/1'),
+    ))!;
+    expect(row.state, OfflineState.failed.name);
   });
 
   group('limite', () {
@@ -388,6 +404,42 @@ void main() {
         expect(r.folder.rescans, 1);
         expect(find.byType(SnackBar), findsNothing);
         expect(find.text('Cloud › LAFLEURMUSIC'), findsOneWidget);
+      },
+    );
+
+    phoneTest(
+      'ancien dossier indisponible : « Utiliser ce dossier » l\'adopte sans rien déplacer',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        r.device.reachable = false;
+        r.device.picked = const PickedFolder('/x/Cloud/LAFLEURMUSIC', 'b64');
+        await choose(tester);
+        expect(find.text("L'ancien dossier n'est pas disponible"), findsOneWidget);
+        await tester.tap(find.text('Utiliser ce dossier'));
+        await done(tester);
+        expect(r.f.downloader.moves, isEmpty);
+        expect(r.f.downloader.adopted, 1);
+        expect(r.device.committed.single.path, '/x/Cloud/LAFLEURMUSIC');
+        expect(r.services.single.refreshes, 1);
+        expect(r.folder.rescans, 1);
+      },
+    );
+
+    phoneTest(
+      'ancien dossier indisponible, annulé : le candidat est abandonné',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        r.device.reachable = false;
+        r.device.picked = const PickedFolder('/x/Cloud/LAFLEURMUSIC', 'b64');
+        await choose(tester);
+        await tester.tap(find.text('Annuler'));
+        await done(tester);
+        expect(r.f.downloader.adopted, 0);
+        expect(r.f.downloader.moves, isEmpty);
+        expect(r.device.committed, isEmpty);
+        expect(r.device.released, 1);
       },
     );
 

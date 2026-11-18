@@ -218,14 +218,27 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       ); // l'écran est parti pendant le choix : le candidat est abandonné
       return;
     }
+    // l'ancien dossier ne répond plus : rien à déplacer, on peut seulement adopter le nouveau
+    var reachable = true;
+    try {
+      reachable = await device.rootReachable();
+    } on Object {
+      reachable = true; // moveRoot le redemandera
+    }
+    if (!reachable && (!await _askAdopt(s) || !mounted)) {
+      await _release(device);
+      return;
+    }
     setState(() => _moving = true);
     KeepResult? r;
     try {
-      r = await downloader.moveRoot(
-        from: old,
-        to: Directory(c.path),
-        commit: () => device.commitFolder(c),
-      );
+      r = reachable
+          ? await downloader.moveRoot(
+              from: old,
+              to: Directory(c.path),
+              commit: () => device.commitFolder(c),
+            )
+          : await downloader.adoptRoot(commit: () => device.commitFolder(c));
     } on Object {
       r = null;
     }
@@ -248,6 +261,48 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     if (mounted) setState(() => _moving = false);
   }
 
+  /// « Utiliser ce dossier » : les copies de l'ancien passeront dans « À réessayer ».
+  Future<bool> _askAdopt(Strings s) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF232323),
+        title: Text(
+          s.oldFolderUnavailable,
+          style: const TextStyle(
+            color: LafleurColors.text,
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          s.oldFolderExplain,
+          style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              s.cancel,
+              style: const TextStyle(color: LafleurColors.text),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              s.useThisFolder,
+              style: const TextStyle(
+                color: LafleurColors.pink,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return yes == true;
+  }
+
   Future<void> _release(Device device) async {
     try {
       await device.releaseCandidate();
@@ -256,12 +311,21 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     }
   }
 
+  /// Par « Garder » : la limite, la place et le dossier sont vérifiés comme au premier essai.
   Future<void> _retry(_Failed f) async {
     final app = AppScope.of(context);
+    final downloader = app.downloader;
+    if (downloader == null) return;
+    final messenger = ScaffoldMessenger.of(context);
     for (final e in f.byReason.entries) {
-      await app.db.queueOffline(e.value, e.key);
+      final r = await downloader.keep([
+        for (final p in e.value) ?_data.tracks[p],
+      ], reason: e.key);
+      if (!r.ok) {
+        say(messenger, refusal(app.strings, r));
+        return;
+      }
     }
-    app.downloader?.start();
   }
 
   Future<void> _remove(_Kept k) async {
@@ -546,7 +610,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                   key: Key(active ? 'pause' : 'resume'),
                   behavior: HitTestBehavior.opaque,
                   onTap: () =>
-                      active ? downloader?.pause() : downloader?.start(),
+                      active ? downloader?.pause() : downloader?.resume(),
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Icon(

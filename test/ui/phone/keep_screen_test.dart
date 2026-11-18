@@ -262,6 +262,44 @@ void main() {
       );
     });
 
+    phoneTest(
+      'dossier choisi indisponible : le message, l\'écran reste',
+      TargetPlatform.iOS,
+      (tester) async {
+        await open(tester, result: const KeepResult.folderUnavailable());
+        await tester.tap(find.text('Garder sur mon iPhone · 790 Mo'));
+        await done(tester);
+        expect(
+          find.text(
+            "Le dossier choisi n'est pas disponible. Branche-le ou choisis-en un autre dans Sur mon iPhone.",
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(KeepScreen), findsOneWidget);
+      },
+    );
+
+    phoneTest('chosen folder unavailable (English, phone)', TargetPlatform.android, (
+      tester,
+    ) async {
+      await pumpKeep(
+        tester,
+        home: const KeepScreen(preselect: {'Ports'}),
+        locale: const Locale('en'),
+        downloader: DemoDownloader(
+          result: const KeepResult.folderUnavailable(),
+        ),
+      );
+      await tester.tap(find.text('Keep on my phone · 260 MB'));
+      await done(tester);
+      expect(
+        find.text(
+          "The chosen folder isn't available. Reconnect it or pick another one in On my phone.",
+        ),
+        findsOneWidget,
+      );
+    });
+
     phoneTest('en anglais', TargetPlatform.android, (tester) async {
       await pumpKeep(
         tester,

@@ -161,17 +161,26 @@ class LibraryDb extends _$LibraryDb {
       });
 
   /// Le plus ancien morceau en attente (moins de 3 échecs).
-  /// Sans [top100], les copies du Top 100 sont laissées en file.
-  Future<OfflineRow?> nextQueued({bool top100 = true}) =>
+  /// Sans [top100], les copies du Top 100 sont laissées en file ; les comptes de
+  /// [skipAccounts] aussi (leur serveur a refusé un morceau pendant ce tour).
+  Future<OfflineRow?> nextQueued({
+    bool top100 = true,
+    Set<String> skipAccounts = const {},
+  }) =>
       (select(offline)
-            ..where(
-              (o) =>
+            ..where((o) {
+              Expression<bool> w =
                   o.state.equals(OfflineState.queued.name) &
                   o.failures.isSmallerThanValue(3) &
                   (top100
                       ? const Constant(true)
-                      : o.reason.equals(OfflineReason.top100.name).not()),
-            )
+                      : o.reason.equals(OfflineReason.top100.name).not());
+              for (final acc in skipAccounts) {
+                final prefix = 'subsonic://$acc/';
+                w = w & o.trackPath.substr(1, prefix.length).equals(prefix).not();
+              }
+              return w;
+            })
             ..orderBy([
               (o) => OrderingTerm.asc(o.addedAt),
               (o) => OrderingTerm.asc(o.trackPath),
@@ -218,6 +227,32 @@ class LibraryDb extends _$LibraryDb {
       );
     }
   });
+
+  /// Le dossier des copies est perdu (on en adopte un autre) : chaque copie finie passe
+  /// en échec, sans chemin ni taille, à refaire depuis « À réessayer ».
+  Future<void> failDoneCopies() =>
+      (update(offline)
+            ..where((o) => o.state.equals(OfflineState.done.name)))
+          .write(
+            OfflineCompanion(
+              filePath: const Value(null),
+              size: const Value(0),
+              state: Value(OfflineState.failed.name),
+            ),
+          );
+
+  /// Octets promis par la file d'attente : la taille connue de chaque morceau,
+  /// [unknownSize] pour un morceau sans taille ou disparu.
+  Future<int> queuedBytes(int unknownSize) async {
+    final r = await customSelect(
+      'SELECT COALESCE(SUM(CASE WHEN t.size > 0 THEN t.size ELSE ? END), 0) AS b '
+      'FROM offline o LEFT JOIN tracks t ON t.path = o.track_path '
+      'WHERE o.state = ?',
+      variables: [Variable(unknownSize), Variable(OfflineState.queued.name)],
+      readsFrom: {offline, tracks},
+    ).getSingle();
+    return r.read<int>('b');
+  }
 
   /// Après un refus du serveur : le morceau passe derrière les autres de la file.
   Future<void> sendOfflineToBack(String trackPath) => customUpdate(

@@ -23,22 +23,46 @@ const unknownTrackSize = 10 * 1024 * 1024;
 
 /// Réponse de [Downloader.keep] et [Downloader.moveRoot].
 class KeepResult {
-  const KeepResult.queued(this.count, this.bytes) : ok = true, neededBytes = 0;
+  const KeepResult.queued(this.count, this.bytes)
+    : ok = true,
+      neededBytes = 0,
+      folderUnavailable = false;
 
   /// Refusé : il manque [neededBytes] (le plus grand écart avec la limite ou la place libre).
-  const KeepResult.tooBig(this.neededBytes) : ok = false, count = 0, bytes = 0;
+  const KeepResult.tooBig(this.neededBytes)
+    : ok = false,
+      count = 0,
+      bytes = 0,
+      folderUnavailable = false;
 
   /// Une erreur au milieu : rien n'a changé.
-  const KeepResult.failed() : ok = false, neededBytes = 0, count = 0, bytes = 0;
+  const KeepResult.failed()
+    : ok = false,
+      neededBytes = 0,
+      count = 0,
+      bytes = 0,
+      folderUnavailable = false;
 
-  final bool ok;
+  /// Refusé : le dossier choisi ne répond plus (jamais de copie dans le dossier par défaut).
+  const KeepResult.folderUnavailable()
+    : ok = false,
+      neededBytes = 0,
+      count = 0,
+      bytes = 0,
+      folderUnavailable = true;
+
+  final bool ok, folderUnavailable;
   final int count, bytes, neededBytes;
 }
 
 /// Le serveur refuse CE morceau (introuvable, vide, format inconnu) : seul cas compté
-/// comme un échec. Tout le reste (réseau, 5xx, 401/403, page de proxy, disque…) arrête
-/// la file sans rien compter.
+/// comme un échec. Un autre refus pour ce morceau (5xx, 429, 401/403, page de proxy,
+/// compte sans source) l'envoie derrière, sans compter, et son compte attend le tour
+/// suivant ; le réseau et le disque arrêtent la file.
 class _Refusal implements Exception {}
+
+/// Ce que la boucle fait après un morceau.
+enum _Next { go, skipAccount, stop }
 
 /// Une réponse que le serveur n'a pas servie comme fichier (4xx, ou erreur Subsonic en JSON/XML).
 class _NotAFile implements Exception {}
@@ -73,6 +97,8 @@ class Downloader extends ChangeNotifier {
 
   Future<void>? _loop;
   bool _paused = false;
+  bool _userPaused = false; // « Pause » de l'écran : seul « Reprendre » ou un « Garder » la lève
+  bool _sweeping = false; // resumeAtLaunch efface les .part : la boucle attend
   bool _wanted = false; // un start() a eu lieu depuis le début du tour
   bool _moving = false; // moveRoot en cours : la boucle ne tourne pas
   bool _accessOk = false;
@@ -92,6 +118,9 @@ class Downloader extends ChangeNotifier {
 
   /// Avancement du morceau en cours, de 0 à 1.
   double get progress => _progress;
+
+  /// Vrai si l'utilisateur a mis la file en pause (écran « Sur mon iPhone »).
+  bool get userPaused => _userPaused;
 
   /// Vrai si l'utilisateur a refusé l'accès au stockage : la file est arrêtée.
   bool get accessDenied => _accessDenied;
@@ -118,11 +147,15 @@ class Downloader extends ChangeNotifier {
 
   static int _sizeOf(Track t) => t.size > 0 ? t.size : unknownTrackSize;
 
-  /// Garde [tracks] : refuse tout si ça dépasse la limite ou la place libre.
+  /// Garde [tracks] : refuse tout si ça dépasse la limite ou la place libre, ou si le
+  /// dossier choisi ne répond plus. Un « Garder » de l'utilisateur lève sa pause.
   Future<KeepResult> keep(
     List<Track> tracks, {
     OfflineReason reason = OfflineReason.user,
   }) async {
+    if (!await device.rootReachable()) {
+      return const KeepResult.folderUnavailable();
+    }
     final remote = [
       for (final t in tracks)
         if (parseRemoteKey(t.path) != null) t,
@@ -144,12 +177,7 @@ class Downloader extends ChangeNotifier {
     await db.queueOffline(done, reason);
     final need = fresh.fold<int>(0, (s, t) => s + _sizeOf(t));
     // la file d'attente déjà promise compte aussi dans la limite
-    var backlog = 0;
-    for (final r in (await db.watchOffline().first).values) {
-      if (r.state != OfflineState.queued.name) continue;
-      final t = await db.trackByPath(r.trackPath);
-      backlog += t == null ? unknownTrackSize : _sizeOf(t);
-    }
+    final backlog = await db.queuedBytes(unknownTrackSize);
     final limit = (await settings()).storageLimitBytes;
     final root = await device.musicRoot();
     final free = await device.freeBytes(root.path) - _freeMargin;
@@ -160,6 +188,7 @@ class Downloader extends ChangeNotifier {
     }
     await db.queueOffline([for (final t in toQueue) t.path], reason);
     _accessDenied = false;
+    if (reason == OfflineReason.user) _userPaused = false;
     start();
     return KeepResult.queued(fresh.length, need);
   }
@@ -178,11 +207,21 @@ class Downloader extends ChangeNotifier {
     return [for (final g in groups.values) ...(List.of(g)..sort(by))];
   }
 
+  /// Relance la file (retour au premier plan, serveur revenu, à la maison…) ; sans effet
+  /// pendant une pause de l'utilisateur.
   void start() {
+    if (_userPaused) return;
     _wanted = true;
     _paused = false;
-    if (_loop != null || _moving) return;
+    if (_loop != null || _moving || _sweeping) return;
     _launch();
+  }
+
+  /// « Reprendre » de l'écran : lève la pause de l'utilisateur.
+  void resume() {
+    _userPaused = false;
+    start();
+    notifyListeners();
   }
 
   void _launch() {
@@ -191,7 +230,9 @@ class Downloader extends ChangeNotifier {
     f = _run().whenComplete(() {
       if (identical(_loop, f)) _loop = null;
       // un start() arrivé pendant que la boucle s'arrêtait ne doit pas se perdre
-      if (_wanted && !_paused && !_moving && _loop == null) _launch();
+      if (_wanted && !_paused && !_moving && !_sweeping && _loop == null) {
+        _launch();
+      }
     });
     _loop = f;
   }
@@ -203,24 +244,33 @@ class Downloader extends ChangeNotifier {
     if (a != null && a.auto) a.cancel();
   }
 
-  /// Arrête après avoir abandonné le morceau en cours (il reste en file).
+  /// « Pause » de l'écran : arrête après avoir abandonné le morceau en cours (il reste
+  /// en file) ; les relances automatiques ([start]) attendent [resume] ou un « Garder ».
   void pause() {
+    _userPaused = true;
     _paused = true;
     _active?.cancel();
     notifyListeners();
   }
 
   Future<void> _run() async {
+    final skip = <String>{}; // comptes dont le serveur a refusé un morceau ce tour
     try {
       while (!_paused && !_moving) {
         final row = await db.nextQueued(
           top100: mayAutoDownload?.call() ?? true,
+          skipAccounts: skip,
         );
         if (row == null) break;
         if (await db.trackByPath(row.trackPath) == null) {
           // le morceau a disparu (synchro, compte retiré) : plus rien à copier, ni à compter
           await db.removeOffline([row.trackPath]);
           continue;
+        }
+        // dossier choisi injoignable : jamais de copie dans le dossier par défaut, rien de compté
+        if (!await device.rootReachable()) {
+          _lastError = 'folder unavailable';
+          break;
         }
         if (!_accessOk) {
           if (!await device.ensureAccess()) {
@@ -230,17 +280,26 @@ class Downloader extends ChangeNotifier {
           }
           _accessOk = true;
         }
-        if (!await _one(row)) break;
+        final next = await _one(row);
+        if (next == _Next.stop) break;
+        if (next == _Next.skipAccount) {
+          final acc = parseRemoteKey(row.trackPath)?.$1;
+          if (acc != null) skip.add(acc);
+        }
       }
+    } on Object catch (e) {
+      _lastError = _describe(e); // base fermée, canal natif… : la boucle s'arrête, sans planter
     } finally {
       _reserved.clear();
       _setProgress(0);
     }
   }
 
-  /// Faux si la boucle doit s'arrêter (réseau coupé : rien n'est compté, le prochain
-  /// start() reprend). Un refus du serveur compte un échec et passe au morceau suivant.
-  Future<bool> _one(OfflineRow row) async {
+  /// [_Next.stop] si la boucle doit s'arrêter (réseau coupé, disque : rien n'est compté,
+  /// le prochain start() reprend). Un refus du serveur pour ce morceau compte un échec et
+  /// passe au suivant ; un autre souci propre au morceau l'envoie derrière, sans compter,
+  /// et son compte attend le tour suivant ([_Next.skipAccount]).
+  Future<_Next> _one(OfflineRow row) async {
     final active = _Active(
       row.trackPath,
       _client(),
@@ -252,14 +311,18 @@ class Downloader extends ChangeNotifier {
     active.done = done.future;
     try {
       await _download(row, active); // null : abandonné (pause), reste en file
-      return true;
+      return _Next.go;
     } catch (e) {
-      if (active.cancelled) return true; // pause ou oubli : pas un échec
+      if (active.cancelled) return _Next.go; // pause ou oubli : pas un échec
       _lastError = _describe(e);
-      if (e is! _Refusal) return false;
-      await db.markOfflineFailed(row.trackPath);
+      if (e is _Refusal) {
+        await db.markOfflineFailed(row.trackPath);
+        await db.sendOfflineToBack(row.trackPath);
+        return _Next.go;
+      }
+      if (_stopsAll(e)) return _Next.stop;
       await db.sendOfflineToBack(row.trackPath);
-      return true;
+      return _Next.skipAccount;
     } finally {
       active.client.close();
       _active = null;
@@ -268,6 +331,10 @@ class Downloader extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Réseau (socket, délai, TLS, coupure) ou disque : rien ne passera pour les autres non plus.
+  static bool _stopsAll(Object e) =>
+      e is IOException || e is TimeoutException || e is http.ClientException;
 
   /// Télécharge le morceau ; renvoie le chemin relatif, null si abandonné.
   Future<String?> _download(OfflineRow row, _Active active) async {
@@ -474,20 +541,28 @@ class Downloader extends ChangeNotifier {
   }
 
   /// Au lancement : efface les `.part` laissés par une coupure, remet la file en route.
+  /// Un start() pendant le balayage attend sa fin (il effacerait le .part du morceau en cours).
   Future<void> resumeAtLaunch() async {
-    try {
-      if (_loop == null && await device.rootReachable()) {
-        final root = await device.musicRoot();
-        if (await root.exists()) {
-          await for (final e in root.list(
-            recursive: true,
-            followLinks: false,
-          )) {
-            if (e is File && isPartialName(e.path)) await _drop(e);
+    if (_loop == null && !_moving) {
+      _sweeping = true;
+      try {
+        if (await device.rootReachable()) {
+          final root = await device.musicRoot();
+          if (await root.exists()) {
+            await for (final e in root.list(
+              recursive: true,
+              followLinks: false,
+            )) {
+              if (e is File && isPartialName(e.path)) await _drop(e);
+            }
           }
         }
+      } catch (_) {
+        // un dossier illisible n'empêche pas la reprise
+      } finally {
+        _sweeping = false;
       }
-    } catch (_) {} // un dossier illisible n'empêche pas la reprise
+    }
     start();
   }
 
@@ -517,8 +592,15 @@ class Downloader extends ChangeNotifier {
       await _drop(File(partialPath(file.path)));
       await _drop(File(legacyPartialPath(file.path)));
       await _drop(file);
+      await _announce(file.path); // Android : la médiathèque l'oublie
       _pruneEmpty(root, file.parent);
     }
+  }
+
+  Future<void> _announce(String path) async {
+    try {
+      await device.announce(path);
+    } catch (_) {} // la médiathèque du système n'est pas vitale
   }
 
   /// [rel] sous [root], ou null s'il en sort.
@@ -545,8 +627,10 @@ class Downloader extends ChangeNotifier {
 
   /// Déplace les copies terminées de [from] vers [to] : même chemin relatif (un autre nom
   /// si le fichier existe déjà : ceux de l'utilisateur ne sont jamais écrasés), taille
-  /// vérifiée, puis [commit] (qui adopte le dossier : `device.commitFolder`), puis les
-  /// originaux sont effacés. Une erreur retire ce qui a été copié, l'ancien dossier reste.
+  /// vérifiée, les lignes réécrites, puis [commit] (qui adopte le dossier :
+  /// `device.commitFolder`), puis les originaux sont effacés. Une erreur retire ce qui a
+  /// été copié et remet les anciens chemins : l'ancien dossier reste. Une copie qu'iCloud
+  /// a mise de côté (`.nom.icloud`) ne peut pas être copiée : le déplacement est refusé.
   /// La file est arrêtée pendant la copie et toujours relancée à la fin.
   Future<KeepResult> moveRoot({
     required Directory from,
@@ -587,7 +671,10 @@ class Downloader extends ChangeNotifier {
     Future<void> Function()? commit,
   ) async {
     final a = p.normalize(from.path), b = p.normalize(to.path);
-    if (a == b) return const KeepResult.queued(0, 0);
+    if (a == b) {
+      await _releaseQuietly(); // rien à adopter
+      return const KeepResult.queued(0, 0);
+    }
     if (p.isWithin(a, b) || p.isWithin(b, a)) return const KeepResult.failed();
 
     final rows = [
@@ -612,7 +699,14 @@ class Downloader extends ChangeNotifier {
     try {
       for (final r in rows) {
         final src = _inside(from, r.filePath!);
-        if (src == null || !await src.exists()) continue;
+        if (src == null) continue;
+        if (!await src.exists()) {
+          // encore là, mais dans iCloud seulement : ni perdu, ni copiable
+          if (fileOrPlaceholderExists(src.path)) {
+            throw const FileSystemException('not downloaded');
+          }
+          continue;
+        }
         final rel = uniquePath(
           r.filePath!,
           (c) =>
@@ -631,32 +725,76 @@ class Downloader extends ChangeNotifier {
         newRel[r.trackPath] = rel;
         bytes += await dst.length();
       }
-      await commit?.call();
     } catch (_) {
-      for (final f in created) {
-        await _drop(f);
-        _pruneEmpty(to, f.parent);
-      }
+      await _dropCreated(to, created);
       return const KeepResult.failed();
     }
-    // une transaction avant d'effacer quoi que ce soit : une ligne ne pointe jamais
-    // vers un fichier qui n'est pas le nôtre
+    // les lignes d'abord, en une transaction, puis le dossier : une ligne ne pointe
+    // jamais vers un fichier qui n'est pas le nôtre, et jamais « ok » sans elles
+    final oldRel = {
+      for (final r in rows)
+        if (newRel.containsKey(r.trackPath)) r.trackPath: r.filePath!,
+    };
     try {
       await db.applyOfflineMove(newRel, [
         for (final r in rows)
           if (!newRel.containsKey(r.trackPath)) r.trackPath,
       ]);
     } catch (_) {
-      return KeepResult.queued(newRel.length, bytes); // originaux gardés
+      await _dropCreated(to, created);
+      return const KeepResult.failed();
+    }
+    try {
+      await commit?.call();
+    } catch (_) {
+      try {
+        await db.applyOfflineMove(oldRel, const []); // l'ancien dossier reste
+      } catch (_) {}
+      await _dropCreated(to, created);
+      return const KeepResult.failed();
     }
     for (final r in rows) {
-      if (!newRel.containsKey(r.trackPath)) continue;
+      final rel = newRel[r.trackPath];
+      if (rel == null) continue;
+      await _announce(p.join(to.path, rel));
       final src = _inside(from, r.filePath!);
       if (src == null) continue;
       await _drop(src);
+      await _announce(src.path);
       _pruneEmpty(from, src.parent);
     }
     return KeepResult.queued(newRel.length, bytes);
+  }
+
+  Future<void> _dropCreated(Directory to, List<File> created) async {
+    for (final f in created) {
+      await _drop(f);
+      _pruneEmpty(to, f.parent);
+    }
+  }
+
+  /// L'ancien dossier ne répond plus et l'utilisateur en adopte un autre : en une
+  /// transaction, chaque copie finie passe en échec sans chemin (à refaire depuis
+  /// « À réessayer ») puis [commit] adopte le dossier. Si [commit] échoue, rien ne change.
+  /// Rien n'est effacé : l'ancien dossier, s'il revient, garde ses fichiers.
+  Future<KeepResult> adoptRoot({required Future<void> Function() commit}) async {
+    _moving = true;
+    _active?.cancel();
+    try {
+      await whenIdle();
+      await db.transaction(() async {
+        await db.failDoneCopies();
+        await commit();
+      });
+      return const KeepResult.queued(0, 0);
+    } catch (_) {
+      await _releaseQuietly();
+      return const KeepResult.failed();
+    } finally {
+      _moving = false;
+      _reserved.clear();
+      start();
+    }
   }
 }
 

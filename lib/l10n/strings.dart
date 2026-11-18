@@ -439,6 +439,19 @@ class Strings {
           'Une carte SD marche aussi. En changeant de dossier, les morceaux gardés y sont déplacés.',
           'An SD card works too. When you change folder, the kept songs are moved there.',
         );
+  String folderUnavailable(bool iphone) => _t(
+    "Le dossier choisi n'est pas disponible. Branche-le ou choisis-en un autre dans ${onDevice(iphone)}.",
+    "The chosen folder isn't available. Reconnect it or pick another one in ${onDevice(iphone)}.",
+  );
+  String get oldFolderUnavailable => _t(
+    "L'ancien dossier n'est pas disponible",
+    "The old folder isn't available",
+  );
+  String get oldFolderExplain => _t(
+    'Les morceaux gardés ne peuvent pas en être déplacés : ils passeront dans « À réessayer » pour ce dossier.',
+    "The kept songs can't be moved out of it: they'll go to “To retry” for this folder.",
+  );
+  String get useThisFolder => _t('Utiliser ce dossier', 'Use this folder');
   String get folderMoveFailed => _t(
     "Le dossier n'a pas pu être changé. Rien n'a été déplacé.",
     "The folder couldn't be changed. Nothing was moved.",

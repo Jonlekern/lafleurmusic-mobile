@@ -34,8 +34,11 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
   @override
   double progress = 0;
 
-  /// Appels à [pause] et à [start].
-  int pauses = 0, starts = 0;
+  /// Appels à [pause], à [start], à [resume] et à [adoptRoot].
+  int pauses = 0, starts = 0, resumes = 0, adopted = 0;
+
+  @override
+  bool userPaused = false;
 
   /// Réponse de [moveRoot] ; avec [moveGate], elle attend que le test la libère.
   KeepResult moveResult = const KeepResult.queued(0, 0);
@@ -47,12 +50,27 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
   @override
   void pause() {
     pauses++;
+    userPaused = true;
     current = null;
     notifyListeners();
   }
 
   @override
   void start() => starts++;
+
+  @override
+  void resume() {
+    resumes++;
+    userPaused = false;
+    notifyListeners();
+  }
+
+  @override
+  Future<KeepResult> adoptRoot({required Future<void> Function() commit}) async {
+    adopted++;
+    if (moveResult.ok) await commit();
+    return moveResult;
+  }
 
   @override
   Future<KeepResult> moveRoot({

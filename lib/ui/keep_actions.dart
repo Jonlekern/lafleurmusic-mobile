@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
+import '../l10n/strings.dart';
 import '../library/db.dart' show OfflineRow;
 import '../library/models.dart';
+import '../offline/downloader.dart' show KeepResult;
 import '../player/media_resolver.dart';
 import '../theme/colors.dart';
 
@@ -61,13 +63,15 @@ Future<bool> keepTracks(BuildContext context, List<Track> tracks) async {
     }
     return true;
   }
-  say(
-    messenger,
-    result.neededBytes > 0
-        ? s.notEnoughSpace(s.size(result.neededBytes))
-        : s.keepFailed,
-  );
+  say(messenger, refusal(s, result));
   return false;
+}
+
+/// Pourquoi [Downloader.keep] a refusé : place, dossier indisponible, ou erreur.
+String refusal(Strings s, KeepResult r) {
+  if (r.folderUnavailable) return s.folderUnavailable(onIphone);
+  if (r.neededBytes > 0) return s.notEnoughSpace(s.size(r.neededBytes));
+  return s.keepFailed;
 }
 
 /// Retire la copie de [tracks] du téléphone (les leurs, celles de l'utilisateur comme du Top 100).
