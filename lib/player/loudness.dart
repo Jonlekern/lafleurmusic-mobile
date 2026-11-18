@@ -25,10 +25,14 @@ class LoudnessService {
     this.player, {
     Future<double?> Function(String path)? measure,
     this.copyOf,
+    this.absolute,
   }) : _measure = measure ?? measureLoudness;
 
   /// Le fichier de la copie gardée d'un morceau du serveur (voir `keptFile`), null sans copie.
   final Future<String?> Function(String trackPath)? copyOf;
+
+  /// Chemin actuel d'un fichier local (clé `docs://` → Documents) ; la clé en base reste celle de la bibliothèque.
+  final Future<String> Function(String path)? absolute;
 
   final LibraryDb db;
   final PlayerController player;
@@ -115,7 +119,7 @@ class LoudnessService {
         final file = await _fileOf(t);
         if (file == null || await db.hasLoudness(file, t.mtime)) continue;
         // gardé pour la prochaine écoute : jamais de saut de volume en plein morceau
-        await db.setLoudness(file, await _measure(file), t.mtime);
+        await db.setLoudness(file, await _measure(await absolute?.call(file) ?? file), t.mtime);
       }
     } finally {
       _working = false;

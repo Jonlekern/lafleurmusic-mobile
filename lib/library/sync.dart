@@ -18,10 +18,10 @@ class SyncResult {
 
 /// Copies a server library into the local tracks table, one album at a time.
 class LibrarySync {
-  /// [musicRoot]: where the kept copies live; a copy of a track that left the server stays playable.
-  LibrarySync(this._db, {this.musicRoot});
+  /// [copyRoot]: where the kept copies live (null: unknown, finished copies are left alone).
+  LibrarySync(this._db, {this.copyRoot});
   final LibraryDb _db;
-  final Future<String> Function()? musicRoot;
+  final Future<CopyRoot?> Function()? copyRoot;
 
   Future<SyncResult> run(MusicSource s) async {
     var added = 0, updated = 0, removed = 0;
@@ -141,7 +141,7 @@ class LibrarySync {
       null;
 
   Future<int> _removeUnseen(String acc, Set<String> seen) async {
-    final root = await musicRoot?.call();
+    final root = await copyRoot?.call();
     return _db.transaction(() async {
         final all =
             await (_db.selectOnly(_db.tracks)

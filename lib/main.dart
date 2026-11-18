@@ -69,11 +69,16 @@ Future<LafleurApp> buildLafleurApp({
     saveSettings: () => settings.save(settingsFile),
   );
   final keptCopy = keptFile(db, device.musicRoot);
-  final resolver = MediaResolver(accounts.source, localCopy: keptCopy);
+  final resolver = MediaResolver(
+    accounts.source,
+    localCopy: keptCopy,
+    localPath: device.absolutePath,
+  );
   final covers = Covers(
     cacheDir: Directory(p.join(support.path, 'covers')),
     remote: remoteCovers(resolver, db.trackByPath),
     remoteKey: remoteCoverKey(db.trackByPath), // une pochette par album
+    absolute: device.absolutePath,
   );
   // tester, enregistrer, synchroniser : les mêmes comptes et le même resolver que le lecteur
   final accountService = AccountService(
@@ -81,7 +86,7 @@ Future<LafleurApp> buildLafleurApp({
     db: db,
     resolver: resolver,
     forgetCovers: covers.forgetAccount, // compte retiré : ses pochettes aussi
-    musicRoot: device.musicRoot, // …mais ses copies gardées restent, en morceaux locaux
+    device: device, // …mais ses copies gardées restent, en morceaux locaux
   );
   await accountService.watchOffline();
   final player = LafleurPlayer(resolver: resolver)
@@ -107,7 +112,12 @@ Future<LafleurApp> buildLafleurApp({
     settings.save(settingsFile);
   });
   // Volume égal : mesures gardées dans la base, allumé si on l'avait laissé allumé
-  final loudness = LoudnessService(db, player, copyOf: keptCopy)..enabled = settings.equalVolume;
+  final loudness = LoudnessService(
+    db,
+    player,
+    copyOf: keptCopy,
+    absolute: device.absolutePath,
+  )..enabled = settings.equalVolume;
   player.gainOf =
       loudness.gainOf; // le 2e lecteur du fondu démarre au bon niveau
   return LafleurApp(

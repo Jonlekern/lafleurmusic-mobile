@@ -44,17 +44,22 @@ class MediaResolver {
     DateTime Function()? clock,
     this.sourceTimeout = const Duration(seconds: 10),
     this.localCopy,
+    this.localPath,
   }) : _clock = clock ?? DateTime.now;
 
   /// The kept copy of a server track (see [keptFile]); null: play the stream.
   final Future<String?> Function(String trackPath)? localCopy;
+
+  /// Where a local track's file is now (`docs://` keys follow the app's folder); the path itself by default.
+  final Future<String> Function(String path)? localPath;
 
   /// Plays local files only (no account known).
   MediaResolver.localOnly()
     : _sourceOf = ((id) async => throw StateError('No account $id')),
       _clock = DateTime.now,
       sourceTimeout = const Duration(seconds: 10),
-      localCopy = null;
+      localCopy = null,
+      localPath = null;
 
   /// A failed account (password missing, database error…) is not asked again before this.
   static const retryAfter = Duration(minutes: 1);
@@ -100,7 +105,13 @@ class MediaResolver {
 
   Future<Media> media(String path) async {
     final key = parseRemoteKey(path);
-    if (key == null) return Media(path);
+    if (key == null) {
+      try {
+        return Media(await localPath?.call(path) ?? path);
+      } on Object {
+        return Media(path);
+      }
+    }
     try {
       final copy = await localCopy?.call(path);
       if (copy != null) return Media(copy); // the file itself: no network, no headers

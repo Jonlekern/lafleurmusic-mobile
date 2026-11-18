@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/offline/device.dart';
 import 'package:lafleurmusic/settings.dart';
 
@@ -198,5 +201,49 @@ void main() {
     calls.clear();
     expect(await device(ios: true).ensureAccess(readOthers: true), true);
     expect(calls, isEmpty);
+  });
+
+  group('docs:// keys', () {
+    test('iPhone: a file in Documents gets docs://rel, others stay absolute', () async {
+      native = (c) async => c.method == 'defaultRoot' ? '${tmp.path}/Documents/LAFLEURMUSIC' : null;
+      final d = device(ios: true);
+      expect(await d.keyFor('${tmp.path}/Documents/LAFLEURMUSIC/Art/a.mp3'), 'docs://LAFLEURMUSIC/Art/a.mp3');
+      expect(await d.keyFor('${tmp.path}/Elsewhere/a.mp3'), '${tmp.path}/Elsewhere/a.mp3');
+      expect(await d.keyFor('${tmp.path}/Documentsx/a.mp3'), '${tmp.path}/Documentsx/a.mp3');
+      expect(await d.absolutePath('docs://LAFLEURMUSIC/Art/a.mp3'), '${tmp.path}/Documents/LAFLEURMUSIC/Art/a.mp3');
+      expect(await d.absolutePath('/x/y.mp3'), '/x/y.mp3');
+    });
+
+    test('Android: nothing is rewritten', () async {
+      native = (c) async => c.method == 'defaultRoot' ? '${tmp.path}/Music/LAFLEURMUSIC' : null;
+      final d = device();
+      expect(await d.keyFor('${tmp.path}/Music/LAFLEURMUSIC/a.mp3'), '${tmp.path}/Music/LAFLEURMUSIC/a.mp3');
+    });
+
+    test('an orphan on iPhone keeps a key that still resolves after the app container moves', () async {
+      final db = LibraryDb(NativeDatabase.memory());
+      addTearDown(db.close);
+      final before = '${tmp.path}/container1/Documents/LAFLEURMUSIC';
+      native = (c) async => c.method == 'defaultRoot' ? before : null;
+      File('$before/Art/a.mp3')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([1]);
+      const k = 'subsonic://acc/s1';
+      await db.upsertTrack(const Track(
+        path: k, accountId: 'acc', remoteId: 's1', title: 'T', artist: 'A', album: 'B', durationMs: 1, hasCover: false, size: 1,
+      ));
+      await db.queueOffline([k], OfflineReason.user);
+      await db.markOfflineDone(k, 'Art/a.mp3', 1);
+      final d1 = device(ios: true);
+      await db.dropServerTracks([k], root: CopyRoot(before, d1.keyFor));
+      final key = (await db.select(db.tracks).get()).single.path;
+      expect(key, 'docs://LAFLEURMUSIC/Art/a.mp3');
+      // update / restore: same files, another container path
+      Directory('${tmp.path}/container1').renameSync('${tmp.path}/container2');
+      native = (c) async => c.method == 'defaultRoot' ? '${tmp.path}/container2/Documents/LAFLEURMUSIC' : null;
+      final now = await device(ios: true).absolutePath(key);
+      expect(now, '${tmp.path}/container2/Documents/LAFLEURMUSIC/Art/a.mp3');
+      expect(File(now).existsSync(), isTrue);
+    });
   });
 }

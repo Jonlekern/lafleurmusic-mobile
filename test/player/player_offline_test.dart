@@ -87,4 +87,17 @@ void main() {
     expect(firstPlayable(PlayQueue(['s1', 's2']), ok), isNull);
     expect(firstPlayable(PlayQueue(['k1', 's2']), ok), 0);
   });
+
+  test('fondu : seulement vers un suivant jouable, sinon le saut normal s’en charge', () {
+    final q = PlayQueue(['k1', 's2', 'k3']);
+    expect(fadeTarget(q, ok), isNull); // s2 injouable : pas de fondu dans le vide
+    expect(fadeTarget(q, null), 1); // sans règle, comme avant
+    q.jumpTo(1);
+    expect(fadeTarget(q, ok), 2);
+    q.jumpTo(2);
+    expect(fadeTarget(q, ok), isNull); // fin de liste
+    q.repeat = Repeat.all;
+    expect(fadeTarget(q, ok), 0);
+    expect(fadeTarget(PlayQueue(['k1']), ok), isNull);
+  });
 }

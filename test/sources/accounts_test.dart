@@ -83,7 +83,7 @@ void main() {
 
   test('remove erases the secrets and the row', () async {
     final a = await addOne('Home');
-    await accounts.remove(a.id);
+    await accounts.remove(a.id, root: null);
     expect(secrets.data, isEmpty);
     expect(await accounts.watch().first, isEmpty);
   });
@@ -107,7 +107,7 @@ void main() {
       tr('/m/x.flac', 'local'),
     ]);
     await db.addPlay('subsonic://${a.id}/1', DateTime(2026));
-    await accounts.remove(a.id);
+    await accounts.remove(a.id, root: null);
     final left = await db.select(db.tracks).get();
     expect(left.map((r) => r.accountId).toSet(), {b.id, 'local'});
     expect(await db.select(db.playCounts).get(), isEmpty);
@@ -218,14 +218,14 @@ void main() {
     final st = _Throwing(failDelete: true);
     final acc = await with_(st);
     final a = await addOne('x');
-    await expectLater(acc.remove(a.id), throwsStateError);
+    await expectLater(acc.remove(a.id, root: null), throwsStateError);
     expect(await acc.watch().first, isEmpty);
   });
 
   test('positions use max+1 after a removal', () async {
     final a = await addOne('a');
     final b = await addOne('b');
-    await accounts.remove(a.id);
+    await accounts.remove(a.id, root: null);
     final c = await addOne('c');
     expect(c.order, b.order + 1);
   });

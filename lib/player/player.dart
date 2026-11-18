@@ -238,10 +238,9 @@ class LafleurPlayer implements PlayerController {
     if (!_mpv.state.playing || cur.path == _fadedFrom) return;
     final start = CrossfadePlan.startAt(_last.duration, secs, repeat: q.repeat);
     if (start == null || at < start || at >= _last.duration) return;
-    final i = q.position + 1 < q.order.length
-        ? q.position + 1
-        : (q.repeat == Repeat.all ? 0 : -1);
-    if (i < 0 || q.order[i].missing || i == q.position) return;
+    // le suivant doit être jouable : sinon pas de fondu dans le vide, le saut normal s'en charge
+    final i = fadeTarget(q, playable);
+    if (i == null || q.order[i].missing) return;
     _fadedFrom = cur.path;
     _fadeNext = q.order[i].path;
     _userVolume = _mpv.state.volume;

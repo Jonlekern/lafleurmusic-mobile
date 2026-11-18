@@ -221,10 +221,14 @@ void main() {
 
   group('kept copies of tracks that leave the server', () {
     late Directory tmp;
-    setUp(() => tmp = Directory.systemTemp.createTempSync('sync'));
+    CopyRoot? root; // null: folder unreachable
+    setUp(() {
+      tmp = Directory.systemTemp.createTempSync('sync');
+      root = CopyRoot(tmp.path);
+    });
     tearDown(() => tmp.deleteSync(recursive: true));
 
-    LibrarySync syncer() => LibrarySync(db, musicRoot: () async => tmp.path);
+    LibrarySync syncer() => LibrarySync(db, copyRoot: () async => root);
 
     Future<void> keep(String id, {String state = 'done', bool file = true}) async {
       final path = trackKey('acc1', id);
@@ -282,13 +286,36 @@ void main() {
       await syncer().run(FakeSource('acc1', lib3x()));
       await keep('s3');
       await keep('s5', state: 'queued');
-      await db.deleteAccountTracks('acc1', root: tmp.path);
+      await db.deleteAccountTracks('acc1', root: CopyRoot(tmp.path));
       expect(await db.trackByPath('${tmp.path}/Art/Album/s3.mp3'), isNotNull);
       expect(await db.select(db.offline).get(), isEmpty);
       expect(
         await db.select(db.tracks).get().then((l) => l.map((t) => t.accountId).toSet()),
         {'local'},
       );
+    });
+
+    test('folder unreachable: finished copies, their tracks and plays are left alone', () async {
+      await syncer().run(FakeSource('acc1', lib3x()));
+      await keep('s3'); // file really exists, but the folder doesn't answer
+      await keep('s4', state: 'queued');
+      await db.addPlay(trackKey('acc1', 's3'), DateTime(2026));
+      root = null;
+      await syncer().run(FakeSource('acc1', lib3x(drop: 's3')));
+      await syncer().run(FakeSource('acc1', lib3x(drop: 's4')));
+      await db.deleteAccountTracks('acc1', root: null);
+      expect(await db.trackByPath(trackKey('acc1', 's3')), isNotNull);
+      expect((await db.offlineOf(trackKey('acc1', 's3')))!.state, 'done');
+      expect(await db.select(db.playCounts).get(), hasLength(1));
+      expect(await db.offlineOf(trackKey('acc1', 's4')), isNull); // not done: goes
+    });
+
+    test('keyFor names the local track (iPhone: docs://)', () async {
+      await syncer().run(FakeSource('acc1', lib3x()));
+      await keep('s3');
+      root = CopyRoot(tmp.path, (a) async => a.replaceFirst('${tmp.path}/', 'docs://'));
+      await syncer().run(FakeSource('acc1', lib3x(drop: 's3')));
+      expect((await db.trackByPath('docs://Art/Album/s3.mp3'))!.accountId, 'local');
     });
   });
 }

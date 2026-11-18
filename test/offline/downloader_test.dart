@@ -53,6 +53,10 @@ class _Device implements Device {
   }
 
   @override
+  Future<String> absolutePath(String key) async => key;
+  @override
+  Future<String> keyFor(String a) async => a;
+  @override
   Future<int> freeBytes(String path) async => free;
   @override
   Future<void> announce(String path) async => announced.add(path);

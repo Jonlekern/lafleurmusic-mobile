@@ -92,6 +92,14 @@ class PendingScrobbles extends Table {
   IntColumn get at => integer()(); // ms
 }
 
+/// Where the kept copies live (a reachable folder) and how a copy found there is named
+/// once it is a local track ([keyFor]: absolute path → library path; null = the path itself).
+class CopyRoot {
+  const CopyRoot(this.path, [this.keyFor]);
+  final String path;
+  final Future<String> Function(String absolutePath)? keyFor;
+}
+
 @DriftDatabase(
   tables: [
     Tracks,
@@ -330,52 +338,57 @@ class LibraryDb extends _$LibraryDb {
   }
 
   /// Deletes all tracks of one account, plus those tracks' play counts and loudness rows.
-  /// [root]: the kept copies (see [dropServerTracks]) stay as local tracks.
-  Future<void> deleteAccountTracks(String accountId, {String? root}) =>
-      transaction(() async {
-        final paths =
-            await (selectOnly(tracks)
-                  ..addColumns([tracks.path])
-                  ..where(tracks.accountId.equals(accountId)))
-                .map((r) => r.read(tracks.path)!)
-                .get();
-        await dropServerTracks(paths, root: root);
-      });
+  /// [root]: see [dropServerTracks].
+  Future<void> deleteAccountTracks(
+    String accountId, {
+    required CopyRoot? root,
+  }) => transaction(() async {
+    final paths =
+        await (selectOnly(tracks)
+              ..addColumns([tracks.path])
+              ..where(tracks.accountId.equals(accountId)))
+            .map((r) => r.read(tracks.path)!)
+            .get();
+    await dropServerTracks(paths, root: root);
+  });
 
   /// Server tracks [paths] that are gone (removed from the server, or their account removed).
-  /// Their offline rows go; a finished copy whose file still exists under [root] is not lost:
-  /// it becomes a local track (absolute path, plays follow), the file itself is never touched.
-  /// Without [root] nothing is kept.
-  Future<void> dropServerTracks(List<String> paths, {String? root}) =>
-      transaction(() async {
-        for (var i = 0; i < paths.length; i += 500) {
-          final chunk = paths.skip(i).take(500).toList();
-          final rows = {
-            for (final o in await (select(
-              offline,
-            )..where((o) => o.trackPath.isIn(chunk))).get())
-              o.trackPath: o,
-          };
-          for (final path in chunk) {
-            final o = rows[path];
-            final rel = o?.filePath;
-            if (root == null ||
-                o == null ||
-                rel == null ||
-                o.state != OfflineState.done.name) {
-              continue;
-            }
-            final abs = p.join(root, rel);
-            final file = File(abs);
-            if (!file.existsSync()) continue;
-            final row = await (select(
-              tracks,
-            )..where((t) => t.path.equals(path))).getSingleOrNull();
-            if (row == null) continue;
+  /// Their offline rows go, except finished copies: with a reachable [root], one whose file
+  /// exists becomes a local track (plays follow, the file is never touched) and one whose file
+  /// is gone is dropped; with a null [root] (folder unreachable or unknown) we can't tell
+  /// whether the file is there, so finished copies and their tracks are left as they are.
+  Future<void> dropServerTracks(
+    List<String> paths, {
+    required CopyRoot? root,
+  }) => transaction(() async {
+    for (var i = 0; i < paths.length; i += 500) {
+      final chunk = paths.skip(i).take(500).toList();
+      final rows = {
+        for (final o in await (select(
+          offline,
+        )..where((o) => o.trackPath.isIn(chunk))).get())
+          o.trackPath: o,
+      };
+      final gone = <String>[];
+      for (final path in chunk) {
+        final o = rows[path];
+        final rel = o?.filePath;
+        final done = o != null && o.state == OfflineState.done.name;
+        if (done && root == null) continue; // can't tell: nothing lost
+        if (done && rel != null) {
+          final abs = p.join(root!.path, rel);
+          final file = File(abs);
+          final row = file.existsSync()
+              ? await (select(
+                  tracks,
+                )..where((t) => t.path.equals(path))).getSingleOrNull()
+              : null;
+          if (row != null) {
             final t = _fromRow(row);
+            final key = await root.keyFor?.call(abs) ?? abs;
             await upsertTracks([
               Track(
-                path: abs,
+                path: key,
                 accountId: 'local',
                 remoteId: '',
                 albumArtist: t.albumArtist,
@@ -394,12 +407,15 @@ class LibraryDb extends _$LibraryDb {
                 size: file.lengthSync(),
               ),
             ]);
-            await movePlays(path, abs);
+            await movePlays(path, key);
           }
-          await deletePaths(chunk);
-          await removeOffline(chunk);
         }
-      });
+        gone.add(path);
+      }
+      await deletePaths(gone);
+      await removeOffline(gone);
+    }
+  });
 
   /// Raises counts to [counts] (path -> count) where higher; never lowers one.
   Future<void> raisePlayCounts(Map<String, int> counts) async {

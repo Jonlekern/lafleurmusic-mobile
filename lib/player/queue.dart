@@ -242,6 +242,16 @@ class PlayQueue<T> {
   }
 }
 
+/// Place du morceau vers lequel un fondu enchaîné peut aller : le suivant, s'il existe et s'il est
+/// jouable. Sinon null : pas de fondu, et le passage normal saute au prochain jouable.
+int? fadeTarget<T>(PlayQueue<T> q, bool Function(T)? ok) {
+  final n = q.order.length;
+  final i = q.position + 1 < n ? q.position + 1 : (q.repeat == Repeat.all ? 0 : -1);
+  if (i < 0 || i == q.position) return null;
+  if (ok != null && !ok(q.order[i])) return null;
+  return i;
+}
+
 /// Place du premier morceau jouable à partir du morceau en cours (compris), ou juste après si
 /// [after] ; la liste reprend au début en « répéter tout ». Null s'il n'y en a pas.
 int? firstPlayable<T>(

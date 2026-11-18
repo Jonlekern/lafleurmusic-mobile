@@ -98,6 +98,14 @@ void main() {
       expect(await find('subsonic://acc1/none'), isNull);
     });
 
+    test('a docs:// key is opened where the app\'s folder is now', () async {
+      final m = await MediaResolver(
+        (id) async => source(id),
+        localPath: (k) async => k.replaceFirst('docs://', '/new/Documents/'),
+      ).media('docs://LAFLEURMUSIC/a.mp3');
+      expect(m.uri, '/new/Documents/LAFLEURMUSIC/a.mp3');
+    });
+
     test('local file → Media(path) without headers', () async {
       final m = await r.media('/x/a.flac');
       expect(m.uri, '/x/a.flac');

@@ -14,6 +14,7 @@ import 'package:lafleurmusic/sources/accounts.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/sources/subsonic.dart';
 
+import '../offline/fake_device.dart';
 import 'fake_secret_store.dart';
 
 void main() {
@@ -203,7 +204,7 @@ void main() {
       final service = AccountService(
         accounts,
         db: db,
-        musicRoot: () async => tmp,
+        device: FakeDevice(tmp),
       );
       await service.remove(a.id);
       expect(await db.select(db.offline).get(), isEmpty);
@@ -214,6 +215,7 @@ void main() {
     group('playableNow', () {
       late Directory tmp;
       late AccountService service;
+      late FakeDevice device;
       Track tr(String path, {String acc = 'local'}) => Track(
         path: path,
         accountId: acc,
@@ -229,7 +231,7 @@ void main() {
         service = AccountService(
           accounts,
           db: db,
-          musicRoot: () async => tmp,
+          device: device = FakeDevice(tmp),
           sourceOf: (id) async => GatedSource(id, albumCount: 0, answer: TestResult.unreachable),
         );
         await service.watchOffline();
@@ -260,12 +262,66 @@ void main() {
         expect(service.playableNow(tr(k, acc: a.id)), isTrue);
       });
 
+      test('the copies\' folder moved: playableNow follows it', () async {
+        final k = 'subsonic://${a.id}/s1';
+        await db.queueOffline([k], OfflineReason.user);
+        await db.markOfflineDone(k, 'A/s1.mp3', 1);
+        await service.checkAll([a.id]); // absent: only the copy can make it playable
+        final moved = Directory('${tmp.path}/moved');
+        File('${moved.path}/A/s1.mp3')
+          ..createSync(recursive: true)
+          ..writeAsBytesSync([1]);
+        await pumpEventQueue();
+        expect(service.playableNow(tr(k, acc: a.id)), isFalse, reason: 'old folder');
+        device.root = moved;
+        await service.refreshRoot();
+        expect(service.playableNow(tr(k, acc: a.id)), isTrue);
+      });
+
+      test('docs:// local track follows the Documents folder', () async {
+        final docs = Directory('${tmp.path}/docs')..createSync();
+        device.docs = docs;
+        await service.refreshRoot();
+        File('${docs.path}/LAFLEURMUSIC/x.mp3')
+          ..createSync(recursive: true)
+          ..writeAsBytesSync([1]);
+        expect(service.playableNow(tr('docs://LAFLEURMUSIC/x.mp3')), isTrue);
+        expect(service.playableNow(tr('docs://LAFLEURMUSIC/y.mp3')), isFalse);
+      });
+
       test('server track without copy: playable unless the account is absent', () async {
         final k = tr('subsonic://${a.id}/s9', acc: a.id);
         expect(service.playableNow(k), isTrue, reason: 'not tested yet');
         await service.checkAll([a.id]);
         expect(service.playableNow(k), isFalse);
       });
+    });
+
+    test('remove with the folder unreachable keeps the finished copies untouched', () async {
+      final tmp = Directory.systemTemp.createTempSync('rm');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final k = 'subsonic://${a.id}/s1';
+      await db.upsertTrack(Track(
+        path: k,
+        accountId: a.id,
+        remoteId: 's1',
+        title: 'T',
+        artist: 'A',
+        album: 'B',
+        durationMs: 1,
+        hasCover: false,
+        size: 1,
+      ));
+      await db.queueOffline([k], OfflineReason.user);
+      await db.markOfflineDone(k, 'A/B/T.mp3', 1);
+      final service = AccountService(
+        accounts,
+        db: db,
+        device: FakeDevice(tmp)..reachable = false,
+      );
+      await service.remove(a.id);
+      expect((await db.offlineOf(k))!.state, 'done');
+      expect(await db.trackByPath(k), isNotNull);
     });
 
     test('remove invalidates the player source', () async {

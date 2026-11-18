@@ -34,6 +34,7 @@ class Covers {
     this.embedded = taglibCover,
     this.remote,
     this.remoteKey,
+    this.absolute,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
   final Directory cacheDir;
@@ -41,6 +42,9 @@ class Covers {
   final RemoteCover? remote;
   final Future<String?> Function(String trackPath)? remoteKey;
   final DateTime Function() _clock;
+
+  /// Chemin actuel d'un fichier local (clé `docs://` → Documents).
+  final Future<String> Function(String path)? absolute;
 
   /// Un échec (réseau coupé, compte inutilisable) est retenu ce temps-là : pas un essai à chaque image.
   static const retryAfter = Duration(minutes: 1);
@@ -115,10 +119,11 @@ class Covers {
   Future<File?> _load(String trackPath, int size) async {
     if (!trackPath.startsWith('subsonic://')) {
       return _make(_cacheFile(trackPath, size), size, () async {
-        Uint8List? bytes = await embedded(trackPath);
+        final file = await absolute?.call(trackPath) ?? trackPath;
+        Uint8List? bytes = await embedded(file);
         if (bytes == null || bytes.isEmpty) {
           for (final name in folderNames) {
-            final f = File(p.join(p.dirname(trackPath), name));
+            final f = File(p.join(p.dirname(file), name));
             if (await f.exists()) {
               bytes = await f.readAsBytes();
               break;

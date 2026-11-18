@@ -1,8 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 import '../settings.dart';
+
+/// Clé d'un fichier local posé dans le dossier Documents de l'appli (iPhone) : le chemin absolu
+/// change quand l'appli est mise à jour ou restaurée, la partie après `docs://` reste.
+const docsScheme = 'docs://';
 
 /// Ce que l'appli demande au téléphone : dossier des copies, sélecteur, place libre.
 abstract class Device {
@@ -27,6 +32,12 @@ abstract class Device {
   /// Android : demande les droits de stockage (écriture avant l'API 29 ; lecture des
   /// autres fichiers si [readOthers]). Vrai si accordés ou inutiles. iOS : toujours vrai.
   Future<bool> ensureAccess({bool readOthers = false});
+
+  /// `docs://rel` → chemin actuel dans Documents (iPhone) ; tout autre chemin tel quel.
+  Future<String> absolutePath(String key);
+
+  /// Inverse : un fichier dans Documents (iPhone) reçoit sa clé `docs://rel` ; les autres restent absolus.
+  Future<String> keyFor(String absolutePath);
 
   Future<int> freeBytes(String path);
 
@@ -153,6 +164,22 @@ class ChannelDevice implements Device {
           'readOthers': readOthers,
         }) ??
         false;
+  }
+
+  // Documents = le parent du dossier par défaut (Documents/LAFLEURMUSIC)
+  Future<String> _docs() async => p.dirname((await _default()).path);
+
+  @override
+  Future<String> absolutePath(String key) async => key.startsWith(docsScheme)
+      ? p.join(await _docs(), key.substring(docsScheme.length))
+      : key;
+
+  @override
+  Future<String> keyFor(String absolutePath) async {
+    if (!_ios) return absolutePath;
+    final docs = await _docs();
+    if (!p.isWithin(docs, absolutePath)) return absolutePath;
+    return '$docsScheme${p.posix.joinAll(p.split(p.relative(absolutePath, from: docs)))}';
   }
 
   @override

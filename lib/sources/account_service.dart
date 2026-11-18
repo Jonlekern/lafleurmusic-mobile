@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../library/db.dart';
 import '../library/models.dart';
+import '../offline/device.dart';
 import '../library/sync.dart';
 import '../player/media_resolver.dart';
 import 'accounts.dart';
@@ -93,23 +94,32 @@ class AccountService extends ChangeNotifier {
     Future<MusicSource> Function(String id)? sourceOf,
     Future<SyncResult> Function(MusicSource source)? sync,
     this.forgetCovers,
-    this.musicRoot,
+    this.device,
   }) : _db = db,
        _sourceOf = sourceOf ?? resolver?.source ?? accounts.source,
        _sync =
            sync ??
            LibrarySync(
              db,
-             musicRoot: musicRoot == null
-                 ? null
-                 : () async => (await musicRoot()).path,
+             copyRoot: device == null ? null : () => _copyRootOf(device),
            ).run;
 
   final LibraryDb _db;
 
-  /// Where the kept copies live (main: [Device.musicRoot]). Without it nothing is kept
+  /// The phone: where the kept copies live. Without it, finished copies are left alone
   /// when a track leaves the server or an account is removed.
-  final Future<Directory> Function()? musicRoot;
+  final Device? device;
+
+  /// The copies' folder, or null when it can't be reached (card removed…): then a missing
+  /// file proves nothing and no kept copy may be dropped.
+  static Future<CopyRoot?> _copyRootOf(Device d) async {
+    try {
+      if (!await d.rootReachable()) return null;
+      return CopyRoot((await d.musicRoot()).path, d.keyFor);
+    } on Object {
+      return null;
+    }
+  }
 
   final Accounts accounts;
   final MediaResolver? resolver;
@@ -151,24 +161,43 @@ class AccountService extends ChangeNotifier {
   }
 
   Map<String, OfflineRow> _kept = const {};
-  String? _root;
+  String? _root, _docs;
   StreamSubscription<Map<String, OfflineRow>>? _keptSub;
 
   /// Follows the offline rows (and the copies' folder) so [playableNow] can answer at once.
+  /// The folder is read again at every change of the rows (a folder move rewrites them) and
+  /// on [refreshRoot].
   Future<void> watchOffline() async {
-    _root = (await musicRoot?.call())?.path;
+    await refreshRoot();
     await _keptSub?.cancel();
-    _keptSub = _db.watchOffline().listen((m) {
+    _keptSub = _db.watchOffline().listen((m) async {
       _kept = m;
-      notifyListeners();
+      await refreshRoot();
     });
   }
+
+  /// Reads the copies' folder and the Documents folder again (after a folder change).
+  Future<void> refreshRoot() async {
+    final d = device;
+    if (d == null) return;
+    try {
+      _root = (await d.musicRoot()).path;
+      _docs = await d.absolutePath(docsScheme);
+    } on Object {
+      // keep what we knew
+    }
+    notifyListeners();
+  }
+
+  String _absolute(String path) => path.startsWith(docsScheme) && _docs != null
+      ? p.join(_docs!, path.substring(docsScheme.length))
+      : path;
 
   /// Can this track start now? A local file: it exists. A server track: its finished copy
   /// exists, or its account hasn't been found unreachable. The track playing is never
   /// asked: it finishes if it is in memory; only the NEXT choice uses this.
   bool playableNow(Track t) {
-    if (parseRemoteKey(t.path) == null) return File(t.path).existsSync();
+    if (parseRemoteKey(t.path) == null) return File(_absolute(t.path)).existsSync();
     final row = _kept[t.path];
     final rel = row?.filePath;
     final root = _root;
@@ -290,8 +319,8 @@ class AccountService extends ChangeNotifier {
     _cancel[id]?.cancelled = true;
     final running = _syncing[id];
     if (running != null) await running.catchError((Object _) {});
-    final root = await musicRoot?.call();
-    await accounts.remove(id, root: root?.path);
+    final d = device;
+    await accounts.remove(id, root: d == null ? null : await _copyRootOf(d));
     resolver?.invalidate(id);
     try {
       await forgetCovers?.call(id);
