@@ -352,6 +352,24 @@ class LibraryDb extends _$LibraryDb {
     await dropServerTracks(paths, root: root);
   });
 
+  /// Server tracks whose account no longer exists (removed while the folder was unreachable):
+  /// finished copies that are still on disk become local tracks, the rest goes ([dropServerTracks]).
+  /// Safe to repeat; call it only with a reachable [root].
+  Future<void> adoptOrphans(CopyRoot root) async {
+    final ids = (await select(accountRows).get()).map((r) => r.id).toSet();
+    final paths =
+        await (selectOnly(tracks)
+              ..addColumns([tracks.path, tracks.accountId])
+              ..where(tracks.accountId.equals('local').not()))
+            .map((r) => (r.read(tracks.path)!, r.read(tracks.accountId)!))
+            .get();
+    final orphans = [
+      for (final (path, acc) in paths)
+        if (!ids.contains(acc)) path,
+    ];
+    if (orphans.isNotEmpty) await dropServerTracks(orphans, root: root);
+  }
+
   /// Server tracks [paths] that are gone (removed from the server, or their account removed).
   /// Their offline rows go, except finished copies: with a reachable [root], one whose file
   /// exists becomes a local track (plays follow, the file is never touched) and one whose file

@@ -13,7 +13,7 @@ class FakeDevice implements Device {
   @override
   Future<bool> rootReachable() async => reachable;
   @override
-  Future<String> absolutePath(String key) async => key.startsWith(docsScheme)
+  Future<String> absolutePath(String key) async => key.startsWith(docsScheme) && docs != null
       ? '${docs!.path}/${key.substring(docsScheme.length)}'
       : key;
   @override

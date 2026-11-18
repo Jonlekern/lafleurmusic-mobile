@@ -324,6 +324,52 @@ void main() {
       expect(await db.trackByPath(k), isNotNull);
     });
 
+    test('account removed while the folder was unreachable: its copies become local once it answers', () async {
+      final tmp = Directory.systemTemp.createTempSync('rm');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final k = 'subsonic://${a.id}/s1', q = 'subsonic://${a.id}/s2';
+      for (final p in [k, q]) {
+        await db.upsertTrack(Track(
+          path: p,
+          accountId: a.id,
+          remoteId: p.split('/').last,
+          title: 'T',
+          artist: 'A',
+          album: 'B',
+          durationMs: 1,
+          hasCover: false,
+          size: 1,
+        ));
+      }
+      await db.queueOffline([k, q], OfflineReason.user);
+      await db.markOfflineDone(k, 'A/B/T.mp3', 1);
+      await db.markOfflineDone(q, 'A/B/gone.mp3', 1); // file deleted by hand
+      File('${tmp.path}/A/B/T.mp3')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([1]);
+      await db.addPlay(k, DateTime(2026));
+      final device = FakeDevice(tmp)..reachable = false;
+      final service = AccountService(accounts, db: db, device: device);
+      await service.remove(a.id);
+      expect(await db.trackByPath(k), isNotNull); // stuck until the folder answers
+      device.reachable = true;
+      await service.refreshRoot();
+      final abs = '${tmp.path}/A/B/T.mp3';
+      expect(await db.trackByPath(k), isNull);
+      expect(await db.trackByPath(q), isNull);
+      expect((await db.trackByPath(abs))!.accountId, 'local');
+      expect([for (final c in await db.select(db.playCounts).get()) c.path], [abs]);
+      expect(await db.select(db.offline).get(), isEmpty);
+    });
+
+    test('refreshRoot notifies even without a device', () async {
+      final service = AccountService(accounts, db: db);
+      var n = 0;
+      service.addListener(() => n++);
+      await service.refreshRoot();
+      expect(n, 1);
+    });
+
     test('remove invalidates the player source', () async {
       var built = 0;
       final resolver = MediaResolver((id) async {

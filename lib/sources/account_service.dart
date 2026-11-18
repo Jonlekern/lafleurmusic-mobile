@@ -177,17 +177,23 @@ class AccountService extends ChangeNotifier {
   }
 
   /// Reads the copies' folder and the Documents folder again (after a folder change).
+  /// A reachable folder also settles the tracks of accounts removed while it was unreachable.
   Future<void> refreshRoot() async {
     final d = device;
-    if (d == null) return;
-    try {
-      _root = (await d.musicRoot()).path;
-      _docs = await d.absolutePath(docsScheme);
-    } on Object {
-      // keep what we knew
+    if (d != null) {
+      try {
+        _root = (await d.musicRoot()).path;
+        _docs = await d.absolutePath(docsScheme);
+        final root = await _copyRootOf(d);
+        if (root != null) await _db.adoptOrphans(root);
+      } on Object {
+        // keep what we knew
+      }
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners(); // an emit can land after dispose
   }
+
+  bool _disposed = false;
 
   String _absolute(String path) => path.startsWith(docsScheme) && _docs != null
       ? p.join(_docs!, path.substring(docsScheme.length))
@@ -213,6 +219,7 @@ class AccountService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _keptSub?.cancel();
     super.dispose();
   }

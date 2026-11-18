@@ -429,7 +429,7 @@ class Downloader extends ChangeNotifier {
   /// Au lancement : efface les `.part` laissés par une coupure, remet la file en route.
   Future<void> resumeAtLaunch() async {
     try {
-      if (_loop == null) {
+      if (_loop == null && await device.rootReachable()) {
         final root = await device.musicRoot();
         if (await root.exists()) {
           await for (final e in root.list(
@@ -463,6 +463,9 @@ class Downloader extends ChangeNotifier {
       a.cancel();
       await a.done;
     }
+    // dossier choisi injoignable : musicRoot() donne le dossier par défaut, où ces chemins
+    // désignent peut-être d'autres fichiers. Les lignes sont retirées, aucun fichier effacé.
+    if (!await device.rootReachable()) return;
     final root = await device.musicRoot();
     for (final rel in rels) {
       final file = _inside(root, rel);
@@ -509,6 +512,11 @@ class Downloader extends ChangeNotifier {
     _active?.cancel();
     try {
       await whenIdle();
+      // [from] vient de musicRoot() : injoignable, c'est le dossier par défaut, pas celui des copies
+      if (!await device.rootReachable()) {
+        await _releaseQuietly();
+        return const KeepResult.failed();
+      }
       final r = await _move(from, to, commit);
       if (!r.ok) await _releaseQuietly();
       return r;

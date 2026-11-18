@@ -60,8 +60,9 @@ class _Device implements Device {
   Future<int> freeBytes(String path) async => free;
   @override
   Future<void> announce(String path) async => announced.add(path);
+  bool reachable = true;
   @override
-  Future<bool> rootReachable() async => true;
+  Future<bool> rootReachable() async => reachable;
   @override
   Future<PickedFolder?> pickFolder() async => null;
   @override
@@ -603,6 +604,34 @@ void main() {
     expect(outside.existsSync(), isTrue);
     expect(await db.offlineOf('subsonic://acc/1'), isNull);
     expect(await db.offlineOf('subsonic://acc/2'), isNull);
+  });
+
+  test('chosen folder unreachable: forget drops the rows but deletes no file', () async {
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    // the chosen folder is gone: musicRoot() answers with the default one,
+    // where the same relative path is somebody else's file
+    final other = File('${root.path}/Art/Alb/01 Song 1.mp3');
+    expect(other.existsSync(), isTrue);
+    device.reachable = false;
+    await d.forget(['subsonic://acc/1']);
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    expect(other.existsSync(), isTrue);
+  });
+
+  test('chosen folder unreachable: no .part sweep, no move', () async {
+    final part = File('${root.path}/x.mp3.lafleur.part')
+      ..createSync(recursive: true);
+    device.reachable = false;
+    final d = make();
+    await d.resumeAtLaunch();
+    await d.whenIdle();
+    expect(part.existsSync(), isTrue);
+    final r = await d.moveRoot(from: root, to: Directory('${tmp.path}/sd'));
+    expect(r.ok, isFalse);
+    expect(device.released, 1);
   });
 
   test('forget cancels the download in progress', () async {
