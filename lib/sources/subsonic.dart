@@ -149,10 +149,13 @@ class SubsonicSource implements MusicSource, HttpSource {
       http.Response r;
       while (true) {
         final target = _uri('ping');
-        final url = target.replace(
+        // built whole: Uri.replace(port: null) would keep the old port
+        final url = Uri(
           scheme: origin.scheme,
           host: origin.host,
           port: origin.hasPort ? origin.port : null,
+          path: target.path,
+          query: target.query,
         );
         final req = http.Request('GET', url)
           ..followRedirects = false

@@ -85,14 +85,24 @@ void main() {
       });
 
       test('http -> https on the default port', () async {
+        final urls = <Uri>[];
         final s = make(
-          MockClient((r) async => r.url.scheme == 'http'
-              ? moved('https://h/rest/ping.view')
-              : json(fixture('ping'))),
+          MockClient((r) async {
+            urls.add(r.url);
+            return r.url.scheme == 'http'
+                ? moved('https://h/rest/ping.view')
+                : json(fixture('ping'));
+          }),
           base: 'http://h:4533',
         );
         expect(await s.test(), TestResult.ok);
         expect(s.redirectedBase, Uri.parse('https://h'));
+        expect(urls, hasLength(2));
+        expect(urls[1].scheme, 'https');
+        expect(urls[1].port, 443);
+        expect(urls[1].hasPort, isFalse);
+        expect(urls[1].path, '/rest/ping.view');
+        expect(urls[1].toString(), isNot(contains('4533')));
       });
 
       test('another host stays headerRefused', () async {
