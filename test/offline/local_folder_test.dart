@@ -11,9 +11,11 @@ import 'fake_device.dart';
 
 class _Reader implements TagReader {
   final reads = <String>[];
+  Future<void> Function()? onRead;
   @override
   Future<TrackTags?> read(String path) async {
     reads.add(path);
+    await onRead?.call();
     return TrackTags(
       title: 'T ${path.split('/').last}',
       artist: 'Art',
@@ -28,8 +30,12 @@ class _Device extends FakeDevice {
   _Device(super.root, {super.docs});
   bool access = true;
   bool? askedOthers;
+  int asks = 0;
+  bool throws = false;
   @override
   Future<bool> ensureAccess({bool readOthers = false}) async {
+    asks++;
+    if (throws) throw StateError('busy');
     askedOthers = readOthers;
     return access;
   }
@@ -164,9 +170,11 @@ void main() {
       expect(await db.localTracks(), hasLength(1));
       device.reachable = true;
       device.access = false;
+      folder = LocalFolder(db: db, device: device, reader: reader); // new launch
       await folder.rescan(); // no permission: can't tell
       expect(await db.localTracks(), hasLength(1));
       device.access = true;
+      folder = LocalFolder(db: db, device: device, reader: reader); // next launch
       await folder.rescan();
       expect(await db.localTracks(), isEmpty);
       expect(await db.select(db.playCounts).get(), isEmpty);
@@ -179,5 +187,69 @@ void main() {
     await folder.rescan();
     expect(f.readAsStringSync(), 'zzzz');
     expect(f.statSync().modified, before.modified);
+  });
+
+  Track kept(String id) => Track(
+    path: 'subsonic://acc/$id',
+    accountId: 'acc',
+    remoteId: id,
+    title: 'x',
+    artist: 'A',
+    album: 'B',
+    durationMs: 1,
+    hasCover: false,
+    size: 4,
+  );
+
+  test('a copy stored by the downloader during the scan is not taken as hand-placed', () async {
+    final f = put('A/B/01 x.mp3');
+    await db.upsertTrack(kept('1'));
+    await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+    reader.onRead = () async {
+      await db.markOfflineDone('subsonic://acc/1', 'A/B/01 x.mp3', 4);
+    };
+    await folder.rescan();
+    expect(await db.trackByPath(f.path), isNull);
+  });
+
+  test('a file the downloader is writing right now is left alone', () async {
+    final f = put('A/B/01 x.mp3');
+    folder = LocalFolder(
+      db: db,
+      device: device,
+      reader: reader,
+      inFlight: () => f.path,
+    );
+    await folder.rescan();
+    expect(await db.localTracks(), isEmpty);
+  });
+
+  test('an existing duplicate of a finished copy is healed, plays go to the server track', () async {
+    final f = put('A/B/01 x.mp3');
+    await db.upsertTrack(kept('1'));
+    await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+    await db.markOfflineDone('subsonic://acc/1', 'A/B/01 x.mp3', 4);
+    await db.upsertTrack(
+      Track(path: f.path, title: 'dup', artist: '', album: '', durationMs: 1, hasCover: false, size: 4),
+    );
+    await db.addPlay(f.path, DateTime(2026));
+    await folder.rescan();
+    expect(await db.localTracks(), isEmpty);
+    expect((await db.select(db.playCounts).get()).single.path, 'subsonic://acc/1');
+  });
+
+  test('a throwing permission request does not escape and counts as refused', () async {
+    put('a.mp3');
+    device.throws = true;
+    await folder.rescan();
+    expect(await db.localTracks(), hasLength(1)); // our own folder is still read
+  });
+
+  test('the permission is asked once per launch, not at every resume', () async {
+    put('a.mp3');
+    await folder.rescan();
+    await folder.rescan();
+    await folder.rescan();
+    expect(device.asks, 1);
   });
 }

@@ -83,6 +83,11 @@ class Downloader extends ChangeNotifier {
   /// Le morceau en cours de téléchargement (sa clé), sinon null.
   String? get current => _active?.path;
 
+  String? _target;
+
+  /// Le fichier final en cours d'écriture ou tout juste rangé, pas encore noté `done`.
+  String? get targetPath => _target;
+
   /// Avancement du morceau en cours, de 0 à 1.
   double get progress => _progress;
 
@@ -218,6 +223,7 @@ class Downloader extends ChangeNotifier {
     } finally {
       active.client.close();
       _active = null;
+      _target = null;
       done.complete();
       notifyListeners();
     }
@@ -256,6 +262,7 @@ class Downloader extends ChangeNotifier {
 
     final rel = _chooseName(root, t, ext);
     final file = File(p.join(root.path, rel));
+    _target = file.path;
     final part = File('${file.path}$_partSuffix');
     await part.parent.create(recursive: true);
     final sink = part.openWrite();

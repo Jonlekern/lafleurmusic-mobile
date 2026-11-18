@@ -98,7 +98,7 @@ Future<LafleurApp> buildLafleurApp({
     device: device,
     reader: TagLibReader(),
   );
-  String? scannedRoot;
+  String? scannedRoot = (await device.musicRoot()).path; // le lancement relit déjà
   accountService.addListener(() async {
     final path = (await device.musicRoot()).path;
     if (path == scannedRoot) return;
