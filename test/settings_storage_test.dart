@@ -33,4 +33,20 @@ void main() {
       expect((await AppSettings.load(f)).storageLimitBytes, gib10, reason: bad);
     }
   });
+
+  test('musicFolder defaults to null and round-trips', () async {
+    expect((await AppSettings.load(f)).musicFolder, isNull);
+    await (AppSettings()..musicFolder = '/storage/emulated/0/Music/X').save(f);
+    expect(
+      (await AppSettings.load(f)).musicFolder,
+      '/storage/emulated/0/Music/X',
+    );
+  });
+
+  test('bad musicFolder falls back to null', () async {
+    for (final bad in ['3', '""', '[]']) {
+      f.writeAsStringSync('{"musicFolder": $bad}');
+      expect((await AppSettings.load(f)).musicFolder, isNull, reason: bad);
+    }
+  });
 }

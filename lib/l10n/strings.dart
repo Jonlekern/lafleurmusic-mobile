@@ -313,4 +313,8 @@ class Strings {
     'Its songs leave this phone; nothing is erased on the server.',
   );
   String get offlineLabel => _t('Hors ligne', 'Offline');
+  String get folderNotLocal => _t(
+    'Ce dossier n’est pas sur le téléphone. Choisis un dossier du téléphone ou de la carte SD.',
+    'This folder isn’t on the phone. Pick a folder on the phone or SD card.',
+  );
 }

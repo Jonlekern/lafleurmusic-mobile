@@ -22,6 +22,7 @@ class AppSettings {
     this.crossfade = false,
     this.crossfadeSeconds = 5,
     this.storageLimitBytes = defaultStorageLimitBytes,
+    this.musicFolder,
   }) : equalizer = equalizer ?? Equalizer.named('flat');
   Equalizer equalizer;
   bool artistGrid; // vue Artistes : grille de photos (sinon liste)
@@ -40,6 +41,8 @@ class AppSettings {
   int crossfadeSeconds; // 1 à 10 s
   int
   storageLimitBytes; // place maximale des copies hors ligne (bornes : l'écran)
+
+  String? musicFolder; // dossier choisi pour les copies (iOS : signet en base64) ; null = dossier par défaut
 
   static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
 
@@ -78,6 +81,11 @@ class AppSettings {
                   (j['storageLimitBytes']! as int) > 0
               ? j['storageLimitBytes']! as int
               : defaultStorageLimitBytes,
+          musicFolder:
+              j['musicFolder'] is String &&
+                  (j['musicFolder']! as String).isNotEmpty
+              ? j['musicFolder']! as String
+              : null,
         );
       }
     } on Object {
@@ -111,6 +119,7 @@ class AppSettings {
         'crossfade': crossfade,
         'crossfadeSeconds': crossfadeSeconds,
         'storageLimitBytes': storageLimitBytes,
+        'musicFolder': musicFolder,
       }),
     );
     await tmp.rename(f.path);

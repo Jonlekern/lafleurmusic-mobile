@@ -1,0 +1,133 @@
+package studio.lafleur.lafleurmusic
+
+import android.app.Activity
+import android.content.Intent
+import android.media.MediaScannerConnection
+import android.net.Uri
+import android.os.Environment
+import android.os.StatFs
+import android.provider.DocumentsContract
+import io.flutter.plugin.common.BinaryMessenger
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+import java.io.File
+
+/** Canal `studio.lafleur/device` : dossier des copies, sélecteur de dossier, place libre. */
+class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) {
+    private var pending: MethodChannel.Result? = null
+
+    init {
+        MethodChannel(messenger, "studio.lafleur/device").setMethodCallHandler(::handle)
+    }
+
+    private fun handle(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "defaultRoot" -> {
+                val dir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                    "LAFLEURMUSIC",
+                )
+                if (dir.isDirectory || dir.mkdirs()) result.success(dir.path)
+                else result.error("default_root", null, null)
+            }
+            "pickFolder" -> pickFolder(result)
+            "freeBytes" -> {
+                val path = call.argument<String>("path")
+                if (path == null) {
+                    result.error("args", null, null)
+                    return
+                }
+                try {
+                    // Le dossier peut ne pas exister encore : on remonte au premier parent présent.
+                    var f = File(path)
+                    while (!f.exists() && f.parentFile != null) f = f.parentFile!!
+                    result.success(StatFs(f.path).availableBytes)
+                } catch (e: Exception) {
+                    result.success(0L)
+                }
+            }
+            "announce" -> {
+                val path = call.argument<String>("path")
+                if (path != null) MediaScannerConnection.scanFile(activity, arrayOf(path), null, null)
+                result.success(null)
+            }
+            else -> result.notImplemented()
+        }
+    }
+
+    private fun pickFolder(result: MethodChannel.Result) {
+        if (pending != null) {
+            result.error("busy", null, null)
+            return
+        }
+        pending = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+        )
+        @Suppress("DEPRECATION")
+        activity.startActivityForResult(intent, REQUEST_FOLDER)
+    }
+
+    /** Appelé par [MainActivity.onActivityResult] ; renvoie vrai si le résultat est le nôtre. */
+    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode != REQUEST_FOLDER) return false
+        val result = pending ?: return true
+        pending = null
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+            result.success(null)
+            return true
+        }
+        val path = realPath(uri)
+        if (path == null) {
+            result.error("not_local", null, null)
+            return true
+        }
+        try {
+            activity.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        } catch (e: Exception) {
+            // Pas de permission persistable : le chemin de fichier suffit avec l'accès au stockage.
+        }
+        val dir = File(path)
+        if (!dir.isDirectory && !dir.mkdirs()) {
+            result.error("not_local", null, null)
+            return true
+        }
+        result.success(mapOf("path" to path))
+        return true
+    }
+
+    /**
+     * Chemin de fichiers d'un dossier choisi : `primary:Music/X` → stockage principal,
+     * `1234-ABCD:Music` → `/storage/1234-ABCD/Music`. Cloud et autres : null.
+     */
+    private fun realPath(tree: Uri): String? {
+        if (tree.authority != "com.android.externalstorage.documents") return null
+        val docId = try {
+            DocumentsContract.getTreeDocumentId(tree)
+        } catch (e: Exception) {
+            return null
+        }
+        val colon = docId.indexOf(':')
+        if (colon < 0) return null
+        val volume = docId.substring(0, colon)
+        val rel = docId.substring(colon + 1)
+        val base = if (volume == "primary") {
+            Environment.getExternalStorageDirectory().path
+        } else if (volume.matches(Regex("[A-Za-z0-9-]+"))) {
+            "/storage/$volume"
+        } else {
+            return null
+        }
+        return if (rel.isEmpty()) base else "$base/$rel"
+    }
+
+    private companion object {
+        const val REQUEST_FOLDER = 4711
+    }
+}
