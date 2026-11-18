@@ -29,6 +29,15 @@ class _Throwing extends FakeSecretStore {
   }
 }
 
+class _Recording extends FakeSecretStore {
+  final writes = <String>[];
+  @override
+  Future<void> write(String key, String value) {
+    writes.add(key);
+    return super.write(key, value);
+  }
+}
+
 void main() {
   late LibraryDb db;
   late FakeSecretStore secrets;
@@ -163,10 +172,20 @@ void main() {
     expect(await acc.watch().first, isEmpty);
   });
 
-  test('add cleans the secrets when the insert throws', () async {
-    await db.customStatement('DROP TABLE accounts');
+  test('add cleans the secrets when the insert itself throws', () async {
+    // the insert fails after both secrets were written
+    await db.customStatement(
+      "CREATE TRIGGER no_insert BEFORE INSERT ON accounts "
+      "BEGIN SELECT RAISE(ABORT, 'insert refused'); END",
+    );
+    final st = _Recording();
+    final acc = await with_(st);
     await expectLater(addOne('x'), throwsA(anything));
-    expect(secrets.data, isEmpty);
+    expect(st.writes, hasLength(2));
+    expect(st.writes.any((k) => k.endsWith('.password')), isTrue);
+    expect(st.writes.any((k) => k.endsWith('.headers')), isTrue);
+    expect(st.data, isEmpty);
+    expect(await acc.watch().first, isEmpty);
   });
 
   test('remove deletes the row first even if the store throws', () async {
