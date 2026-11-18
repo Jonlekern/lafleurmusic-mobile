@@ -137,18 +137,53 @@ void main() {
       expect(await server.get('subsonic://acc1/s9', 64), isNull);
     });
 
-    test('réseau coupé → null, et redemandé plus tard', () async {
-      var fail = true;
+    test('réseau coupé → null pendant 1 min (pas un essai par image), puis redemandé', () async {
+      var fail = true, fetches = 0;
+      var now = DateTime(2026);
       final flaky = Covers(
         cacheDir: Directory('${dir.path}/cache'),
+        clock: () => now,
         remote: (_, _) async {
+          fetches++;
           if (fail) throw Exception('offline');
           return png(10);
         },
       );
       expect(await flaky.get('subsonic://acc1/s9', 64), isNull);
       fail = false;
+      now = now.add(const Duration(seconds: 30));
+      expect(await flaky.get('subsonic://acc1/s9', 64), isNull);
+      expect(fetches, 1);
+      now = now.add(const Duration(seconds: 31));
       expect(await flaky.get('subsonic://acc1/s9', 64), isNotNull);
+      expect(fetches, 2);
+    });
+
+    test('pochettes par album (remoteKey) : un seul téléchargement pour tout l’album', () async {
+      var fetches = 0;
+      Covers make() => Covers(
+        cacheDir: Directory('${dir.path}/cache'),
+        remoteKey: (path) async => path.endsWith('x') ? null : 'acc1/al-1',
+        remote: (_, _) async {
+          fetches++;
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+          return png(250);
+        },
+      );
+      final album = make();
+      final files = await Future.wait([
+        for (final s in ['s1', 's2', 's3'])
+          album.get('subsonic://acc1/$s', 300),
+      ]);
+      expect(fetches, 1);
+      expect(files.map((f) => f!.path).toSet(), hasLength(1));
+      // plus tard, un autre morceau du même album : déjà sur le disque
+      expect(await album.get('subsonic://acc1/s4', 300), isNotNull);
+      expect(await make().get('subsonic://acc1/s5', 300), isNotNull);
+      expect(fetches, 1);
+      // pas de pochette sur le serveur : rien téléchargé
+      expect(await album.get('subsonic://acc1/x', 300), isNull);
+      expect(fetches, 1);
     });
 
     test('sans fonction remote : pas de pochette', () async {

@@ -20,30 +20,46 @@ const _scheme = 'subsonic://';
 /// Turns a library path into what mpv opens: the file itself, or the server
 /// stream with the account headers. Never logs the stream URL (it carries the token).
 class MediaResolver {
-  MediaResolver(this._sourceOf);
+  MediaResolver(this._sourceOf, {DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
 
   /// Plays local files only (no account known).
   MediaResolver.localOnly()
-    : _sourceOf = ((id) async => throw StateError('No account $id'));
+    : _sourceOf = ((id) async => throw StateError('No account $id')),
+      _clock = DateTime.now;
+
+  /// A failed account (password missing, database error…) is not asked again before this.
+  static const retryAfter = Duration(minutes: 1);
 
   final Future<MusicSource> Function(String accountId) _sourceOf;
+  final DateTime Function() _clock;
   final _sources = <String, Future<MusicSource>>{};
+  final _failedAt = <String, DateTime>{};
 
   /// One source per account, kept until [invalidate] (password or headers changed).
-  Future<MusicSource> source(String accountId) =>
-      _sources.putIfAbsent(accountId, () {
-        final f = _sourceOf(accountId);
-        // a failure (password missing…) is retried next time
-        f.then<void>(
-          (_) {},
-          onError: (Object _) {
-            if (identical(_sources[accountId], f)) _sources.remove(accountId);
-          },
-        );
-        return f;
-      });
+  Future<MusicSource> source(String accountId) {
+    final failed = _failedAt[accountId];
+    if (failed != null && !_clock().isBefore(failed.add(retryAfter))) {
+      invalidate(accountId);
+    }
+    return _sources.putIfAbsent(accountId, () {
+      final f = _sourceOf(accountId);
+      f.then<void>(
+        (_) {},
+        onError: (Object _) {
+          if (identical(_sources[accountId], f)) {
+            _failedAt[accountId] = _clock();
+          }
+        },
+      );
+      return f;
+    });
+  }
 
-  void invalidate(String accountId) => _sources.remove(accountId);
+  void invalidate(String accountId) {
+    _sources.remove(accountId);
+    _failedAt.remove(accountId);
+  }
 
   Future<Media> media(String path) async {
     final key = parseRemoteKey(path);
@@ -74,12 +90,13 @@ Future<Uint8List?> remoteCover(
   final cl = c ?? http.Client();
   try {
     final res = await cl.get(s.coverUri(coverId, size), headers: s.headers);
-    final type = res.headers['content-type'] ?? '';
-    // Subsonic answers "not found" with a 200 and a JSON/XML error
+    final type = (res.headers['content-type'] ?? '').toLowerCase();
+    // Subsonic answers "not found" with a 200 and a JSON/XML error (an SVG cover is image/svg+xml: kept)
     if (res.statusCode != 200 ||
         res.bodyBytes.isEmpty ||
         type.contains('json') ||
-        type.contains('xml')) {
+        type.startsWith('text/xml') ||
+        type.startsWith('application/xml')) {
       return null;
     }
     return res.bodyBytes;
@@ -99,6 +116,17 @@ Future<Uint8List?> Function(String trackPath, int size) remoteCovers(
   final coverId = t?.coverId;
   if (t == null || coverId == null || coverId.isEmpty) return null;
   return remoteCover(await resolver.source(t.accountId), coverId, size);
+};
+
+/// `Covers.remoteKey` for library tracks: account + cover id, shared by a whole album
+/// (one download, one cache file); null when the server has no cover.
+Future<String?> Function(String trackPath) remoteCoverKey(
+  Future<Track?> Function(String path) trackOf,
+) => (path) async {
+  final t = await trackOf(path);
+  final coverId = t?.coverId;
+  if (t == null || coverId == null || coverId.isEmpty) return null;
+  return '${t.accountId}/$coverId';
 };
 
 /// Lock screen: a server stream has no reliable tags nor embedded picture, so the

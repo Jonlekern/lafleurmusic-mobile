@@ -44,6 +44,7 @@ Future<void> main() async {
   final covers = Covers(
     cacheDir: Directory(p.join(support.path, 'covers')),
     remote: remoteCovers(resolver, db.trackByPath),
+    remoteKey: remoteCoverKey(db.trackByPath), // une pochette par album
   );
   final player = LafleurPlayer(resolver: resolver)
     // écran verrouillé : la pochette du serveur en octets, jamais une URL

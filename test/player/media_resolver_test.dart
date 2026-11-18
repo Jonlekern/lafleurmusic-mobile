@@ -83,15 +83,27 @@ void main() {
 
     test('account unusable (password gone) → the raw key: mpv fails it and the track is skipped', () async {
       var calls = 0;
+      var now = DateTime(2026);
       final broken = MediaResolver((id) async {
         calls++;
         throw StateError('Missing password for account $id');
-      });
+      }, clock: () => now);
       final m = await broken.media('subsonic://acc1/s9');
       expect(m.uri, 'subsonic://acc1/s9');
       expect(m.httpHeaders, isNull);
+      // within a minute: no new database + keychain read
+      now = now.add(const Duration(seconds: 59));
       await broken.media('subsonic://acc1/s9');
-      expect(calls, 2); // a failure is not cached
+      await expectLater(broken.source('acc1'), throwsStateError);
+      expect(calls, 1);
+      // afterwards: tried again
+      now = now.add(const Duration(seconds: 2));
+      await broken.media('subsonic://acc1/s9');
+      expect(calls, 2);
+      // invalidate (password just fixed): tried at once
+      broken.invalidate('acc1');
+      await broken.media('subsonic://acc1/s9');
+      expect(calls, 3);
     });
   });
 
@@ -113,10 +125,35 @@ void main() {
       expect(seen.headers['CF-Access-Client-Id'], 'id1');
     });
 
-    test('404 or empty body → null', () async {
+    test('SVG is an image, not an error body', () async {
+      final s = source(
+        'acc1',
+        client: MockClient(
+          (_) async => http.Response.bytes(
+            [60, 115],
+            200,
+            headers: {'content-type': 'image/svg+xml'},
+          ),
+        ),
+      );
+      expect(await remoteCover(s, 'al-1', 64), isNotNull);
+    });
+
+    test('404, empty body or Subsonic error body → null', () async {
       for (final res in [
         http.Response('nope', 404),
         http.Response.bytes([], 200),
+        http.Response('{}', 200, headers: {'content-type': 'application/json'}),
+        http.Response(
+          '<e/>',
+          200,
+          headers: {'content-type': 'text/xml; charset=utf-8'},
+        ),
+        http.Response(
+          '<e/>',
+          200,
+          headers: {'content-type': 'application/xml'},
+        ),
       ]) {
         final s = source('acc1', client: MockClient((_) async => res));
         expect(await remoteCover(s, 'al-1', 64), isNull);
@@ -176,6 +213,20 @@ void main() {
         isNull,
       );
       expect(built, 0);
+    });
+  });
+
+  group('remoteCoverKey (Covers.remoteKey)', () {
+    test('account + cover id: one key for the whole album', () async {
+      final key = remoteCoverKey((path) async => remote(path.split('/').last));
+      expect(await key('subsonic://acc1/s1'), 'acc1/al-1');
+      expect(await key('subsonic://acc1/s2'), 'acc1/al-1');
+      final none = remoteCoverKey((path) async => remote('s1', coverId: null));
+      expect(await none('subsonic://acc1/s1'), isNull);
+      expect(
+        await remoteCoverKey((_) async => null)('subsonic://acc1/x'),
+        isNull,
+      );
     });
   });
 

@@ -26,12 +26,24 @@ Future<Uint8List?> taglibCover(String path) => Isolate.run(() {
 });
 
 /// Pochettes réduites (64, 300, 600 px) en cache : image intégrée, sinon cover / folder / front.jpg du dossier.
-/// Morceau du serveur : téléchargée par [remote], même cache disque.
+/// Morceau du serveur : téléchargée par [remote], même cache disque ; avec [remoteKey] (compte + id de
+/// pochette), une seule pochette par album : un téléchargement, un fichier.
 class Covers {
-  Covers({required this.cacheDir, this.embedded = taglibCover, this.remote});
+  Covers({
+    required this.cacheDir,
+    this.embedded = taglibCover,
+    this.remote,
+    this.remoteKey,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
   final Directory cacheDir;
   final EmbeddedCover embedded;
   final RemoteCover? remote;
+  final Future<String?> Function(String trackPath)? remoteKey;
+  final DateTime Function() _clock;
+
+  /// Un échec (réseau coupé, compte inutilisable) est retenu ce temps-là : pas un essai à chaque image.
+  static const retryAfter = Duration(minutes: 1);
 
   static const folderNames = [
     'cover.jpg',
@@ -48,12 +60,19 @@ class Covers {
   // Résultats en mémoire, « pas de pochette » compris : l'interface redemande la même image à chaque image.
   final _memo = <String, Future<File?>>{};
 
+  final _failedAt = <String, DateTime>{};
+
   Future<File?> get(String trackPath, int size) {
     final key = '$size|$trackPath';
+    final failed = _failedAt[key];
+    if (failed != null && !_clock().isBefore(failed.add(retryAfter))) {
+      _failedAt.remove(key);
+      _memo.remove(key); // on réessaie
+    }
     return _memo.putIfAbsent(
       key,
       () => _load(trackPath, size).catchError((Object _) {
-        _memo.remove(key); // réseau coupé : on redemandera plus tard
+        _failedAt[key] = _clock(); // null retenu pendant [retryAfter]
         return null;
       }),
     );
@@ -69,22 +88,51 @@ class Covers {
     }
   }
 
+  // téléchargements en cours, par pochette du serveur : les morceaux d'un album affichés ensemble attendent le même
+  final _downloads = <String, Future<File?>>{};
+
   Future<File?> _load(String trackPath, int size) async {
-    final cached = _cacheFile(trackPath, size);
-    if (await cached.exists()) return cached;
-    final remote = trackPath.startsWith('subsonic://');
-    Uint8List? bytes = remote
-        ? await this.remote?.call(trackPath, size)
-        : await embedded(trackPath);
-    if (!remote && (bytes == null || bytes.isEmpty)) {
-      for (final name in folderNames) {
-        final f = File(p.join(p.dirname(trackPath), name));
-        if (await f.exists()) {
-          bytes = await f.readAsBytes();
-          break;
+    if (!trackPath.startsWith('subsonic://')) {
+      return _make(_cacheFile(trackPath, size), size, () async {
+        Uint8List? bytes = await embedded(trackPath);
+        if (bytes == null || bytes.isEmpty) {
+          for (final name in folderNames) {
+            final f = File(p.join(p.dirname(trackPath), name));
+            if (await f.exists()) {
+              bytes = await f.readAsBytes();
+              break;
+            }
+          }
         }
-      }
+        return bytes;
+      });
     }
+    final fetch = remote;
+    if (fetch == null) return null;
+    final keyOf = remoteKey;
+    final cover = keyOf == null ? trackPath : await keyOf(trackPath);
+    if (cover == null) return null; // pas de pochette sur le serveur
+    final file = _cacheFile(keyOf == null ? cover : 'cover:$cover', size);
+    final id = file.path; // la taille est dans le nom
+    final running = _downloads[id];
+    if (running != null) return running;
+    final f = _make(file, size, () => fetch(trackPath, size));
+    _downloads[id] = f;
+    try {
+      return await f;
+    } finally {
+      _downloads.remove(id);
+    }
+  }
+
+  /// Le fichier en cache, sinon [source] réduite à [size] et écrite dans [cached].
+  Future<File?> _make(
+    File cached,
+    int size,
+    Future<Uint8List?> Function() source,
+  ) async {
+    if (await cached.exists()) return cached;
+    final bytes = await source();
     if (bytes == null || bytes.isEmpty) return null;
     final src = bytes;
     final jpg = await Isolate.run(() {

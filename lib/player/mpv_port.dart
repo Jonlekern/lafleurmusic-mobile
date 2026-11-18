@@ -15,46 +15,56 @@ abstract interface class MpvPort {
 
 /// mpv réel. On tient la longueur de la liste nous-mêmes : l'appli est seule à la modifier.
 /// Chaque chemin passe par [resolver] (fichier local, ou flux du serveur avec les en-têtes du compte).
+/// Les opérations passent à mpv une par une, dans l'ordre des appels : ouvrir un compte prend du temps
+/// (base + trousseau), un ajout rapide ne doit pas doubler un ajout lent (la file et mpv divergeraient).
 class PlayerPort implements MpvPort {
   PlayerPort(this.player, [MediaResolver? resolver])
     : resolver = resolver ?? MediaResolver.localOnly();
   final Player player;
   final MediaResolver resolver;
   int _length = 0;
+  Future<void> _tail = Future.value();
 
-  @override
-  Future<void> openAll(List<String> paths, int index) async {
-    final media = await Future.wait(paths.map(resolver.media));
-    _length = paths.length;
-    await player.openAll(media, index: index);
+  /// [op] démarre quand les opérations précédentes sont finies ; un échec ne bloque pas les suivantes.
+  Future<void> _serial(Future<void> Function() op) {
+    final done = _tail.then((_) => op());
+    _tail = done.then((_) {}, onError: (Object _) {});
+    return done;
   }
 
   @override
-  Future<void> insertAt(int at, String path) async {
+  Future<void> openAll(List<String> paths, int index) => _serial(() async {
+    final media = await Future.wait(paths.map(resolver.media));
+    await player.openAll(media, index: index);
+    _length = paths.length;
+  });
+
+  @override
+  Future<void> insertAt(int at, String path) => _serial(() async {
     await player.add(await resolver.media(path)); // ajouté à la fin…
     _length++;
     if (at < _length - 1) await player.move(_length - 1, at); // …puis remonté
-  }
+  });
 
   @override
-  Future<void> move(int from, int to) async {
+  Future<void> move(int from, int to) => _serial(() async {
     if (from == to) return;
     // mpv : « to » désigne le morceau devant lequel on se place
     await player.move(from, to > from ? to + 1 : to);
-  }
+  });
 
   @override
-  Future<void> remove(int index) async {
+  Future<void> remove(int index) => _serial(() async {
     await player.remove(index);
     _length--;
-  }
+  });
 
   @override
-  Future<void> jump(int index) => player.jump(index);
+  Future<void> jump(int index) => _serial(() => player.jump(index));
 
   @override
-  Future<void> replace(int index, String path) async =>
-      player.replace(index, await resolver.media(path));
+  Future<void> replace(int index, String path) =>
+      _serial(() async => player.replace(index, await resolver.media(path)));
 }
 
 /// Applique chaque changement à la [PlayQueue] **et** à mpv, sans rouvrir la liste (pas de coupure).

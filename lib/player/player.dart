@@ -105,7 +105,7 @@ class LafleurPlayer implements PlayerController {
     _mpv.setAudioChannels(Channels.stereo);
     _mpv.setReplayGain(const ReplayGainSettings(mode: ReplayGain.track));
     _mpv.setMediaSession(const MediaSession());
-    _sync = QueueSync<Track>(PlayerPort(_mpv, _resolver), (t) => t.path);
+    _sync = QueueSync<Track>(_port, (t) => t.path);
     _subs.addAll([
       _mpv.stream.playlist.listen((p) async {
         final q = _queue;
@@ -144,6 +144,10 @@ class LafleurPlayer implements PlayerController {
 
   final Player _mpv;
   final MediaResolver _resolver;
+  late final _port = PlayerPort(
+    _mpv,
+    _resolver,
+  ); // la liste de mpv : modifiée seulement par ici, dans l'ordre
   late final QueueSync<Track> _sync;
   int _editing = 0;
   final _queueChanged = StreamController<void>.broadcast();
@@ -448,7 +452,7 @@ class LafleurPlayer implements PlayerController {
       await _mpv.seek(Duration.zero);
     } else {
       _ends.mpvIndex = q.position;
-      await _mpv.jump(q.position);
+      await _port.jump(q.position); // après les ajouts en cours
     }
     _emit();
   }
