@@ -1,0 +1,427 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import '../../app_scope.dart';
+import '../../sources/account_service.dart';
+import '../../sources/accounts.dart';
+import '../../theme/colors.dart';
+import 'account_form.dart';
+import 'phone_shell.dart';
+
+/// Affichage des albums de plusieurs comptes. Seul « Un compte » existe pour l'instant (plan 3).
+enum AccountsDisplay { one, all, custom }
+
+/// Réglages → Comptes (maquette 2, écran 6) : les comptes dans l'ordre (glisser ⋮⋮), leur état,
+/// « + Ajouter un compte », puis l'Affichage. Toucher un compte l'ouvre pour le modifier.
+class AccountsScreen extends StatefulWidget {
+  const AccountsScreen({super.key});
+
+  @override
+  State<AccountsScreen> createState() => _AccountsScreenState();
+}
+
+class _AccountsScreenState extends State<AccountsScreen> {
+  StreamSubscription<List<Account>>? _sub;
+  List<Account> _list = const [];
+  final _headerCount = <String, int>{};
+  bool _checked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final app = AppScope.of(context);
+    _sub ??= app.accounts?.watch().listen((l) {
+      if (!mounted) return;
+      setState(() => _list = l);
+      for (final a in l) {
+        if (!_headerCount.containsKey(a.id)) {
+          _headerCount[a.id] = 0;
+          app.accounts!.headers(a.id).then((h) {
+            if (mounted) setState(() => _headerCount[a.id] = h.length);
+          }, onError: (Object _) {});
+        }
+      }
+      // un test léger par compte à l'ouverture de l'écran, pas à chaque image
+      if (!_checked) {
+        _checked = true;
+        app.accountService?.checkAll([for (final a in l) a.id]);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  void _reorder(int from, int to) {
+    final l = [..._list];
+    l.insert(to, l.removeAt(from));
+    setState(() => _list = l);
+    AppScope.of(context).accounts?.reorder([for (final a in l) a.id]);
+  }
+
+  /// Après une modification de [a] : son nombre d'en-têtes est relu.
+  Future<void> _edit(Account a) async {
+    await pushPhone(context, AccountFormScreen(editing: a));
+    if (!mounted) return;
+    final h = await AppScope.of(context).accounts?.headers(a.id);
+    if (mounted && h != null) setState(() => _headerCount[a.id] = h.length);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final s = app.strings;
+    final service = app.accountService;
+    return PhoneScaffold(
+      mini: false,
+      // pas encore d'écran Réglages : ⚙︎ ouvre directement les comptes
+      header: PhoneHeader(back: s.home),
+      body: ListenableBuilder(
+        listenable: service ?? const _NoListenable(),
+        builder: (context, _) => CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              sliver: SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                  child: Row(
+                    children: [
+                      Text(s.myAccounts, style: _secStyle),
+                      const Spacer(),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(text: '${s.dragHint} '),
+                            const WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: Icon(
+                                Icons.drag_indicator_rounded,
+                                size: 12,
+                                color: Color(0xFF666666),
+                              ),
+                            ),
+                            TextSpan(text: ' ${s.toReorder}'),
+                          ],
+                        ),
+                        style: _secStyle.copyWith(
+                          color: const Color(0xFF666666),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverReorderableList(
+                itemCount: _list.length,
+                onReorderItem: _reorder,
+                proxyDecorator: (child, _, _) =>
+                    Material(type: MaterialType.transparency, child: child),
+                itemBuilder: (context, i) {
+                  final a = _list[i];
+                  return _AccountRow(
+                    key: ValueKey(a.id),
+                    index: i,
+                    account: a,
+                    headers: _headerCount[a.id] ?? 0,
+                    state: service?.stateOf(a.id),
+                    onTap: () => _edit(a),
+                  );
+                },
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 30),
+              sliver: SliverList.list(
+                children: [
+                  _WidePill(
+                    label: s.addAccount,
+                    onTap: () => pushPhone(context, const AccountFormScreen()),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 22, 4, 8),
+                    child: Text(s.display, style: _secStyle),
+                  ),
+                  DisplaySegment(value: AccountsDisplay.one, onChanged: (_) {}),
+                  const SizedBox(height: 12),
+                  // « Perso » : les comptes à mélanger (plan 3), montrés mais pas encore actifs
+                  Opacity(
+                    opacity: 0.45,
+                    child: Column(
+                      children: [
+                        for (final a in _list) _Check(label: a.name, on: true),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    s.sameAlbumNote(
+                      defaultTargetPlatform == TargetPlatform.iOS,
+                    ),
+                    style: phoneHint,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+const _secStyle = TextStyle(
+  color: Color(0xFF999999),
+  fontSize: 11,
+  letterSpacing: 1,
+  fontWeight: FontWeight.w700,
+);
+
+class _NoListenable implements Listenable {
+  const _NoListenable();
+  @override
+  void addListener(VoidCallback listener) {}
+  @override
+  void removeListener(VoidCallback listener) {}
+}
+
+/// Un compte : ⋮⋮ (glisser pour l'ordre), initiale en couleur, nom, type · adresse, état, ›.
+class _AccountRow extends StatelessWidget {
+  const _AccountRow({
+    super.key,
+    required this.index,
+    required this.account,
+    required this.headers,
+    required this.state,
+    required this.onTap,
+  });
+  final int index;
+  final Account account;
+  final int headers;
+  final AccountState? state;
+  final VoidCallback onTap;
+
+  static Color colorOf(AccountType t) => switch (t) {
+    AccountType.subsonic => LafleurColors.pink,
+    AccountType.jellyfin => const Color(0xFF7AA7FF),
+    AccountType.plex => const Color(0xFFE5A00D),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context).strings;
+    final a = account;
+    final host = a.base.hasPort ? '${a.base.host}:${a.base.port}' : a.base.host;
+    final sub =
+        '${s.typeName(a.type)} · ${headers > 0 ? s.nHeaders(headers) : host}';
+    final st = state;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
+            child: Row(
+              children: [
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Container(
+                    key: ValueKey('grip-${a.id}'),
+                    color: Colors.transparent,
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                    child: const Icon(
+                      Icons.drag_indicator_rounded,
+                      size: 18,
+                      color: Color(0xFF666666),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: colorOf(a.type),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    a.name.isEmpty
+                        ? '?'
+                        : a.name.characters.first.toUpperCase(),
+                    style: const TextStyle(
+                      color: Color(0xFF111111),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        a.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: LafleurColors.text,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        sub,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF999999),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                if (st != null)
+                  Text(
+                    s.accountState(st),
+                    style: TextStyle(
+                      color: st == AccountState.connected
+                          ? const Color(0xFF5FD16F)
+                          : const Color(0xFF666666),
+                      fontSize: 12,
+                    ),
+                  ),
+                const SizedBox(width: 10),
+                const Text(
+                  '›',
+                  style: TextStyle(color: Color(0xFF666666), fontSize: 16),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pilule grise sur toute la largeur (« + Ajouter un compte »).
+class _WidePill extends StatelessWidget {
+  const _WidePill({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    type: MaterialType.transparency,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFF444444)),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: LafleurColors.text,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Case à cocher rose de la maquette (✓ sur fond rose).
+class _Check extends StatelessWidget {
+  const _Check({required this.label, required this.on});
+  final String label;
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+    child: Row(
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: on ? LafleurColors.pink : null,
+            border: Border.all(
+              color: on ? LafleurColors.pink : const Color(0xFF555555),
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: on
+              ? const Icon(
+                  Icons.check_rounded,
+                  size: 15,
+                  color: Color(0xFF111111),
+                )
+              : null,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: on ? LafleurColors.text : const Color(0xFF999999),
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Un compte / Tout / Perso : seul « Un compte » est actif (les autres « bientôt », plan 3).
+class DisplaySegment extends StatelessWidget {
+  const DisplaySegment({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+  final AccountsDisplay value;
+  final ValueChanged<AccountsDisplay> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context).strings;
+    return PhoneSegment<AccountsDisplay>(
+      value: value,
+      onChanged: onChanged,
+      options: [
+        SegmentOption(AccountsDisplay.one, s.oneAccount),
+        SegmentOption(AccountsDisplay.all, s.allAccounts, enabled: false),
+        SegmentOption(AccountsDisplay.custom, s.customDisplay, enabled: false),
+      ],
+    );
+  }
+}

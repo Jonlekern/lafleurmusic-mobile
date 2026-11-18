@@ -9,6 +9,7 @@ import '../../theme/colors.dart';
 import '../cover_image.dart';
 import '../coverflow_screen.dart';
 import '../track_menu.dart';
+import 'accounts_screen.dart';
 import 'album_screen.dart';
 import 'names_screen.dart';
 import 'phone_shell.dart';
@@ -31,139 +32,176 @@ class _HomeScreenState extends State<HomeScreen> {
     void open(Widget screen) => pushPhone(context, screen);
     final searching = _query.trim().isNotEmpty;
     return PhoneScaffold(
-      header: const PhoneHeader(
-        // réglages et comptes : écrans de la tâche 9
-        trailing: HeaderButton(icon: Icons.settings_rounded, size: 16),
+      header: PhoneHeader(
+        status: const _OfflineLabel(),
+        trailing: HeaderButton(
+          icon: Icons.settings_rounded,
+          size: 16,
+          onTap: () => open(const AccountsScreen()),
+        ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        children: [
-          const _AccountChips(),
-          const SizedBox(height: 10),
-          TextField(
-            onChanged: (v) => setState(() => _query = v),
-            style: const TextStyle(fontSize: 14),
-            decoration: InputDecoration(
-              hintText: s.search,
-              hintStyle: const TextStyle(
-                color: Color(0xFF888888),
-                fontSize: 14,
-              ),
-              isDense: true,
-              filled: true,
-              fillColor: LafleurColors.bar,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 11,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
+      // tirer la liste vers le bas : synchronise tous les comptes
+      body: RefreshIndicator(
+        color: LafleurColors.pink,
+        backgroundColor: LafleurColors.bar,
+        onRefresh: () => app.accountService?.syncAll() ?? Future.value(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          children: [
+            const _AccountChips(),
+            const SizedBox(height: 10),
+            TextField(
+              onChanged: (v) => setState(() => _query = v),
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: s.search,
+                hintStyle: const TextStyle(
+                  color: Color(0xFF888888),
+                  fontSize: 14,
+                ),
+                isDense: true,
+                filled: true,
+                fillColor: LafleurColors.bar,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 11,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
-          ),
-          if (searching)
-            FutureBuilder<List<Track>>(
-              key: ValueKey(_query),
-              future: app.db.search(_query),
-              builder: (_, snap) => Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: PhoneTrackRows(
-                  tracks: snap.data ?? const [],
-                  numbered: false,
+            if (searching)
+              FutureBuilder<List<Track>>(
+                key: ValueKey(_query),
+                future: app.db.search(_query),
+                builder: (_, snap) => Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: PhoneTrackRows(
+                    tracks: snap.data ?? const [],
+                    numbered: false,
+                  ),
                 ),
+              )
+            else ...[
+              PhoneSection(s.library),
+              PhoneItem(
+                label: s.coverFlow,
+                onTap: () => openCoverflow(
+                  context,
+                  // Cover Flow se ferme lui-même, puis l'album s'ouvre
+                  onOpen: (a) => WidgetsBinding.instance.addPostFrameCallback(
+                    (_) => context.mounted ? openAlbum(context, a) : null,
+                  ),
+                ),
+              ),
+              PhoneItem(
+                label: s.songs,
+                onTap: () => open(
+                  AlbumScreen(
+                    back: s.home,
+                    label: s.library,
+                    title: s.songs,
+                    tracks: app.db.watchAllTracks(),
+                  ),
+                ),
+              ),
+              PhoneItem(
+                label: s.artists,
+                onTap: () => open(
+                  NamesScreen(
+                    title: s.artists,
+                    names: app.db.watchArtists(),
+                    artists: true,
+                  ),
+                ),
+              ),
+              PhoneItem(
+                label: s.genres,
+                onTap: () => open(
+                  NamesScreen(title: s.genres, names: app.db.watchGenres()),
+                ),
+              ),
+              PhoneItem(
+                label: s.top100,
+                onTap: () => open(
+                  AlbumScreen(
+                    back: s.home,
+                    label: s.topLabel,
+                    title: s.mostPlayed,
+                    tracks: app.db
+                        .watchTop(100)
+                        .map((l) => [for (final (t, _) in l) t]),
+                    empty: s.topEmpty,
+                  ),
+                ),
+              ),
+              // morceaux gardés sur le téléphone : plan 2 (pour l'instant ne fait rien)
+              PhoneItem(
+                label: s.onDevice(defaultTargetPlatform == TargetPlatform.iOS),
+              ),
+              PhoneSection(s.playlists),
+              StreamBuilder<List<Album>>(
+                stream: app.db.watchAlbums(),
+                builder: (context, albums) => StreamBuilder<PlayerState>(
+                  stream: app.player.state,
+                  initialData: app.player.current,
+                  builder: (context, st) {
+                    final playing = st.data?.track?.album;
+                    return Column(
+                      children: [
+                        for (final a in albums.data ?? const <Album>[])
+                          PhoneItem(
+                            leading: CoverImage(
+                              trackPath: a.coverTrackPath,
+                              size: 30,
+                            ),
+                            label: a.name.isEmpty ? s.unknownArtist : a.name,
+                            selected: a.name == playing,
+                            onTap: () => openAlbum(context, a.name),
+                            onLongPress: () => showTrackSheet(
+                              context,
+                              title: a.name,
+                              tracks: () =>
+                                  app.db.watchAlbumTracks(a.name).first,
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// « Hors ligne » à gauche de la barre du haut quand aucun serveur n'a répondu.
+class _OfflineLabel extends StatelessWidget {
+  const _OfflineLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final service = app.accountService;
+    if (service == null) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: service,
+      builder: (_, _) => service.offline
+          ? Text(
+              app.strings.offlineLabel,
+              style: const TextStyle(
+                color: Color(0xFF999999),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
             )
-          else ...[
-            PhoneSection(s.library),
-            PhoneItem(
-              label: s.coverFlow,
-              onTap: () => openCoverflow(
-                context,
-                // Cover Flow se ferme lui-même, puis l'album s'ouvre
-                onOpen: (a) => WidgetsBinding.instance.addPostFrameCallback(
-                  (_) => context.mounted ? openAlbum(context, a) : null,
-                ),
-              ),
-            ),
-            PhoneItem(
-              label: s.songs,
-              onTap: () => open(
-                AlbumScreen(
-                  back: s.home,
-                  label: s.library,
-                  title: s.songs,
-                  tracks: app.db.watchAllTracks(),
-                ),
-              ),
-            ),
-            PhoneItem(
-              label: s.artists,
-              onTap: () => open(
-                NamesScreen(
-                  title: s.artists,
-                  names: app.db.watchArtists(),
-                  artists: true,
-                ),
-              ),
-            ),
-            PhoneItem(
-              label: s.genres,
-              onTap: () => open(
-                NamesScreen(title: s.genres, names: app.db.watchGenres()),
-              ),
-            ),
-            PhoneItem(
-              label: s.top100,
-              onTap: () => open(
-                AlbumScreen(
-                  back: s.home,
-                  label: s.topLabel,
-                  title: s.mostPlayed,
-                  tracks: app.db
-                      .watchTop(100)
-                      .map((l) => [for (final (t, _) in l) t]),
-                  empty: s.topEmpty,
-                ),
-              ),
-            ),
-            // morceaux gardés sur le téléphone : plan 2 (pour l'instant ne fait rien)
-            PhoneItem(
-              label: s.onDevice(defaultTargetPlatform == TargetPlatform.iOS),
-            ),
-            PhoneSection(s.playlists),
-            StreamBuilder<List<Album>>(
-              stream: app.db.watchAlbums(),
-              builder: (context, albums) => StreamBuilder<PlayerState>(
-                stream: app.player.state,
-                initialData: app.player.current,
-                builder: (context, st) {
-                  final playing = st.data?.track?.album;
-                  return Column(
-                    children: [
-                      for (final a in albums.data ?? const <Album>[])
-                        PhoneItem(
-                          leading: CoverImage(
-                            trackPath: a.coverTrackPath,
-                            size: 30,
-                          ),
-                          label: a.name.isEmpty ? s.unknownArtist : a.name,
-                          selected: a.name == playing,
-                          onTap: () => openAlbum(context, a.name),
-                          onLongPress: () => showTrackSheet(
-                            context,
-                            title: a.name,
-                            tracks: () => app.db.watchAlbumTracks(a.name).first,
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ],
-      ),
+          : const SizedBox.shrink(),
     );
   }
 }

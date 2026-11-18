@@ -51,7 +51,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         SnackBar(
           backgroundColor: LafleurColors.bar,
           content: Text(
-            '${app.strings.fr ? 'Illisible, passé' : 'Unreadable, skipped'} : $title',
+            app.strings.unreadableSkipped(title),
             style: const TextStyle(color: LafleurColors.text),
           ),
         ),

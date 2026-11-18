@@ -19,6 +19,7 @@ import 'player/loudness.dart';
 import 'player/media_resolver.dart';
 import 'player/player.dart';
 import 'settings.dart';
+import 'sources/account_service.dart';
 import 'sources/accounts.dart';
 import 'sources/secret_store.dart';
 import 'theme/lafleur_theme.dart';
@@ -48,6 +49,8 @@ Future<void> main() async {
   // morceaux du serveur : flux et pochettes avec les en-têtes du compte (une source par compte)
   final accounts = Accounts(db, SecureSecretStore());
   final resolver = MediaResolver(accounts.source);
+  // tester, enregistrer, synchroniser : les mêmes comptes et le même resolver que le lecteur
+  final accountService = AccountService(accounts, db: db, resolver: resolver);
   final covers = Covers(
     cacheDir: Directory(p.join(support.path, 'covers')),
     remote: remoteCovers(resolver, db.trackByPath),
@@ -84,6 +87,7 @@ Future<void> main() async {
       covers: covers,
       resolver: resolver,
       accounts: accounts,
+      accountService: accountService,
       player: player,
       equalizer: equalizer,
       artistGrid: artistGrid,
@@ -108,11 +112,13 @@ class LafleurApp extends StatefulWidget {
     required this.loudness,
     required this.resolver,
     required this.accounts,
+    required this.accountService,
   });
   final LoudnessService loudness;
   final MediaResolver resolver;
   // le même pour le lecteur (MediaResolver) et les écrans
   final Accounts accounts;
+  final AccountService accountService;
   final AppSettings settings;
   final VoidCallback saveSettings;
   final ValueNotifier<bool> artistGrid;
@@ -135,6 +141,13 @@ class _LafleurAppState extends State<LafleurApp> {
   ); // Top 100
 
   @override
+  void initState() {
+    super.initState();
+    // au lancement : la bibliothèque des serveurs est remise à jour en arrière-plan
+    unawaited(widget.accountService.syncAll());
+  }
+
+  @override
   void dispose() {
     _plays.dispose();
     super.dispose();
@@ -152,6 +165,7 @@ class _LafleurAppState extends State<LafleurApp> {
     saveSettings: widget.saveSettings,
     loudness: widget.loudness,
     accounts: widget.accounts,
+    accountService: widget.accountService,
     child: MaterialApp(
       title: 'LAFLEURMUSIC',
       debugShowCheckedModeBanner: false,

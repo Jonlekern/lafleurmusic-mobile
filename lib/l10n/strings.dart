@@ -1,5 +1,9 @@
 import 'package:flutter/widgets.dart';
 
+import '../sources/account_service.dart';
+import '../sources/accounts.dart';
+import '../sources/source.dart';
+
 /// Textes FR / EN : français si la langue du système commence par « fr », sinon anglais.
 class Strings {
   const Strings._(this.fr);
@@ -211,4 +215,88 @@ class Strings {
       : _t('Sur mon téléphone', 'On my phone');
   String get upNextTab => _t('À suivre', 'Up next');
   String get swipePlayNext => '← $playNextAction';
+  String unreadableSkipped(String title) =>
+      _t('Illisible, passé : $title', 'Unreadable, skipped: $title');
+  // plan 1 (téléphone) : comptes (maquette 2, écrans 6 et 7)
+  String get accountsBack => _t('Comptes', 'Accounts');
+  String get myAccounts => _t('MES COMPTES', 'MY ACCOUNTS');
+  // « glisse ⋮⋮ pour l'ordre » : ⋮⋮ est l'icône de la poignée, entre les deux
+  String get dragHint => _t('glisse', 'drag');
+  String get toReorder => _t("pour l'ordre", 'to reorder');
+  String accountState(AccountState st) => switch (st) {
+    AccountState.connected => _t('● connecté', '● connected'),
+    AccountState.absent => _t('● absent', '● offline'),
+    AccountState.syncing => _t('synchronisation…', 'syncing…'),
+    AccountState.checking => '…',
+  };
+  String typeName(AccountType t) => switch (t) {
+    AccountType.subsonic => 'Subsonic',
+    AccountType.jellyfin => 'Jellyfin',
+    AccountType.plex => 'Plex',
+  };
+  String nHeaders(int n) =>
+      n == 1 ? _t('1 en-tête', '1 header') : _t('$n en-têtes', '$n headers');
+  String get addAccount => _t('+ Ajouter un compte', '+ Add an account');
+  String get display => _t('AFFICHAGE', 'DISPLAY');
+  String get oneAccount => _t('Un compte', 'One account');
+  String get customDisplay => _t('Perso', 'Custom');
+  String get soon => _t('bientôt', 'soon');
+  String sameAlbumNote(bool iphone) => _t(
+    "Un album présent sur deux comptes n'apparaît qu'une fois : il joue depuis ${iphone ? "l'iPhone" : 'le téléphone'}, sinon depuis le premier compte de la liste.",
+    'An album on two accounts shows only once: it plays from ${iphone ? 'the iPhone' : 'the phone'}, otherwise from the first account in the list.',
+  );
+  String get serverType => _t('TYPE DE SERVEUR', 'SERVER TYPE');
+  String get subsonicServers => 'Navidrome, Airsonic, Gonic, LMS, Ampache…';
+  String get fieldName => _t('NOM', 'NAME');
+  String get fieldAddress => _t('ADRESSE', 'ADDRESS');
+  String get fieldUser => _t('UTILISATEUR', 'USER');
+  String get fieldPassword => _t('MOT DE PASSE', 'PASSWORD');
+  String get passwordUnchanged => _t('inchangé', 'unchanged');
+  String get fieldHeaders =>
+      _t('EN-TÊTES HTTP (FACULTATIF)', 'HTTP HEADERS (OPTIONAL)');
+  String get headerName => _t('En-tête', 'Header');
+  String get headerValue => _t('Valeur', 'Value');
+  String get addHeader => _t('+ Ajouter un en-tête', '+ Add a header');
+  String get testAction => _t('Tester', 'Test');
+  String get testing => _t('Je teste…', 'Testing…');
+  String testResult(TestResult r) => switch (r) {
+    TestResult.ok => _t('Ça marche !', 'It works!'),
+    TestResult.unreachable => _t('Serveur injoignable', 'Server unreachable'),
+    TestResult.wrongPassword => _t(
+      'Mauvais nom ou mot de passe',
+      'Wrong name or password',
+    ),
+    TestResult.headerRefused => _t(
+      'En-tête refusé par le proxy',
+      'Header refused by the proxy',
+    ),
+    TestResult.notSubsonic => _t(
+      "Ce n'est pas un serveur Subsonic",
+      'This is not a Subsonic server',
+    ),
+  };
+  String draftProblem(DraftProblem p) => switch (p) {
+    DraftProblem.missing => _t(
+      "Il manque l'adresse, l'utilisateur ou le mot de passe.",
+      'The address, user or password is missing.',
+    ),
+    DraftProblem.badAddress => _t(
+      'Adresse illisible : par exemple http://192.168.1.20:4533',
+      'Unreadable address: for example http://192.168.1.20:4533',
+    ),
+  };
+  String get saveFailed =>
+      _t("Impossible d'enregistrer le compte.", 'Could not save the account.');
+  String get firstAccount => _t(
+    'Ajoute ton serveur de musique pour commencer.',
+    'Add your music server to get started.',
+  );
+  String get deleteAccount => _t('Supprimer le compte', 'Delete account');
+  String deleteAccountQuestion(String name) =>
+      _t('Supprimer « $name » ?', 'Delete “$name”?');
+  String get deleteAccountExplain => _t(
+    'Ses morceaux disparaissent de ce téléphone ; rien n’est effacé sur le serveur.',
+    'Its songs leave this phone; nothing is erased on the server.',
+  );
+  String get offlineLabel => _t('Hors ligne', 'Offline');
 }

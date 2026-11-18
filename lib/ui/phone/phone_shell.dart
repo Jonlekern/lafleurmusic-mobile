@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../app_scope.dart';
+import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
 import '../library_screen.dart';
+import 'account_form.dart';
 import 'album_screen.dart';
 import 'home_screen.dart';
 import 'mini_player.dart';
@@ -14,24 +17,28 @@ import 'now_screen.dart';
 
 /// Moins de 900 px de large : le téléphone ; sinon la vue en colonnes du Mac.
 class AdaptiveHome extends StatelessWidget {
-  const AdaptiveHome({super.key, this.debugStart});
+  const AdaptiveHome({super.key, this.debugStart, this.debugScreens});
   final String? debugStart; // voir [PhoneShell.debugStart]
+  final List<Widget> Function()? debugScreens; // voir [PhoneShell.debugScreens]
 
   static bool isPhone(Size size) => size.width < 900;
 
   @override
   Widget build(BuildContext context) => isPhone(MediaQuery.sizeOf(context))
-      ? PhoneShell(debugStart: debugStart)
+      ? PhoneShell(debugStart: debugStart, debugScreens: debugScreens)
       : const LibraryScreen();
 }
 
 /// Téléphone debout (maquette 1) : les colonnes du Mac empilées. Accueil → Album / Morceaux / Artistes /
 /// Genres / Top 100 → En cours. Retour : glisser depuis le bord gauche, ou le bouton retour d'Android.
 class PhoneShell extends StatefulWidget {
-  const PhoneShell({super.key, this.debugStart});
+  const PhoneShell({super.key, this.debugStart, this.debugScreens});
 
   /// Mode démo (debug) : écran ouvert au lancement, « album » ou « now ».
   final String? debugStart;
+
+  /// Mode démo (debug) : écrans ouverts l'un sur l'autre au lancement (Comptes, Ajouter un compte).
+  final List<Widget> Function()? debugScreens;
 
   @override
   State<PhoneShell> createState() => _PhoneShellState();
@@ -57,6 +64,15 @@ class _PhoneShellState extends State<PhoneShell> {
         }
       });
     }
+    final screens = widget.debugScreens;
+    if (screens != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final nav = _nav.currentState;
+        for (final s in screens()) {
+          nav?.push(CupertinoPageRoute<void>(builder: (_) => s));
+        }
+      });
+    }
   }
 
   @override
@@ -76,7 +92,7 @@ class _PhoneShellState extends State<PhoneShell> {
         SnackBar(
           backgroundColor: LafleurColors.bar,
           content: Text(
-            '${app.strings.fr ? 'Illisible, passé' : 'Unreadable, skipped'} : $title',
+            app.strings.unreadableSkipped(title),
             style: const TextStyle(color: LafleurColors.text),
           ),
         ),
@@ -96,9 +112,36 @@ class _PhoneShellState extends State<PhoneShell> {
     child: Navigator(
       key: _nav,
       onGenerateRoute: (_) =>
-          CupertinoPageRoute<void>(builder: (_) => const HomeScreen()),
+          CupertinoPageRoute<void>(builder: (_) => const _Start()),
     ),
   );
+}
+
+/// Premier écran : l'Accueil ; sur un téléphone sans aucun compte, « Ajouter un compte » (premier lancement),
+/// remplacé par l'Accueil dès que le compte est enregistré.
+class _Start extends StatelessWidget {
+  const _Start();
+
+  static bool get _mobile =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
+
+  @override
+  Widget build(BuildContext context) {
+    final accounts = AppScope.of(context).accounts;
+    // Mac en fenêtre étroite : bibliothèque locale, pas de compte obligatoire
+    if (accounts == null || !_mobile) return const HomeScreen();
+    return StreamBuilder<List<Account>>(
+      stream: accounts.watch(),
+      builder: (_, snap) {
+        final list = snap.data;
+        if (list == null) return const ColoredBox(color: LafleurColors.bg);
+        return list.isEmpty
+            ? const AccountFormScreen(first: true)
+            : const HomeScreen();
+      },
+    );
+  }
 }
 
 /// Ouvre un écran du téléphone : glisse depuis la droite, retour en glissant depuis le bord gauche.
@@ -108,8 +151,16 @@ Future<void> pushPhone(BuildContext context, Widget screen) =>
 
 /// Barre du haut du téléphone : logo LAFLEURMUSIC, « ‹ retour » rose à gauche, bouton à droite.
 class PhoneHeader extends StatelessWidget {
-  const PhoneHeader({super.key, this.back, this.leading, this.trailing});
+  const PhoneHeader({
+    super.key,
+    this.back,
+    this.leading,
+    this.trailing,
+    this.status,
+  });
   final String? back; // « ‹ Albums »
+  final Widget?
+  status; // petit texte à gauche sans déplacer le logo (« Hors ligne »)
   final Widget? leading; // à la place du retour (⌄ d'En cours)
   final Widget? trailing;
 
@@ -151,6 +202,13 @@ class PhoneHeader extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+          if (status != null)
+            Positioned(
+              left: 16,
+              top: 0,
+              bottom: 0,
+              child: Center(child: status),
             ),
           if (leading != null)
             Positioned(left: 4, top: 0, bottom: 0, child: leading!),

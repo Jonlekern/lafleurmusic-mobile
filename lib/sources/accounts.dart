@@ -168,6 +168,17 @@ class Accounts {
     }
   });
 
+  /// Stored password (the edit form tests with it when its password field is left empty).
+  Future<String?> password(String id) => _secrets.read(_pwKey(id));
+
+  /// Stored HTTP headers (prefilled in the edit form).
+  Future<Map<String, String>> headers(String id) async {
+    final hdr = await _secrets.read(_hdrKey(id));
+    return hdr == null
+        ? const {}
+        : (jsonDecode(hdr) as Map).cast<String, String>();
+  }
+
   /// [client] is for tests.
   Future<MusicSource> source(String id, {http.Client? client}) async {
     final r = await (_db.select(
@@ -178,15 +189,12 @@ class Accounts {
       case AccountType.subsonic:
         final pw = await _secrets.read(_pwKey(id));
         if (pw == null) throw StateError('Missing password for account $id');
-        final hdr = await _secrets.read(_hdrKey(id));
         return SubsonicSource(
           accountId: id,
           base: a.base,
           user: a.user,
           password: pw,
-          headers: hdr == null
-              ? const {}
-              : (jsonDecode(hdr) as Map).cast<String, String>(),
+          headers: await headers(id),
           client: client,
         );
       case AccountType.jellyfin:

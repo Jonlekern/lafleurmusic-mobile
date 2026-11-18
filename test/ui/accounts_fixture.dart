@@ -1,0 +1,176 @@
+import 'package:drift/drift.dart' show DatabaseConnection;
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/app_scope.dart';
+import 'package:lafleurmusic/l10n/strings.dart';
+import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/sync.dart';
+import 'package:lafleurmusic/player/equalizer.dart';
+import 'package:lafleurmusic/player/media_resolver.dart';
+import 'package:lafleurmusic/settings.dart';
+import 'package:lafleurmusic/sources/account_service.dart';
+import 'package:lafleurmusic/sources/accounts.dart';
+import 'package:lafleurmusic/sources/source.dart';
+import 'package:lafleurmusic/theme/lafleur_theme.dart';
+import 'package:lafleurmusic/ui/phone/phone_shell.dart';
+
+import '../sources/fake_secret_store.dart';
+import 'fake_player.dart';
+import 'morceaux_golden_test.dart' show ReadyCovers;
+import 'phone_fixture.dart';
+
+/// Source factice : ne fait que répondre à « Tester ».
+class ProbeSource implements MusicSource {
+  ProbeSource(this.accountId, this.result);
+  @override
+  final String accountId;
+  final TestResult result;
+  int tests = 0;
+
+  @override
+  Future<TestResult> test() async {
+    tests++;
+    return result;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+/// Ce que le formulaire a demandé : brouillons testés, synchros lancées, sources construites.
+class AccountsFixture {
+  AccountsFixture(this.db, this.accounts, this.secrets, this.service);
+  final LibraryDb db;
+  final Accounts accounts;
+  final FakeSecretStore secrets;
+  final AccountService service;
+
+  /// Réponse de « Tester » pour un brouillon.
+  TestResult draftResult = TestResult.ok;
+
+  /// Réponse de test() par compte enregistré (connecté / absent).
+  final results = <String, TestResult>{};
+
+  /// Synchro : complète par défaut ; false = le serveur ne répond plus.
+  bool syncComplete = true;
+  final drafts = <(AccountDraft, String)>[];
+  final synced = <String>[];
+  final built = <String>[];
+
+  Future<List<Account>> list(WidgetTester tester) async =>
+      (await tester.runAsync(() => accounts.watch().first))!;
+}
+
+/// Un compte de la maquette 2 (adresse, utilisateur, mot de passe, en-têtes).
+typedef SeedAccount = ({
+  AccountType type,
+  String name,
+  String base,
+  Map<String, String> headers,
+});
+
+const mockupAccounts = <SeedAccount>[
+  (
+    type: AccountType.subsonic,
+    name: 'Navidrome maison',
+    base: 'http://192.168.1.20:4533',
+    headers: {},
+  ),
+  (
+    type: AccountType.jellyfin,
+    name: 'Jellyfin de Max',
+    base: 'https://jellyfin.max.example',
+    headers: {'CF-Access-Client-Id': 'abc123', 'CF-Access-Client-Secret': 'x'},
+  ),
+  (
+    type: AccountType.plex,
+    name: 'Plex',
+    base: 'https://plex.example:32400',
+    headers: {},
+  ),
+];
+
+/// Le téléphone avec ses comptes ([seed]) et un service de comptes aux réponses choisies.
+/// [home] : l'écran de départ (sinon le PhoneShell entier, premier lancement compris).
+Future<AccountsFixture> pumpAccounts(
+  WidgetTester tester, {
+  List<SeedAccount> seed = mockupAccounts,
+  Widget Function()? home,
+  Map<String, TestResult> Function(List<Account>)? results,
+  MediaResolver? resolver,
+  bool fr = true,
+}) async {
+  phoneSize(tester);
+  final db = LibraryDb(
+    DatabaseConnection(
+      NativeDatabase.memory(),
+      closeStreamsSynchronously: true,
+    ),
+  );
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(db.close);
+  });
+  final secrets = FakeSecretStore();
+  final accounts = Accounts(db, secrets);
+  late final AccountsFixture f;
+  final service = AccountService(
+    accounts,
+    db: db,
+    resolver: resolver,
+    draftSource: (d, password) {
+      f.drafts.add((d, password));
+      return ProbeSource('draft', f.draftResult);
+    },
+    sourceOf: (id) async {
+      f.built.add(id);
+      return ProbeSource(id, f.results[id] ?? TestResult.ok);
+    },
+    sync: (s) async {
+      f.synced.add(s.accountId);
+      return SyncResult(
+        added: 0,
+        updated: 0,
+        removed: 0,
+        complete: f.syncComplete,
+      );
+    },
+  );
+  f = AccountsFixture(db, accounts, secrets, service);
+  final list = <Account>[];
+  await tester.runAsync(() async {
+    for (final a in seed) {
+      list.add(
+        await accounts.add(
+          type: a.type,
+          name: a.name,
+          base: Uri.parse(a.base),
+          user: 'johnny',
+          password: 'secret',
+          headers: a.headers,
+        ),
+      );
+    }
+  });
+  if (results != null) f.results.addAll(results(list));
+  await tester.pumpWidget(
+    AppScope(
+      db: db,
+      player: FakePlayer(),
+      covers: ReadyCovers(const {}),
+      strings: Strings.of(Locale(fr ? 'fr' : 'en')),
+      equalizer: ValueNotifier(Equalizer.named('flat')),
+      settings: AppSettings(),
+      saveSettings: () {},
+      accounts: accounts,
+      accountService: service,
+      child: MaterialApp(
+        theme: lafleurTheme(),
+        home: home?.call() ?? const PhoneShell(),
+      ),
+    ),
+  );
+  await settle(tester);
+  return f;
+}
