@@ -18,13 +18,22 @@ L'essai : `integration_test/sound_proof_test.dart`.
 | musique qui continue en arrière-plan | **OUI, observé à la main, en debug** | `UIBackgroundModes` = `audio` ; l'appli mise en arrière-plan (Réglages ouverts) jouait encore après 65 s. Ce n'est pas un essai enregistré, et une appli en debug n'est pas forcément mise en pause par iOS comme une vraie : à confirmer avec l'écran verrouillé |
 | écran verrouillé : pochette et boutons | **à regarder** | la machine ne peut pas verrouiller le simulateur sans l'accord de Johnny ; ce que le système doit afficher est déjà vérifié en (d) |
 
-Décision iPhone, **provisoire : on garde mpv, sous réserve de l'écran verrouillé (regardé par Johnny) et de l'essai Android sur GitHub.**
+Décision iPhone : **on garde mpv** (l'essai Android est réussi, voir plus bas). Reste l'écran verrouillé, à regarder à la main.
 
-## Android (émulateur API 34 sur GitHub)
+## Android (émulateur API 34, Pixel 6, sur GitHub) — 18 novembre 2026
 
-| Point | Réponse |
-| --- | --- |
-| (a) à (e) | **à vérifier sur GitHub** (tâche `android-emulator` de `.github/workflows/ci.yml`) |
+Essai GitHub n° 44315104790 (commit `5249640`), tâche `android-emulator` : tout réussi.
+
+| Point | Réponse | Ce qu'on a vu |
+| --- | --- | --- |
+| (a) un fichier du téléphone joue | **OUI** | `a.flac` joue |
+| (b) un flux `http://` joue avec notre en-tête | **OUI** | le petit serveur de l'essai reçoit l'en-tête et le morceau joue |
+| (c) sans l'en-tête : erreur, pas de plantage | **OUI** | erreur signalée, le même lecteur rejoue ensuite |
+| (d) session multimédia publiée | **OUI** | état « lecture », titre « Ocean_Drive », artiste « Johnny », album « Studio_Lafleur », pochette présente |
+| (e) fréquence de sortie | **notée** | fichier à 44,1 kHz, sortie à 44,1 kHz (16 bits) |
+| l'appli entière, de bout en bout | **OUI** | `app_test` : ajout du compte, albums, pochettes, et « Night Drive » joue (dépasse 1 s) |
+
+Décision : **on garde mpv sur iPhone et sur Android.** Reste à regarder à la main l'écran verrouillé sur un vrai téléphone.
 
 ## Bon à savoir
 
