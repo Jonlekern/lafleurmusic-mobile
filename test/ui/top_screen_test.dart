@@ -168,5 +168,5 @@ void main() {
       find.byType(TopScreen),
       matchesGoldenFile('goldens/9a-top-100.png'),
     );
-  });
+  }, tags: ['golden']);
 }

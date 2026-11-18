@@ -120,7 +120,7 @@ void main() {
       find.byType(CoverflowScreen),
       matchesGoldenFile('goldens/3-coverflow.png'),
     );
-  });
+  }, tags: ['golden']);
 
   testWidgets('flèche droite : album suivant', (tester) async {
     await pump(tester);

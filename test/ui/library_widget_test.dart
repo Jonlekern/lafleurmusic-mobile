@@ -200,7 +200,7 @@ void main() {
       find.byType(LibraryScreen),
       matchesGoldenFile('goldens/2-colonnes.png'),
     );
-  });
+  }, tags: ['golden']);
 
   testWidgets('Artistes : liste des noms, puis leurs morceaux', (tester) async {
     await pump(tester, demo);

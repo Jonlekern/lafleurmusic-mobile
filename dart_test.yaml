@@ -1,0 +1,4 @@
+# Golden (pixel) tests: images made on macOS; Linux rasterises text differently.
+# CI: job "test" (Linux) runs --exclude-tags golden, job "goldens" (macOS) runs --tags golden.
+tags:
+  golden:

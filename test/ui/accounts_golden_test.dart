@@ -1,3 +1,7 @@
+// Pixel comparison: run on macOS only (CI job goldens), see dart_test.yaml.
+@Tags(['golden'])
+library;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

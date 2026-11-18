@@ -15,11 +15,56 @@ env:
   FLUTTER_VERSION: 3.47.7
 
 jobs:
+  # Analysis and every test except the golden images: Linux is ten times
+  # cheaper than macOS on a private repository.
   test:
-    # macOS: the golden images were generated on macOS, and an exact pixel
-    # comparison would fail on Linux because of text rasterisation differences.
-    # Pinned to macos-15 because macos-latest is a moving target and would
-    # silently change rendering under pixel-exact goldens.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter analyze
+      - run: flutter test --exclude-tags golden
+
+  # Does this push touch what the golden images draw? Decided on a cheap Linux
+  # runner, so that no macOS runner starts when it doesn't.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ui: ${{ steps.diff.outputs.ui }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # first push of a branch (or a rewritten one): compare with main
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            BEFORE=$(git merge-base origin/main HEAD 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -1)
+          fi
+          if git diff --name-only "$BEFORE" HEAD | grep -qE '^(lib/ui/|lib/theme/|test/ui/|assets/)'; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ui=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Golden images (tag "golden", see dart_test.yaml): macOS, because the
+  # reference images were generated on macOS and Linux rasterises text
+  # differently. Pinned to macos-15 because macos-latest is a moving target.
+  # Only on main, on a manual run, or when a push touches what they draw.
+  goldens:
+    needs: changes
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.ui == 'true'
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -31,7 +76,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs
-      - run: flutter test
+      - run: flutter test --tags golden
       - name: Upload golden failure images
         if: failure()
         uses: actions/upload-artifact@v4
@@ -41,6 +86,7 @@ jobs:
           if-no-files-found: ignore
 
   android:
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -73,6 +119,7 @@ jobs:
   # built while the emulator ran: disk is freed first, the app is built
   # before the emulator starts, and the emulator runs as light as possible.
   android-emulator:
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

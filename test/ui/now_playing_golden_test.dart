@@ -1,3 +1,7 @@
+// Pixel comparison: run on macOS only (CI job goldens), see dart_test.yaml.
+@Tags(['golden'])
+library;
+
 import 'dart:io';
 
 import 'package:drift/drift.dart' show DatabaseConnection;
