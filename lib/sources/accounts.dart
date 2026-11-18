@@ -38,13 +38,13 @@ class Accounts {
   static String _hdrKey(String id) => 'account.$id.headers';
 
   static Account _from(AccountRow r) => Account(
-        id: r.id,
-        type: AccountType.values.byName(r.type),
-        name: r.name,
-        base: Uri.parse(r.base),
-        user: r.user,
-        order: r.position,
-      );
+    id: r.id,
+    type: AccountType.values.byName(r.type),
+    name: r.name,
+    base: Uri.parse(r.base),
+    user: r.user,
+    order: r.position,
+  );
 
   static String _newId() {
     final rnd = Random.secure();
@@ -66,19 +66,52 @@ class Accounts {
     Map<String, String> headers = const {},
   }) async {
     final id = _newId();
-    final count = await _db.accountRows.count().getSingle();
-    await _secrets.write(_pwKey(id), password);
-    await _secrets.write(_hdrKey(id), jsonEncode(headers));
-    await _db.into(_db.accountRows).insert(AccountRowsCompanion.insert(
-          id: id,
-          type: type.name,
-          name: name,
-          base: base.toString(),
-          user: user,
-          position: count,
-        ));
+    final order = await _nextPosition();
+    try {
+      await _secrets.write(_pwKey(id), password);
+      await _secrets.write(_hdrKey(id), jsonEncode(headers));
+      await _db
+          .into(_db.accountRows)
+          .insert(
+            AccountRowsCompanion.insert(
+              id: id,
+              type: type.name,
+              name: name,
+              base: base.toString(),
+              user: user,
+              position: order,
+            ),
+          );
+    } catch (_) {
+      await _deleteSecrets(id); // no orphan secret left in the keychain
+      rethrow;
+    }
     return Account(
-        id: id, type: type, name: name, base: base, user: user, order: count);
+      id: id,
+      type: type,
+      name: name,
+      base: base,
+      user: user,
+      order: order,
+    );
+  }
+
+  Future<int> _nextPosition() async {
+    final m = _db.accountRows.position.max();
+    final r = await (_db.selectOnly(
+      _db.accountRows,
+    )..addColumns([m])).getSingle();
+    final v = r.read(m);
+    return v == null ? 0 : v + 1;
+  }
+
+  Future<void> _deleteSecrets(String id) async {
+    // each delete is tried even if the other fails; errors are swallowed on cleanup
+    for (final k in [_pwKey(id), _hdrKey(id)]) {
+      try {
+        await _secrets.delete(k);
+      } catch (_) {}
+    }
   }
 
   /// Updates the row fields from [a]; password/headers are rewritten only when given.
@@ -87,6 +120,10 @@ class Accounts {
     String? password,
     Map<String, String>? headers,
   }) async {
+    final exists = await (_db.select(
+      _db.accountRows,
+    )..where((t) => t.id.equals(a.id))).getSingleOrNull();
+    if (exists == null) throw StateError('Unknown account ${a.id}');
     if (password != null) await _secrets.write(_pwKey(a.id), password);
     if (headers != null) {
       await _secrets.write(_hdrKey(a.id), jsonEncode(headers));
@@ -104,32 +141,47 @@ class Accounts {
   /// Erases the account row and its secrets. Deleting its tracks is wired in task 6
   /// (the tracks table has no account column yet).
   Future<void> remove(String id) async {
+    // row first: a leftover secret is invisible, a row without secrets is a broken account
+    await (_db.delete(_db.accountRows)..where((t) => t.id.equals(id))).go();
     await _secrets.delete(_pwKey(id));
     await _secrets.delete(_hdrKey(id));
-    await (_db.delete(_db.accountRows)..where((t) => t.id.equals(id))).go();
   }
 
+  /// Listed accounts first (unknown and duplicate ids ignored), the others after, in their old order.
   Future<void> reorder(List<String> ids) => _db.transaction(() async {
-        for (var i = 0; i < ids.length; i++) {
-          await (_db.update(_db.accountRows)..where((t) => t.id.equals(ids[i])))
-              .write(AccountRowsCompanion(position: Value(i)));
-        }
-      });
+    final current = await (_db.select(
+      _db.accountRows,
+    )..orderBy([(t) => OrderingTerm.asc(t.position)])).get();
+    final known = current.map((r) => r.id).toSet();
+    final seen = <String>{};
+    final order = [
+      for (final id in ids)
+        if (known.contains(id) && seen.add(id)) id,
+      for (final r in current)
+        if (seen.add(r.id)) r.id,
+    ];
+    for (var i = 0; i < order.length; i++) {
+      await (_db.update(_db.accountRows)..where((t) => t.id.equals(order[i])))
+          .write(AccountRowsCompanion(position: Value(i)));
+    }
+  });
 
   /// [client] is for tests.
   Future<MusicSource> source(String id, {http.Client? client}) async {
-    final r = await (_db.select(_db.accountRows)
-          ..where((t) => t.id.equals(id)))
-        .getSingle();
+    final r = await (_db.select(
+      _db.accountRows,
+    )..where((t) => t.id.equals(id))).getSingle();
     final a = _from(r);
     switch (a.type) {
       case AccountType.subsonic:
+        final pw = await _secrets.read(_pwKey(id));
+        if (pw == null) throw StateError('Missing password for account $id');
         final hdr = await _secrets.read(_hdrKey(id));
         return SubsonicSource(
           accountId: id,
           base: a.base,
           user: a.user,
-          password: await _secrets.read(_pwKey(id)) ?? '',
+          password: pw,
           headers: hdr == null
               ? const {}
               : (jsonDecode(hdr) as Map).cast<String, String>(),
