@@ -54,6 +54,12 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Playlists = albums, comme sur le Mac et la console
 - ✅ En plus : section « Playlists du serveur » sous les albums (lecture seule, gardables)
 
+## Mode clair
+- ✅ L'affichage actuel = mode sombre
+- ✅ Mode clair : fond blanc, logo en noir, détails rose
+- ⬜ Maquette du mode clair (plan 7), à valider par Johnny
+- ⬜ Comment passer d'un mode à l'autre
+
 ## Jamais sur téléphone
 - ✅ Skins Winamp (pas besoin, dit Johnny)
 
