@@ -11,7 +11,6 @@
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:lafleurmusic/main.dart';
@@ -21,79 +20,7 @@ import 'package:mpv_audio_kit/mpv_audio_kit.dart' show MpvAudioKit;
 import 'package:path_provider/path_provider.dart';
 
 import 'fake_subsonic.dart';
-
-/// Test-only secure storage: another keychain service on iOS, another preferences file on Android.
-const _testStorage = FlutterSecureStorage(
-  iOptions: IOSOptions(accountName: 'lafleurmusic.e2e-test'),
-  aOptions: AndroidOptions(sharedPreferencesName: 'lafleurmusic_e2e_test'),
-);
-
-/// Pumps frames until [finder] finds something, for at most [timeout].
-Future<void> pumpUntil(
-  WidgetTester tester,
-  Finder finder, {
-  Duration timeout = const Duration(seconds: 20),
-}) async {
-  final end = DateTime.now().add(timeout);
-  while (finder.evaluate().isEmpty) {
-    if (DateTime.now().isAfter(end)) {
-      throw TestFailure('Not found within $timeout: $finder');
-    }
-    await tester.pump(const Duration(milliseconds: 100));
-  }
-}
-
-/// Scrolls the screen's list until [finder] is built and on screen: lists build lazily, a small
-/// phone (the 320×640 Android emulator) shows only the top of the form, and the real keyboard
-/// takes half the screen. Down first, then up (the keyboard may have pushed it above).
-Future<void> reveal(WidgetTester tester, Finder finder) async {
-  final list = find
-      .descendant(
-        of: find.byType(ListView),
-        matching: find.byType(Scrollable),
-      )
-      .first;
-  for (var attempt = 0; attempt < 4; attempt++) {
-    await tester.pump();
-    for (final delta in const [150.0, -150.0]) {
-      if (finder.evaluate().isNotEmpty) break;
-      try {
-        await tester.scrollUntilVisible(
-          finder,
-          delta,
-          scrollable: list,
-          maxScrolls: 60,
-        );
-      } on StateError {
-        // not in this direction
-      }
-    }
-    if (finder.evaluate().isNotEmpty) {
-      await tester.ensureVisible(finder);
-      await tester.pump(const Duration(milliseconds: 300));
-      if (finder.hitTestable().evaluate().isNotEmpty) return;
-    }
-  }
-  throw TestFailure('Could not bring on screen: $finder');
-}
-
-/// Taps a button: the keyboard goes away first, so the whole screen is free on a small phone.
-Future<void> tapVisible(WidgetTester tester, Finder finder) async {
-  FocusManager.instance.primaryFocus?.unfocus();
-  await tester.pump(const Duration(milliseconds: 500));
-  await reveal(tester, finder);
-  await tester.tap(finder.hitTestable().first);
-  await tester.pump();
-}
-
-Future<void> typeInto(WidgetTester tester, String key, String text) async {
-  final field = find.byKey(ValueKey(key));
-  await reveal(tester, field);
-  await tester.enterText(field, text);
-  await tester.pump(const Duration(milliseconds: 300)); // keyboard up: the list may move
-  await reveal(tester, field);
-  await tester.pump();
-}
+import 'ui_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -109,18 +36,18 @@ void main() {
     );
     if (support.existsSync()) support.deleteSync(recursive: true);
     support.createSync(recursive: true);
-    await _testStorage.deleteAll();
+    await testStorage.deleteAll();
   });
 
   tearDownAll(() async {
-    await _testStorage.deleteAll();
+    await testStorage.deleteAll();
     await server.close();
   });
 
   testWidgets('first launch → account → Home → album → plays', (tester) async {
     final app = await buildLafleurApp(
       support: support,
-      secrets: SecureSecretStore(_testStorage),
+      secrets: SecureSecretStore(testStorage),
     );
     final s = app.strings;
     await tester.pumpWidget(app);
@@ -175,13 +102,20 @@ void main() {
     );
     expect(player.current.playing, isTrue);
 
-    final streams = server.requests.where((r) => r.method == 'stream');
-    expect(streams, isNotEmpty);
-    expect(streams.first.params['id'], 's-1');
+    // the song came from the server: streamed, or already kept by the Top 100 (it has plays
+    // on the server, the fake is « at home ») and read from that copy
+    final served = server.requests.where(
+      (r) => r.method == 'stream' || r.method == 'download',
+    );
+    expect(served, isNotEmpty);
+    expect(served.first.params['id'], 's-1');
     // every request carried the header and a good token
     expect(server.requests.where((r) => r.status != 200), isEmpty);
 
     await player.toggle(); // pause
     await tester.pump(const Duration(milliseconds: 200));
+
+    // the copies made go to the phone's own folder: remove them
+    await app.downloader.forget([...(await app.db.watchOffline().first).keys]);
   });
 }

@@ -1,6 +1,6 @@
 // A small Subsonic server for the end-to-end run (plan 1, task 10), in the test process itself.
 // It answers from the responses recorded in test/fixtures/subsonic/ (copied below: a phone can't
-// read the repo; test/fake_subsonic_test.dart checks they still match) and streams a.flac.
+// read the repo; test/fake_subsonic_test.dart checks they still match) and streams (and gives for download) a.flac.
 // Like a Navidrome behind a proxy, it refuses every request without `X-Lafleur-Test: ok` (403),
 // and it checks the token: md5(password + salt), otherwise Subsonic error 40.
 import 'dart:convert';
@@ -48,6 +48,15 @@ const albumJson =
     '"albumArtist":"LAFLEURSTUDIO","track":2,"genre":"Surf","duration":180.5,'
     '"size":5400000,"suffix":"mp3","coverArt":"al-1"}]}}}';
 
+/// A second album, one song, for the offline run (`secondAlbum: true`): the one never kept.
+const album2Json =
+    '{"subsonic-response":{"status":"ok","version":"1.16.1","type":"navidrome",'
+    '"serverVersion":"0.54.0","openSubsonic":true,"album":{"id":"al-2",'
+    '"name":"Lafleur Surf","artist":"Johnny","coverArt":"al-2","songCount":1,"song":['
+    '{"id":"s-3","title":"Wave Rider","artist":"Johnny","album":"Lafleur Surf",'
+    '"albumArtist":"Johnny","track":1,"genre":"Surf","duration":3,'
+    '"size":54439,"suffix":"flac","coverArt":"al-2"}]}}}';
+
 /// 1×1 PNG for getCoverArt.
 const _pngBase64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -63,11 +72,19 @@ class FakeRequest {
 }
 
 class FakeSubsonic {
-  FakeSubsonic._(this._server, this.user, this.password);
+  FakeSubsonic._(this._server, this.user, this.password, this.secondAlbum);
 
   final HttpServer _server;
   final String user, password;
+  final bool secondAlbum;
   final requests = <FakeRequest>[];
+
+  /// Cuts the server: every connection is closed without an answer (the app sees a network
+  /// error, like a phone out of reach of its server). Nothing is recorded in [requests].
+  bool down = false;
+
+  /// Connections cut while [down].
+  int refused = 0;
   final _song = base64Decode(aFlacBase64);
   final _png = base64Decode(_pngBase64);
 
@@ -75,9 +92,10 @@ class FakeSubsonic {
   static Future<FakeSubsonic> start({
     String user = 'johnny',
     String password = 'lafleur-e2e',
+    bool secondAlbum = false,
   }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final fake = FakeSubsonic._(server, user, password);
+    final fake = FakeSubsonic._(server, user, password, secondAlbum);
     server.listen(fake._handle);
     return fake;
   }
@@ -87,13 +105,17 @@ class FakeSubsonic {
   Future<void> close() => _server.close(force: true);
 
   /// Only the albums whose songs we recorded (al-1), so the library is consistent.
-  static String get _albumList {
+  String get _albumList {
     final d = jsonDecode(albumList2Json) as Map<String, dynamic>;
     final r = d['subsonic-response'] as Map<String, dynamic>;
     final list = ((r['albumList2'] as Map)['album'] as List)
         .cast<Map<String, dynamic>>()
-        .where((a) => a['id'] == 'al-1')
-        .map((a) => {...a, 'songCount': 2, 'duration': 395})
+        .where((a) => a['id'] == 'al-1' || (secondAlbum && a['id'] == 'al-2'))
+        .map(
+          (a) => a['id'] == 'al-1'
+              ? {...a, 'songCount': 2, 'duration': 395}
+              : {...a, 'songCount': 1, 'duration': 3},
+        )
         .toList();
     (r['albumList2'] as Map)['album'] = list;
     return jsonEncode(d);
@@ -107,6 +129,11 @@ class FakeSubsonic {
 
   Future<void> _handle(HttpRequest req) async {
     final res = req.response;
+    if (down) {
+      refused++;
+      (await res.detachSocket(writeHeaders: false)).destroy();
+      return;
+    }
     final q = req.uri.queryParameters;
     final last = req.uri.pathSegments.isEmpty ? '' : req.uri.pathSegments.last;
     final method = last.endsWith('.view')
@@ -142,6 +169,8 @@ class FakeSubsonic {
         case 'getAlbum':
           if (q['id'] == 'al-1') {
             json(albumJson);
+          } else if (secondAlbum && q['id'] == 'al-2') {
+            json(album2Json);
           } else {
             res.statusCode = HttpStatus.notFound;
           }
@@ -150,7 +179,8 @@ class FakeSubsonic {
           res.contentLength = _png.length;
           res.add(_png);
         case 'stream':
-          if (q['id'] == 's-1' || q['id'] == 's-2') {
+        case 'download':
+          if (const ['s-1', 's-2', 's-3'].contains(q['id'])) {
             res.headers.contentType = ContentType('audio', 'flac');
             res.contentLength = _song.length;
             res.add(_song);

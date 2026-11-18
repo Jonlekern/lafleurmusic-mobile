@@ -254,6 +254,7 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _plays; // lazy field: starts counting listens (Top 100, scrobbles)
     unawaited(widget.localFolder.rescan());
     // au lancement : la bibliothèque des serveurs est remise à jour en arrière-plan
     unawaited(widget.accountService.syncAll());
