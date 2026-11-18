@@ -58,7 +58,7 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ L'affichage actuel = mode sombre
 - ✅ Mode clair : fond blanc, logo en noir, détails rose
 - ⬜ Maquette du mode clair (plan 7), à valider par Johnny
-- ⬜ Comment passer d'un mode à l'autre
+- ✅ Automatique : suit le réglage clair / sombre du téléphone
 
 ## Jamais sur téléphone
 - ✅ Skins Winamp (pas besoin, dit Johnny)
