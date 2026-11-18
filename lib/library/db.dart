@@ -145,7 +145,12 @@ class LibraryDb extends _$LibraryDb {
   Future<void> queueOffline(List<String> trackPaths, OfflineReason reason) =>
       transaction(() async {
         final now = DateTime.now().millisecondsSinceEpoch;
+        // retirés par l'utilisateur : le Top 100 ne les remet pas en file (relu ici, dans la transaction)
+        final blocked = reason == OfflineReason.top100
+            ? await autoKeepBlocked()
+            : const <String>{};
         for (final (i, p) in trackPaths.indexed) {
+          if (blocked.contains(p)) continue;
           final old = await offlineOf(p);
           if (old == null) {
             await into(offline).insert(

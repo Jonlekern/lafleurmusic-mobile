@@ -152,13 +152,26 @@ class Downloader extends ChangeNotifier {
   Future<KeepResult> keep(
     List<Track> tracks, {
     OfflineReason reason = OfflineReason.user,
-  }) async {
+  }) {
+    // un à la fois : une garde automatique ne prend pas la place qu'un « Garder » vient de libérer
+    final run = _keepLock.then((_) => _keep(tracks, reason));
+    _keepLock = run.then((_) {}, onError: (Object _) {});
+    return run;
+  }
+
+  Future<void> _keepLock = Future.value();
+
+  Future<KeepResult> _keep(List<Track> tracks, OfflineReason reason) async {
     if (!await device.rootReachable()) {
       return const KeepResult.folderUnavailable();
     }
+    // le Top 100 laisse de côté ce que l'utilisateur a retiré (avant tout calcul de place)
+    final blocked = reason == OfflineReason.top100
+        ? await db.autoKeepBlocked()
+        : const <String>{};
     final remote = [
       for (final t in tracks)
-        if (parseRemoteKey(t.path) != null) t,
+        if (parseRemoteKey(t.path) != null && !blocked.contains(t.path)) t,
     ];
     final batch = _albumOrder(remote);
     final fresh = <Track>[]; // ni terminés ni déjà en file
@@ -230,6 +243,9 @@ class Downloader extends ChangeNotifier {
       if (limitLeft <= 0 && diskLeft <= 0) break;
       if (keep.contains(r.trackPath)) continue;
       final done = r.state == OfflineState.done.name;
+      // un échec ne compte ni dans la limite ni sur le disque ; une copie en file ne libère rien sur le disque
+      if (r.state == OfflineState.failed.name) continue;
+      if (!done && limitLeft <= 0) continue;
       // en file : la taille annoncée par le serveur, comme le décompte de la limite
       final size = done
           ? r.size

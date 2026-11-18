@@ -179,7 +179,8 @@ void main() {
     // la publication vers le système suit le chargement du fichier : on la guette un instant
     Map<Object?, Object?>? os;
     await tester.runAsync(() async {
-      for (var i = 0; i < 50; i++) {
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (DateTime.now().isBefore(deadline)) {
         os = await osSession();
         if (os?['title'] == fileTitle &&
             os?['playbackState'] == 'playing' &&

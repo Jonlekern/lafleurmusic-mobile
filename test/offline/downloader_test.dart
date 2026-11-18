@@ -791,6 +791,76 @@ void main() {
       await add(_t('20', size: _mb * 5 ~/ 2));
       final r = await d.keep([_t('20', size: _mb * 5 ~/ 2)]);
       expect((r.ok, r.neededBytes), (false, _mb * 3 ~/ 2));
+      // the copies really went (eviction is not undone): the least played first
+      expect(await kept(OfflineReason.top100), {'3'});
+    },
+  );
+
+  test(
+    'a failed Top 100 row is not freeable: tooBig, nothing evicted',
+    () async {
+      final d = make();
+      settings.storageLimitBytes = 10 * _mb;
+      await seedCopies(1, users: 9);
+      await db.markOfflineFailed('subsonic://acc/1');
+      await db.markOfflineFailed('subsonic://acc/1');
+      await db.markOfflineFailed('subsonic://acc/1');
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'failed');
+      await add(_t('20', size: 2 * _mb));
+      final r = await d.keep([_t('20', size: 2 * _mb)]);
+      // 9 MiB done + 2 asked - 10 allowed; the failed row frees nothing
+      expect((r.ok, r.neededBytes), (false, _mb));
+      expect(await kept(OfflineReason.top100), {'1'});
+    },
+  );
+
+  test('only disk short: queued Top 100 rows are not evicted', () async {
+    final d = make();
+    settings.storageLimitBytes = 1000 * _mb;
+    await seedCopies(2);
+    await add(_t('8'));
+    await db.queueOffline([
+      'subsonic://acc/8',
+    ], OfflineReason.top100); // least played, frees no disk
+    device.freeFn = () =>
+        201 * _mb +
+        [for (var i = 1; i <= 2; i++) File('${root.path}/Art/Alb/$i.mp3')]
+                .where((f) => !f.existsSync())
+                .length *
+            _mb;
+    await add(_t('20', size: _mb * 2));
+    final r = await d.keep([_t('20', size: _mb * 2)]);
+    expect(r.ok, isTrue);
+    expect(await kept(OfflineReason.top100), {'8', '2'});
+    await d.whenIdle();
+  });
+
+  test('a block set between the Top 100 snapshot and its keep wins', () async {
+    final d = make();
+    await add(_t('1'));
+    await d.forget(['subsonic://acc/1'], byUser: true);
+    final r = await d.keep([_t('1')], reason: OfflineReason.top100);
+    expect(r.ok, isTrue);
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    await db.queueOffline(['subsonic://acc/1'], OfflineReason.top100);
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    await d.whenIdle();
+  });
+
+  test(
+    'a Top 100 keep racing a user eviction cannot take the freed room',
+    () async {
+      final d = make();
+      settings.storageLimitBytes = 10 * _mb;
+      await seedCopies(10);
+      await add(_t('20', size: _mb));
+      await add(_t('1', size: _mb)); // the copy about to be evicted
+      final user = d.keep([_t('20', size: _mb)]);
+      final auto = d.keep([_t('1', size: _mb)], reason: OfflineReason.top100);
+      expect((await user).ok, isTrue);
+      expect((await auto).ok, isFalse);
+      expect((await db.offlineOf('subsonic://acc/20'))!.reason, 'user');
+      await d.whenIdle();
     },
   );
 
@@ -1215,9 +1285,8 @@ void main() {
     test('moving: an iCloud placeholder at the target is not reused', () async {
       final d = await withDone(['1']);
       final to = Directory('${tmp.path}/sd');
-      File(
-        '${to.path}/Art/Alb/.01 Song 1.mp3.icloud',
-      ).createSync(recursive: true);
+      File('${to.path}/Art/Alb/.01 Song 1.mp3.icloud')
+          .createSync(recursive: true);
       final r = await d.moveRoot(from: device.root, to: to);
       expect(r.ok, isTrue);
       expect(
