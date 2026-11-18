@@ -7,8 +7,8 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Écrans : reprendre ceux du Mac, empilés
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
-- ⬜ Plan 1 « écouter son serveur » écrit, à valider ; plans 2 à 6 ensuite
-- ⬜ Code
+- ✅ Plan 1 « écouter son serveur » et plan 2 « hors ligne » écrits et codés ; plans 3 à 7 ensuite
+- ⬜ Code (plans 1 et 2 faits, essai de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 
@@ -38,10 +38,13 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Vrais fichiers dans un dossier visible : Fichiers → Sur mon iPhone → LAFLEURMUSIC ; Android : Musique/LAFLEURMUSIC
 - ✅ Rangés Artiste/Album, avec tags et pochette ; fichier original si le serveur le permet
 - ✅ Les fichiers posés à la main dans ce dossier apparaissent dans l'appli
+- ✅ Dossier au choix (iCloud Drive compris) ; le déplacer emporte les copies
 - ✅ Les mettre sur le NAS : c'est à l'utilisateur (appli Fichiers) ; l'appli n'écrit jamais sur le NAS
 - ✅ Top 100 gardé tout seul
 - ✅ Les écoutes faites dehors sont envoyées au serveur au retour
-- ✅ Limite de place : 10 Go au départ, réglable (choix de Claude, à vérifier)
+- ✅ Limite de place : 10 Go au départ, réglable (choix de Claude, à vérifier) ; la file refuse ce qui dépasse la limite ou la place libre
+- ✅ Plan 2 essayé de bout en bout (faux serveur coupé puis rétabli) : copie dans le dossier, lecture sans serveur, morceau non gardé grisé, écoute envoyée au retour
+- ⬜ Écran « Sur mon iPhone » (limite, dossier, Top 100) : après la maquette validée par Johnny
 
 ## Écrans et tactile (idées gardées)
 - ✅ Menu façon iPod : Musique → Artistes / Albums (= playlists) / Morceaux / Top 100
