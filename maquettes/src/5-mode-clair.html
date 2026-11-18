@@ -1,0 +1,125 @@
+<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1760px;height:1000px;background:#dcdcdc;font-family:Inter;color:#111111;display:flex;gap:36px;padding:40px 36px;overflow:hidden}
+.col{display:flex;flex-direction:column;align-items:center;gap:14px}
+.cap{color:#333333;font-size:15px;font-weight:700}.cap span{color:#F26EF2}
+.ph{width:390px;height:844px;background:#FFFFFF;border-radius:46px;border:10px solid #111;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.sb{height:44px;display:flex;justify-content:space-between;align-items:center;padding:6px 28px 0;font-size:14px;font-weight:700;flex:none}
+.top{height:50px;display:flex;align-items:center;justify-content:center;position:relative;flex:none;background:#F3F3F3;border-bottom:1px solid #E0E0E0}
+.top img{height:15px}.top.bk img{height:11px;margin-left:40px}.top .l{position:absolute;left:14px;color:#F26EF2;font-size:15px;font-weight:700}.top .r{position:absolute;right:16px;color:#555555;font-size:18px}
+.body{flex:1;overflow:hidden;padding:14px 16px;position:relative}
+.sec{font-size:11px;font-weight:700;color:#6E6E6E;letter-spacing:1px;margin:14px 4px 8px}
+.it{font-size:16px;font-weight:700;padding:11px 12px;border-radius:8px;display:flex;align-items:center;gap:12px}.it .c{margin-left:auto;color:#9A9A9A}
+.it.on{background:#F26EF2;color:#111}.it.on .c{color:#111}
+.sq{width:30px;height:30px;border-radius:4px;flex:none}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid #CFCFCF;border-radius:16px;padding:6px 12px;font-size:13px;font-weight:700}
+.chip.p{border-color:#F26EF2;color:#F26EF2}
+.search{background:#F3F3F3;border-radius:10px;color:#8A8A8A;font-size:14px;padding:10px 14px;margin-top:10px}
+.mini{height:64px;background:#F3F3F3;border-top:1px solid #E0E0E0;display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+.mini .t{font-size:14px;font-weight:700}.mini .a{font-size:12px;color:#6E6E6E;margin-top:2px}.mini .b{margin-left:auto;font-size:20px;display:flex;gap:18px}
+.prog{height:3px;background:#E4E4E4;flex:none}.prog i{display:block;height:3px;width:38%;background:#F26EF2}
+.home{height:30px;flex:none;display:flex;justify-content:center;align-items:center}.home i{width:134px;height:5px;border-radius:3px;background:#111111}
+h1{font-size:28px;font-weight:700;margin-top:12px}.lbl{color:#6E6E6E;font-size:11px;letter-spacing:.9px;font-weight:700}
+.pill{display:inline-block;border-radius:22px;padding:10px 18px;font-weight:700;font-size:14px;border:1px solid #CFCFCF;margin-right:8px}.pill.p{background:#F26EF2;color:#111;border-color:#F26EF2}
+.tr{display:flex;align-items:center;gap:12px;padding:11px 8px;font-size:15px;font-weight:700;border-bottom:1px solid #EEEEEE;position:relative}
+.tr .n{width:20px;color:#555555}.tr .s{color:#6E6E6E;font-size:12px;font-weight:400;margin-top:2px}.tr .d{margin-left:auto;color:#555555;font-weight:400;font-size:13px}
+.tr.cur{background:#F26EF2;color:#111;border-radius:8px}.tr.cur .n,.tr.cur .s,.tr.cur .d{color:#111}
+.tr.off{color:#B8B8B8}.tr.off .s,.tr.off .d,.tr.off .n{color:#CFCFCF}
+.dl{color:#F26EF2;font-size:13px}
+.swipe{position:absolute;right:0;top:0;bottom:0;width:110px;background:#F26EF2;color:#111;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:0 8px 8px 0}
+.cover{width:300px;height:300px;margin:6px auto 0;border-radius:8px;background:#EDE8DE;position:relative;overflow:hidden}
+.ctl{display:flex;justify-content:space-between;align-items:center;padding:0 30px;font-size:26px;margin-top:18px}.ctl .pp{width:64px;height:64px;border-radius:32px;background:#F26EF2;color:#111;display:flex;align-items:center;justify-content:center}
+.bar2{height:4px;background:#E4E4E4;border-radius:2px;margin-top:16px}.bar2 i{display:block;height:4px;width:38%;background:#F26EF2;border-radius:2px}
+.times{display:flex;justify-content:space-between;color:#6E6E6E;font-size:12px;margin-top:6px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0}.row .t{font-size:14px;font-weight:700}.row .a{color:#6E6E6E;font-size:12px;margin-top:2px}.row .x{color:#8A8A8A;font-size:15px;margin-left:auto}.grip{color:#9A9A9A;font-size:13px;width:12px}
+.tabs{display:flex;gap:8px;margin-top:16px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#FFFFFF;border-top:1px solid #E2E2E2;border-radius:18px 18px 0 0;padding:10px 12px 22px;box-shadow:0 -12px 40px rgba(0,0,0,.6);font-size:16px}
+.sheet .g{width:40px;height:5px;border-radius:3px;background:#B8B8B8;margin:0 auto 10px}
+.sheet div.o{padding:12px 12px;border-radius:8px}.sheet .hl{background:#F26EF2;color:#111;font-weight:700}.sheet hr{border:0;border-top:1px solid #E2E2E2;margin:5px 4px}.sheet .red{color:#ff6b6b}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.top img{filter:invert(1)}
+.sheet{box-shadow:0 -12px 40px rgba(0,0,0,.15)}
+.dim{background:rgba(0,0,0,.25)!important}
+</style></head><body>
+
+<!-- 1 Accueil = barre de côté du Mac -->
+<div class="col"><div class="cap"><span>1</span> Accueil (barre de côté du Mac)</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><img src="logo-texte-grand.png"><span class="r">⚙︎</span></div>
+<div class="body">
+ <span class="chip p">Tout ▾</span> <span class="chip">Navidrome</span> <span class="chip">Jellyfin</span>
+ <div class="search">Rechercher</div>
+ <div class="sec">BIBLIOTHÈQUE</div>
+ <div class="it">Cover Flow<span class="c">›</span></div>
+ <div class="it">Morceaux<span class="c">›</span></div>
+ <div class="it">Artistes<span class="c">›</span></div>
+ <div class="it">Genres<span class="c">›</span></div>
+ <div class="it">Top 100<span class="c">›</span></div>
+ <div class="it">Sur mon iPhone<span class="c">›</span></div>
+ <div class="sec">ALBUMS</div>
+ <div class="it on"><span class="sq" style="background:#5b8a5e"></span>Studio Lafleur<span class="c">›</span></div>
+ <div class="it"><span class="sq" style="background:#8f1f2a"></span>Lafleur Surf <span class="dl">⬇︎</span><span class="c">›</span></div>
+ <div class="it"><span class="sq" style="background:#e0b53a"></span>Summer Mix<span class="c">›</span></div>
+</div>
+<div class="prog"><i></i></div>
+<div class="mini"><span class="sq" style="background:#8f1f2a;width:42px;height:42px"></span><div><div class="t">Lafleur Surf</div><div class="a">LAFLEURSTUDIO</div></div><div class="b">⏸ ⏭</div></div>
+<div class="home"><i></i></div></div></div>
+
+<!-- 2 Album = colonne du milieu -->
+<div class="col"><div class="cap"><span>2</span> Album (colonne du milieu)</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">‹ Albums</span><img src="logo-texte-grand.png"><span class="r">⋯</span></div>
+<div class="body">
+ <div style="display:flex;gap:16px;align-items:flex-end"><div style="width:120px;height:120px;background:#EDE8DE;border-radius:6px;position:relative"><div style="position:absolute;left:12px;top:36px;width:96px;height:48px;background:#5b8a5e;transform:rotate(-2deg)"></div></div>
+ <div><div class="lbl">ALBUM</div><h1 style="margin-top:4px;font-size:24px">Studio Lafleur</h1><div style="color:#6E6E6E;font-size:13px;font-weight:700;margin-top:4px">9 morceaux · 36 min</div></div></div>
+ <div style="margin-top:16px"><span class="pill p">▶ Lecture</span><span class="pill">⤨ Aléatoire</span><span class="pill">⬇︎</span></div>
+ <div style="margin-top:14px">
+ <div class="tr"><span class="n">1</span><div>Ocean Drive<div class="s">Johnny</div></div><span class="d">3:42</span></div>
+ <div class="tr cur"><span class="n">2</span><div>Lafleur Surf<div class="s">LAFLEURSTUDIO</div></div><span class="d">4:05</span></div>
+ <div class="tr"><span class="n">3</span><div>Golden Hour<div class="s">Divers</div></div><span class="d">3:18</span></div>
+ <div class="tr" style="background:#EFEFEF;border-radius:8px"><span class="n">4</span><div>Night Swim<div class="s">Kavinsky</div></div><span class="d">5:01</span><div class="swipe" style="width:120px;border-radius:8px">← Lire ensuite</div></div>
+ <div class="tr"><span class="n">5</span><div>Paradise Club<div class="s">Divers</div></div><span class="d">3:55</span></div>
+ <div class="tr"><span class="n">6</span><div>Sunset Tape<div class="s">Divers</div></div><span class="d">4:12</span></div>
+ </div>
+</div>
+<div class="prog"><i></i></div>
+<div class="mini"><span class="sq" style="background:#8f1f2a;width:42px;height:42px"></span><div><div class="t">Lafleur Surf</div><div class="a">LAFLEURSTUDIO</div></div><div class="b">⏸ ⏭</div></div>
+<div class="home"><i></i></div></div></div>
+
+<!-- 3 En cours = colonne de droite -->
+<div class="col"><div class="cap"><span>3</span> En cours (colonne de droite)</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">⌄</span><img src="logo-texte-grand.png"><span class="r">⋯</span></div>
+<div class="body">
+ <div class="cover"><div style="position:absolute;left:50px;top:90px;width:200px;height:110px;border-radius:50%;background:#9e2c36;border:5px solid #f0d9a0"></div></div>
+ <h1 style="font-size:22px;margin-top:18px">Lafleur Surf</h1><div style="color:#6E6E6E;font-size:14px;margin-top:4px">LAFLEURSTUDIO · Studio Lafleur</div>
+ <div class="bar2"><i></i></div><div class="times"><span>1:33</span><span>−2:32</span></div>
+ <div class="ctl"><span>⤨</span><span>⏮</span><span class="pp">⏸</span><span>⏭</span><span>↻</span></div>
+ <div class="tabs"><span class="chip p">À suivre</span><span class="chip">Égaliseur</span><span class="chip">Lecture</span></div>
+ <div class="sec" style="margin-top:12px">AJOUTÉS PAR TOI</div>
+ <div class="row"><span class="grip">⋮⋮</span><span class="sq" style="background:#2c3b78"></span><div><div class="t">Nightcall</div><div class="a">Kavinsky</div></div><span class="x">✕</span></div>
+</div>
+<div class="home"><i></i></div></div></div>
+
+<!-- 4 Appui long = menu clic droit du Mac -->
+<div class="col"><div class="cap"><span>4</span> Appui long (menu clic droit du Mac)</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">‹ Albums</span><img src="logo-texte-grand.png"><span class="r">⋯</span></div>
+<div class="body">
+ <div class="tr"><span class="n">1</span><div>Ocean Drive<div class="s">Johnny</div></div><span class="d">3:42</span></div>
+ <div class="tr"><span class="n">2</span><div>Lafleur Surf<div class="s">LAFLEURSTUDIO</div></div><span class="d">4:05</span></div>
+ <div class="tr"><span class="n">3</span><div>Golden Hour<div class="s">Divers</div></div><span class="d">3:18</span></div>
+ <div class="tr off"><span class="n">4</span><div>Night Swim<div class="s">Kavinsky · pas sur le téléphone</div></div><span class="d">5:01</span></div>
+ <div class="tr"><span class="n">5</span><div>Paradise Club<div class="s">Divers</div></div><span class="d">3:55</span></div>
+ <div class="dim"></div>
+ <div class="sheet"><div class="g"></div>
+  <div style="padding:4px 12px 10px;font-weight:700">Sunset Tape <span style="color:#6E6E6E;font-weight:400;font-size:13px">· Divers</span></div>
+  <div class="o hl">Lire ensuite</div><div class="o">Ajouter à la file</div><hr>
+  <div class="o">Garder sur mon iPhone</div><div class="o">Sélectionner…</div><hr>
+  <div class="o" style="color:#8A8A8A">Modifier… <span style="font-size:12px">(plus tard)</span></div>
+ </div>
+</div>
+<div class="home" style="background:#FFFFFF"><i></i></div></div></div>
+
+</body></html>

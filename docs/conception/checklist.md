@@ -60,7 +60,7 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 ## Mode clair
 - ✅ L'affichage actuel = mode sombre
 - ✅ Mode clair : fond blanc, logo en noir, détails rose
-- ⬜ Maquette du mode clair (plan 7), à valider par Johnny
+- ✅ Maquette du mode clair validée (`maquettes/5-mode-clair.png`, 18.11.2026)
 - ✅ Automatique : suit le réglage clair / sombre du téléphone
 
 ## Jamais sur téléphone
