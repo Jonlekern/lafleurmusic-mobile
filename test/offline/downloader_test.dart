@@ -1215,8 +1215,9 @@ void main() {
     test('moving: an iCloud placeholder at the target is not reused', () async {
       final d = await withDone(['1']);
       final to = Directory('${tmp.path}/sd');
-      File('${to.path}/Art/Alb/.01 Song 1.mp3.icloud')
-        ..createSync(recursive: true);
+      File(
+        '${to.path}/Art/Alb/.01 Song 1.mp3.icloud',
+      ).createSync(recursive: true);
       final r = await d.moveRoot(from: device.root, to: to);
       expect(r.ok, isTrue);
       expect(

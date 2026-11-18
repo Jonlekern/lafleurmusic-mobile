@@ -393,8 +393,9 @@ class Downloader extends ChangeNotifier {
   Future<String?> _download(OfflineRow row, _Active active) async {
     final key = parseRemoteKey(row.trackPath);
     final t = await db.trackByPath(row.trackPath);
-    if (key == null || t == null)
+    if (key == null || t == null) {
       throw StateError('unknown track'); // pas un refus du serveur
+    }
     final source = await resolver.source(key.$1);
     final root = await device.musicRoot();
 
