@@ -1,3 +1,8 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:http/http.dart' as http;
+
 /// A music source (Subsonic today) as seen by sync and playback.
 class SourceAlbum {
   const SourceAlbum({
@@ -38,6 +43,36 @@ class SourceSong {
   final String? coverId, suffix;
   final double? replayGainTrack, replayGainAlbum;
   final int playCount;
+}
+
+/// A network failure talking to a source (refused, timeout, TLS…).
+/// Its text never carries the request URL: the query holds the credentials.
+class SourceNetworkException implements Exception {
+  SourceNetworkException(Object cause)
+      : kind = cause.runtimeType.toString(),
+        message = _redact(_describe(cause));
+
+  /// Type of the original error, e.g. `SocketException`, `ClientException`.
+  final String kind;
+  final String message;
+
+  static String _describe(Object e) {
+    // never e.toString(): ClientException's adds the URL
+    final m = switch (e) {
+      SocketException() => e.osError?.message ?? e.message,
+      http.ClientException() => e.message,
+      TlsException() => e.message,
+      TimeoutException() => e.message ?? 'timed out',
+      _ => '',
+    };
+    return m.isEmpty ? 'network error' : m;
+  }
+
+  static String _redact(String s) =>
+      s.replaceAll(RegExp(r'\w+://\S*'), '<url>').replaceAll(RegExp(r'\?\S*'), '');
+
+  @override
+  String toString() => 'SourceNetworkException($kind): $message';
 }
 
 enum TestResult { ok, unreachable, wrongPassword, headerRefused, notSubsonic }

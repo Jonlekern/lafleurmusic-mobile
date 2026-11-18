@@ -342,6 +342,42 @@ void main() {
     });
   });
 
+  group('network errors carry no credentials', () {
+    final failures = <String, Object>{
+      'ClientException': http.ClientException(
+          'Connection refused',
+          Uri.parse(
+              'https://music.example.com/rest/getAlbum.view?u=johnny&t=deadbeef&s=abc&id=1')),
+      'SocketException': const SocketException('Connection refused'),
+      'TimeoutException': TimeoutException('slow'),
+    };
+    for (final MapEntry(key: kind, value: error) in failures.entries) {
+      test(kind, () async {
+        final s = make(MockClient((r) async => throw error));
+        Object? caught;
+        try {
+          await s.albumSongs('1');
+        } catch (e) {
+          caught = e;
+        }
+        expect(caught, isA<SourceNetworkException>());
+        final e = caught! as SourceNetworkException;
+        expect(e.kind, kind); // the original type stays recognisable
+        expect(e, isA<Exception>()); // sync still treats it as a failure
+        for (final secret in ['t=', 's=', 'u=', 'deadbeef', 'johnny']) {
+          expect('$e', isNot(contains(secret)), reason: '$e');
+        }
+      });
+    }
+
+    test('scrobble wraps network errors too', () async {
+      final s = make(MockClient((r) async =>
+          throw http.ClientException('reset', r.url)));
+      await expectLater(s.scrobble('9', DateTime(2026)),
+          throwsA(isA<SourceNetworkException>()));
+    });
+  });
+
   test('accountId is exposed', () {
     expect(make(MockClient((r) async => json(fixture('ping')))).accountId,
         'acc1');

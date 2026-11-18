@@ -88,7 +88,13 @@ class SubsonicSource implements MusicSource {
 
   Future<Map<String, dynamic>> _call(
       String method, Map<String, String> params) async {
-    final res = await _client.get(_uri(method, params), headers: _headers);
+    final http.Response res;
+    try {
+      res = await _client.get(_uri(method, params), headers: _headers);
+    } on Exception catch (e) {
+      // never rethrow as is: ClientException.toString prints the URL, token included
+      throw SourceNetworkException(e);
+    }
     final r = _parse(utf8.decode(res.bodyBytes, allowMalformed: true));
     if (r == null) {
       throw SubsonicException('HTTP ${res.statusCode}: not a Subsonic response');
