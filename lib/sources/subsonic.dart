@@ -118,18 +118,67 @@ class SubsonicSource implements MusicSource, HttpSource {
     return r;
   }
 
+  static const _maxRedirects = 3;
+
+  /// Set by [test] when the server sent us from http to https on the same host:
+  /// the address to use from now on. Null otherwise.
+  Uri? get redirectedBase => _redirectedBase;
+  Uri? _redirectedBase;
+
+  static int _portOf(Uri u) => u.hasPort ? u.port : (u.scheme == 'https' ? 443 : 80);
+
+  /// A hop we accept: same host, http or https, never https -> http, and the
+  /// port unchanged (or the default https port when upgrading).
+  static bool _sameHostHop(Uri from, Uri to) {
+    if (to.scheme != 'http' && to.scheme != 'https') return false;
+    if (to.host.toLowerCase() != from.host.toLowerCase()) return false;
+    if (from.scheme == 'https' && to.scheme == 'http') return false;
+    final upgrade = from.scheme == 'http' && to.scheme == 'https';
+    return _portOf(to) == _portOf(from) || (upgrade && _portOf(to) == 443);
+  }
+
   @override
   Future<TestResult> test() async {
+    _redirectedBase = null;
     final http.Response res;
     try {
-      // redirects not followed: a proxy sending to its login page is a refused header
-      final req = http.Request('GET', _uri('ping'))
-        ..followRedirects = false
-        ..headers.addAll(_headers);
-      res = await _client
-          .send(req)
-          .then(http.Response.fromStream)
-          .timeout(timeout);
+      // redirects followed by hand: only to the same host, a proxy sending to
+      // its login page is a refused header
+      var origin = _base;
+      var hops = 0;
+      http.Response r;
+      while (true) {
+        final target = _uri('ping');
+        final url = target.replace(
+          scheme: origin.scheme,
+          host: origin.host,
+          port: origin.hasPort ? origin.port : null,
+        );
+        final req = http.Request('GET', url)
+          ..followRedirects = false
+          ..headers.addAll(_headers);
+        r = await _client
+            .send(req)
+            .then(http.Response.fromStream)
+            .timeout(timeout);
+        if (r.statusCode < 300 || r.statusCode >= 400) break;
+        final loc = r.headers['location'];
+        final next = loc == null ? null : url.resolve(loc);
+        if (next == null || hops >= _maxRedirects || !_sameHostHop(url, next)) {
+          return TestResult.headerRefused;
+        }
+        hops++;
+        origin = next;
+      }
+      res = r;
+      if (origin.scheme != _base.scheme) {
+        _redirectedBase = Uri(
+          scheme: origin.scheme,
+          host: origin.host,
+          port: origin.hasPort ? origin.port : null,
+          pathSegments: _base.pathSegments.where((s) => s.isNotEmpty),
+        );
+      }
     } on TlsException {
       return TestResult.certificateRejected; // HandshakeException, CertificateException
     } on SocketException {

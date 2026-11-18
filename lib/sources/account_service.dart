@@ -140,6 +140,9 @@ class AccountService extends ChangeNotifier {
   /// A sync is running for at least one account.
   bool get syncing => _syncing.isNotEmpty;
 
+  /// Set by the last [testDraft]: the https address the server redirected to, or null.
+  Uri? draftRedirect;
+
   /// "Tester": a throw-away source built from the form, nothing saved.
   /// [id]: the account being edited (its stored password is used when the field is empty).
   Future<TestResult> testDraft(AccountDraft d, {String? id}) async {
@@ -147,20 +150,22 @@ class AccountService extends ChangeNotifier {
     if (password.isEmpty && id != null) {
       password = await accounts.password(id) ?? '';
     }
+    draftRedirect = null;
     final custom = _draftSource;
     if (custom != null) return _timed(custom(d, password));
     final client = newServerClient();
     try {
-      return await _timed(
-        SubsonicSource(
-          accountId: id ?? 'draft',
-          base: d.base!,
-          user: d.user.trim(),
-          password: password,
-          headers: d.headers,
-          client: client,
-        ),
+      final source = SubsonicSource(
+        accountId: id ?? 'draft',
+        base: d.base!,
+        user: d.user.trim(),
+        password: password,
+        headers: d.headers,
+        client: client,
       );
+      final r = await _timed(source);
+      draftRedirect = source.redirectedBase;
+      return r;
     } finally {
       client.close();
     }

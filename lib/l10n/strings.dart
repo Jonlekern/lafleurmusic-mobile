@@ -258,6 +258,10 @@ class Strings {
   String get headerValue => _t('Valeur', 'Value');
   String get addHeader => _t('+ Ajouter un en-tête', '+ Add a header');
   String get testAction => _t('Tester', 'Test');
+  String get useHttps => _t(
+    'Le serveur demande https:// : adresse corrigée.',
+    'The server asks for https://: address fixed.',
+  );
   String get testing => _t('Je teste…', 'Testing…');
   String testResult(TestResult r) => switch (r) {
     TestResult.ok => _t('Ça marche !', 'It works!'),

@@ -58,6 +58,89 @@ SubsonicSource make(
 
 void main() {
   group('test()', () {
+    group('redirects', () {
+      http.Response moved(String to, [int code = 301]) =>
+          http.Response('', code, headers: {'location': to});
+
+      test('same host http -> https: followed, new base reported', () async {
+        final seen = <String>[];
+        final headersSeen = <String?>[];
+        final s = make(
+          MockClient((r) async {
+            seen.add('${r.url.scheme}://${r.url.host}:${r.url.port}${r.url.path}');
+            headersSeen.add(r.headers['CF-Access-Client-Id']);
+            if (r.url.scheme == 'http') {
+              return moved('https://h:4533/rest/ping');
+            }
+            return json(fixture('ping'));
+          }),
+          base: 'http://h:4533',
+          headers: {'CF-Access-Client-Id': 'id1'},
+        );
+        expect(s.redirectedBase, isNull);
+        expect(await s.test(), TestResult.ok);
+        expect(s.redirectedBase, Uri.parse('https://h:4533'));
+        expect(seen, ['http://h:4533/rest/ping.view', 'https://h:4533/rest/ping.view']);
+        expect(headersSeen, ['id1', 'id1']);
+      });
+
+      test('http -> https on the default port', () async {
+        final s = make(
+          MockClient((r) async => r.url.scheme == 'http'
+              ? moved('https://h/rest/ping.view')
+              : json(fixture('ping'))),
+          base: 'http://h:4533',
+        );
+        expect(await s.test(), TestResult.ok);
+        expect(s.redirectedBase, Uri.parse('https://h'));
+      });
+
+      test('another host stays headerRefused', () async {
+        final s = make(
+          MockClient((r) async => moved('https://login.autre.com', 302)),
+          base: 'http://h:4533',
+        );
+        expect(await s.test(), TestResult.headerRefused);
+        expect(s.redirectedBase, isNull);
+      });
+
+      test('a redirect loop (4 hops) is headerRefused', () async {
+        var n = 0;
+        final s = make(
+          MockClient((r) async {
+            n++;
+            return moved('https://h:4533/rest/ping');
+          }),
+          base: 'https://h:4533',
+        );
+        expect(await s.test(), TestResult.headerRefused);
+        expect(n, 4);
+      });
+
+      test('https -> http is refused', () async {
+        final s = make(
+          MockClient((r) async => moved('http://h:4533/rest/ping')),
+          base: 'https://h:4533',
+        );
+        expect(await s.test(), TestResult.headerRefused);
+      });
+
+      test('credentials stay out of exceptions: query kept on the hop', () async {
+        final queries = <String>[];
+        final s = make(
+          MockClient((r) async {
+            queries.add(r.url.queryParameters['u'] ?? '');
+            return r.url.scheme == 'http'
+                ? moved('https://h:4533/rest/ping')
+                : json(fixture('ping'));
+          }),
+          base: 'http://h:4533',
+        );
+        await s.test();
+        expect(queries, everyElement(isNotEmpty));
+      });
+    });
+
     test('ok on a successful ping', () async {
       final s = make(MockClient((r) async => json(fixture('ping'))));
       expect(await s.test(), TestResult.ok);

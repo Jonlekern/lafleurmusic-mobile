@@ -148,8 +148,10 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
       _ok = false;
     });
     TestResult r = TestResult.unreachable;
+    Uri? https;
     try {
       r = await service.testDraft(d, id: widget.editing?.id);
+      https = service.draftRedirect;
     } catch (_) {
       // testDraft ne lance rien ; par prudence : « injoignable »
     } finally {
@@ -164,6 +166,11 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
             _message = '${s.testResult(r)}\n${s.localNetworkHint}';
           }
           _ok = r == TestResult.ok;
+          // le serveur a renvoyé vers https : le champ prend la bonne adresse
+          if (https != null) {
+            _address.text = https.toString();
+            _message = '${_message ?? ''}\n${s.useHttps}';
+          }
         });
       }
     }
