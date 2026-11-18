@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'l10n/strings.dart';
 import 'library/covers.dart';
 import 'library/db.dart';
+import 'library/models.dart';
 import 'offline/downloader.dart';
 import 'offline/home_state.dart';
 import 'player/equalizer.dart';
@@ -51,6 +52,11 @@ class AppScope extends InheritedWidget {
 
   /// « À la maison » (Wi-Fi et un serveur qui répond) : le Top 100 se garde alors tout seul.
   final HomeState? home;
+
+  /// Ce morceau peut-il partir maintenant ? (copie gardée, ou serveur qui répond ; fichier présent)
+  /// Sans service de comptes (tests, Mac) : oui. Lit le disque : à appeler une fois par construction.
+  bool playableNow(Track t) => accountService?.playableNow(t) ?? true;
+
   static final _noEq = ValueNotifier(Equalizer.named('flat'));
 
   /// Réglage d'égaliseur en cours (l'appli l'applique au lecteur et l'enregistre à chaque changement).

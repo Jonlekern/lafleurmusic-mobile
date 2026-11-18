@@ -21,16 +21,26 @@ import '../theme/lafleur_theme.dart';
 import '../ui/phone/account_form.dart';
 import '../ui/phone/accounts_screen.dart';
 import '../ui/phone/phone_shell.dart';
+import '../ui/phone/keep_screen.dart';
 import 'demo_library.dart';
+import 'demo_offline.dart';
 import 'demo_player.dart';
 
 /// Mode démo (debug seulement, `--dart-define=LAFLEUR_DEMO=true`) : la bibliothèque des maquettes en
 /// mémoire, deux comptes factices, un lecteur muet sur « Lafleur Surf ». Rien n'est enregistré.
 /// `--dart-define=LAFLEUR_DEMO_SCREEN=album|now|accounts|account` ouvre l'Album, En cours, Réglages → Comptes
 /// ou Ajouter un compte (rempli comme la maquette 2) au lancement (captures).
+/// `keephome|keep|greyed` : la bibliothèque d'un serveur dont Lafleur Surf est gardé : l'Accueil (⬇ rose),
+/// « Garder sur mon iPhone » (maquette 2, écran 8), l'album dont « Night Swim » est grisé (maquette 1, écran 4).
 Future<Widget> demoApp() async {
+  const screen = String.fromEnvironment('LAFLEUR_DEMO_SCREEN');
+  final remote = const {'keephome', 'keep', 'greyed'}.contains(screen);
   final db = LibraryDb(NativeDatabase.memory());
-  await db.upsertTracks(DemoLibrary.tracks);
+  if (remote) {
+    await seedKeepDemo(db);
+  } else {
+    await db.upsertTracks(DemoLibrary.tracks);
+  }
   final accounts = Accounts(db, _MemorySecrets());
   // les comptes de la maquette 2 : Navidrome répond, Jellyfin non, Plex oui
   final answers = <String, TestResult>{};
@@ -68,9 +78,10 @@ Future<Widget> demoApp() async {
     answers[a.id] = answer;
   }
   // rien ne part sur le réseau : réponses inventées, synchro vide
-  final service = AccountService(
+  final service = DemoAccountService(
     accounts,
     db: db,
+    notOnPhone: remote ? DemoLibrary.notOnPhonePaths.toSet() : const {},
     draftSource: (_, _) => _DemoSource('draft', TestResult.ok),
     sourceOf: (id) async =>
         _DemoSource(id, answers[id] ?? TestResult.unreachable),
@@ -87,28 +98,41 @@ Future<Widget> demoApp() async {
     ),
     PlayQueue(DemoLibrary.studio, index: 1)..enqueue([DemoLibrary.nightcall]),
   );
-  const screen = String.fromEnvironment('LAFLEUR_DEMO_SCREEN');
   return AppScope(
     db: db,
     player: player,
-    covers: _DemoCovers(DemoLibrary.writeCovers(dir)),
+    covers: _DemoCovers(
+      DemoLibrary.writeCovers(
+        dir,
+        images: {
+          ...DemoLibrary.coverImages(),
+          if (remote) ...DemoLibrary.remoteCoverImages(),
+        },
+      ),
+    ),
     strings: Strings.of(PlatformDispatcher.instance.locale),
     equalizer: ValueNotifier(Equalizer.named('flat')),
     settings: AppSettings(),
     saveSettings: () {},
     accounts: accounts,
     accountService: service,
+    downloader: DemoDownloader(),
     child: MaterialApp(
       title: 'LAFLEURMUSIC',
       debugShowCheckedModeBanner: false,
       theme: lafleurTheme(),
       home: AdaptiveHome(
-        debugStart: screen.isEmpty ? null : screen,
+        debugStart: screen == 'greyed'
+            ? 'album'
+            : (screen.isEmpty ? null : screen),
         debugScreens: switch (screen) {
           'accounts' => () => [const AccountsScreen()],
           'account' => () => [
             const AccountsScreen(),
             const AccountFormScreen(initial: demoDraft),
+          ],
+          'keep' => () => [
+            const KeepScreen(preselect: {'Studio Lafleur', 'Summer Mix'}),
           ],
           _ => null,
         },

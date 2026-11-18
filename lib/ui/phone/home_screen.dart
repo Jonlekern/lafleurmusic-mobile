@@ -145,32 +145,39 @@ class _HomeScreenState extends State<HomeScreen> {
               PhoneSection(s.playlists),
               StreamBuilder<List<Album>>(
                 stream: app.db.watchAlbums(),
-                builder: (context, albums) => StreamBuilder<PlayerState>(
-                  stream: app.player.state,
-                  initialData: app.player.current,
-                  builder: (context, st) {
-                    final playing = st.data?.track?.album;
-                    return Column(
-                      children: [
-                        for (final a in albums.data ?? const <Album>[])
-                          PhoneItem(
-                            leading: CoverImage(
-                              trackPath: a.coverTrackPath,
-                              size: 30,
+                builder: (context, albums) => StreamBuilder<Set<String>>(
+                  stream: app.downloader == null
+                      ? null
+                      : app.db.watchKeptAlbums(),
+                  builder: (context, keptSnap) => StreamBuilder<PlayerState>(
+                    stream: app.player.state,
+                    initialData: app.player.current,
+                    builder: (context, st) {
+                      final playing = st.data?.track?.album;
+                      final kept = keptSnap.data ?? const <String>{};
+                      return Column(
+                        children: [
+                          for (final a in albums.data ?? const <Album>[])
+                            PhoneItem(
+                              kept: kept.contains(a.name),
+                              leading: CoverImage(
+                                trackPath: a.coverTrackPath,
+                                size: 30,
+                              ),
+                              label: a.name.isEmpty ? s.unknownArtist : a.name,
+                              selected: a.name == playing,
+                              onTap: () => openAlbum(context, a.name),
+                              onLongPress: () => showTrackSheet(
+                                context,
+                                title: a.name,
+                                tracks: () =>
+                                    app.db.watchAlbumTracks(a.name).first,
+                              ),
                             ),
-                            label: a.name.isEmpty ? s.unknownArtist : a.name,
-                            selected: a.name == playing,
-                            onTap: () => openAlbum(context, a.name),
-                            onLongPress: () => showTrackSheet(
-                              context,
-                              title: a.name,
-                              tracks: () =>
-                                  app.db.watchAlbumTracks(a.name).first,
-                            ),
-                          ),
-                      ],
-                    );
-                  },
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -294,9 +301,11 @@ class PhoneItem extends StatelessWidget {
     required this.label,
     this.leading,
     this.selected = false,
+    this.kept = false,
     this.onTap,
     this.onLongPress,
   });
+  final bool kept; // ⬇ rose : tout l'album est sur le téléphone
   final String label;
   final Widget? leading;
   final bool selected;
@@ -325,15 +334,31 @@ class PhoneItem extends StatelessWidget {
             children: [
               if (leading != null) ...[leading!, const SizedBox(width: 12)],
               Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: fg,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (kept) ...[
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.arrow_downward_rounded,
+                        size: 14,
+                        color: selected
+                            ? LafleurColors.ink
+                            : LafleurColors.pink,
+                      ),
+                    ],
+                  ],
                 ),
               ),
               Icon(

@@ -321,4 +321,65 @@ class Strings {
     'L’appli ne peut pas écrire dans ce dossier. Choisis-en un autre, par exemple dans Musique.',
     'The app can’t write to this folder. Pick another one, for example in Music.',
   );
+
+  // plan 2 : garder hors ligne (maquettes 1 et 2, écrans 2, 4 et 8)
+  String get select => _t('Sélectionner…', 'Select…');
+  String keepOnDevice(bool iphone) => iphone
+      ? _t('Garder sur mon iPhone', 'Keep on my iPhone')
+      : _t('Garder sur mon téléphone', 'Keep on my phone');
+  String removeFromDevice(bool iphone) => iphone
+      ? _t('Retirer du téléphone', 'Remove from iPhone')
+      : _t('Retirer du téléphone', 'Remove from phone');
+  String albumsSelected(int n) => _t(
+    'ALBUMS · $n ${n > 1 ? 'SÉLECTIONNÉS' : 'SÉLECTIONNÉ'}',
+    'ALBUMS · $n SELECTED',
+  );
+  String get alreadyKept => _t('déjà gardé', 'already kept');
+  String spaceOnDevice(bool iphone) => iphone
+      ? _t("PLACE SUR L'IPHONE", 'SPACE ON THE IPHONE')
+      : _t('PLACE SUR LE TÉLÉPHONE', 'SPACE ON THE PHONE');
+  String usedOf(String used, String limit) =>
+      _t('$used utilisés sur $limit', '$used used of $limit');
+  String filesHint(bool iphone) => iphone
+      ? _t(
+          "Les fichiers vont dans Fichiers → Sur mon iPhone → LAFLEURMUSIC. Pour les mettre sur ton NAS, copie-les avec l'appli Fichiers.",
+          'The files go in Files → On My iPhone → LAFLEURMUSIC. To put them on your NAS, copy them with the Files app.',
+        )
+      : _t(
+          'Les fichiers vont dans Musique/LAFLEURMUSIC. Pour les mettre sur ton NAS, copie-les avec une appli de fichiers.',
+          'The files go in Music/LAFLEURMUSIC. To put them on your NAS, copy them with a file app.',
+        );
+  String keepButton(bool iphone, String? size) =>
+      size == null ? keepOnDevice(iphone) : '${keepOnDevice(iphone)} · $size';
+  String notEnoughSpace(String size) => _t(
+    'Pas assez de place : il faut encore $size.',
+    'Not enough space: $size more needed.',
+  );
+  String get keepFailed =>
+      _t('Impossible de garder ces morceaux.', 'Could not keep these songs.');
+  String get storageDenied => _t(
+    "L'appli n'a pas le droit d'écrire dans Musique. Autorise-la dans les réglages du téléphone.",
+    "The app isn't allowed to write to Music. Allow it in the phone settings.",
+  );
+  String notOnDevice(String artist, bool iphone) => iphone
+      ? _t("$artist · pas sur l'iPhone", '$artist · not on the iPhone')
+      : _t('$artist · pas sur le téléphone', '$artist · not on the phone');
+  String nothingOffline(bool iphone) => iphone
+      ? _t(
+          "Pas sur l'iPhone : rien à jouer hors ligne.",
+          'Not on the iPhone: nothing to play offline.',
+        )
+      : _t(
+          'Pas sur le téléphone : rien à jouer hors ligne.',
+          'Not on the phone: nothing to play offline.',
+        );
+
+  /// Taille lisible : Mo en dessous d'un Go, sinon Go à une décimale (virgule en français).
+  String size(int bytes) {
+    const mb = 1024 * 1024, gb = 1024 * mb;
+    if (bytes < gb) return '${(bytes / mb).round()} ${_t('Mo', 'MB')}';
+    final g = (bytes / gb * 10).round() / 10;
+    final text = g == g.roundToDouble() ? '${g.round()}' : g.toStringAsFixed(1);
+    return '${fr ? text.replaceAll('.', ',') : text} ${_t('Go', 'GB')}';
+  }
 }

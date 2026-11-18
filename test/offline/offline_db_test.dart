@@ -101,4 +101,36 @@ void main() {
     expect((await db.pending('x')).single.remoteId, '2');
     expect(await db.pending('y'), hasLength(1));
   });
+
+  test('watchKeptAlbums: albums whose server tracks are all done', () async {
+    Track t(String path, String album) => Track(
+      path: path,
+      title: path,
+      artist: 'x',
+      album: album,
+      durationMs: 1,
+      hasCover: false,
+      size: 1,
+    );
+    await db.upsertTracks([
+      t('subsonic://a/1', 'Full'),
+      t('subsonic://a/2', 'Full'),
+      t('subsonic://a/3', 'Half'),
+      t('subsonic://a/4', 'Half'),
+      t('subsonic://a/5', 'Queued'),
+      t('/local/1.mp3', 'Local'),
+    ]);
+    await db.queueOffline([
+      'subsonic://a/1',
+      'subsonic://a/2',
+      'subsonic://a/3',
+    ], OfflineReason.user);
+    await db.queueOffline(['subsonic://a/5'], OfflineReason.top100);
+    for (final p in ['subsonic://a/1', 'subsonic://a/2', 'subsonic://a/3']) {
+      await db.markOfflineDone(p, 'f', 1);
+    }
+    expect(await db.watchKeptAlbums().first, {'Full'});
+    await db.markOfflineDone('subsonic://a/5', 'f', 1);
+    expect(await db.watchKeptAlbums().first, {'Full', 'Queued'});
+  });
 }

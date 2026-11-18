@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../library/db.dart' show OfflineRow;
 import '../../library/models.dart';
 import '../../player/player.dart';
 import '../../theme/colors.dart';
@@ -9,6 +10,7 @@ import '../artist_avatar.dart';
 import '../cover_image.dart';
 import '../cover_mosaic.dart';
 import '../format.dart';
+import '../keep_actions.dart';
 import '../track_menu.dart';
 import 'phone_shell.dart';
 
@@ -147,6 +149,10 @@ class AlbumScreen extends StatelessWidget {
                         ? null
                         : () => app.player.playTracks(list, 0, shuffle: true),
                   ),
+                  if (app.downloader != null && list.any(isRemote)) ...[
+                    const SizedBox(width: 8),
+                    _KeepPill(tracks: list),
+                  ],
                 ],
               ),
               const SizedBox(height: 14),
@@ -167,6 +173,35 @@ class AlbumScreen extends StatelessWidget {
   }
 }
 
+/// Le rond ⬇ à côté de Lecture / Aléatoire : garde la liste sur le téléphone, rose quand tout y est
+/// (un toucher de plus la retire).
+class _KeepPill extends StatelessWidget {
+  const _KeepPill({required this.tracks});
+  final List<Track> tracks;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final remote = tracks.where(isRemote).toList();
+    return StreamBuilder<Map<String, OfflineRow>>(
+      stream: app.db.watchOffline(),
+      builder: (context, snap) {
+        final kept = remote.every((t) => isKept(t, snap.data ?? const {}));
+        return PillButton(
+          icon: Icons.arrow_downward_rounded,
+          iconColor: kept ? LafleurColors.pink : null,
+          tooltip: kept
+              ? app.strings.removeFromDevice(onIphone)
+              : app.strings.keepOnDevice(onIphone),
+          onPressed: () => kept
+              ? forgetTracks(context, remote)
+              : keepTracks(context, remote),
+        );
+      },
+    );
+  }
+}
+
 /// Lignes de morceaux du téléphone ; celle qui joue est en rose.
 class PhoneTrackRows extends StatelessWidget {
   const PhoneTrackRows({super.key, required this.tracks, this.numbered = true});
@@ -176,29 +211,46 @@ class PhoneTrackRows extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
-    return StreamBuilder<PlayerState>(
-      stream: app.player.state,
-      initialData: app.player.current,
-      builder: (context, snap) {
-        final playing = snap.data?.track?.path;
-        return Column(
-          children: [
-            for (final (i, t) in tracks.indexed)
-              PhoneTrackRow(
-                key: ValueKey(t.path),
-                no: numbered ? '${t.trackNo ?? i + 1}' : '${i + 1}',
-                track: t,
-                selected: t.path == playing,
-                onTap: t.missing
-                    ? null
-                    : () => app.player.playTracks(tracks, i),
-              ),
-          ],
+    // « jouable ? » lit le disque : une fois par construction, et de nouveau quand les copies ou
+    // les comptes changent (pas à chaque mise à jour du lecteur)
+    return ListenableBuilder(
+      listenable: app.accountService ?? _noChange,
+      builder: (context, _) {
+        final playable = {for (final t in tracks) t.path: app.playableNow(t)};
+        return StreamBuilder<PlayerState>(
+          stream: app.player.state,
+          initialData: app.player.current,
+          builder: (context, snap) {
+            final playing = snap.data?.track?.path;
+            return Column(
+              children: [
+                for (final (i, t) in tracks.indexed)
+                  PhoneTrackRow(
+                    key: ValueKey(t.path),
+                    no: numbered ? '${t.trackNo ?? i + 1}' : '${i + 1}',
+                    track: t,
+                    selected: t.path == playing,
+                    playable: playable[t.path]!,
+                    onTap: t.missing
+                        ? null
+                        : playable[t.path]!
+                        ? () => app.player.playTracks(tracks, i)
+                        : () => say(
+                            ScaffoldMessenger.of(context),
+                            app.strings.nothingOffline(onIphone),
+                          ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
   }
 }
+
+/// Ne change jamais (pas de service de comptes).
+final _noChange = ChangeNotifier();
 
 /// Une ligne : numéro, titre, artiste dessous, durée.
 class PhoneTrackRow extends StatelessWidget {
@@ -207,19 +259,31 @@ class PhoneTrackRow extends StatelessWidget {
     required this.no,
     required this.track,
     this.selected = false,
+    this.playable = true,
     this.onTap,
   });
   final String no;
   final Track track;
   final bool selected;
+  final bool playable; // faux : grisée, « pas sur le téléphone »
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context).strings;
     final t = track;
-    final fg = selected ? LafleurColors.ink : LafleurColors.text;
-    final dim = selected ? LafleurColors.ink : const Color(0xFFBBBBBB);
+    final grey = !playable && !selected;
+    final fg = selected
+        ? LafleurColors.ink
+        : grey
+        ? const Color(0xFF555555)
+        : LafleurColors.text;
+    final dim = selected
+        ? LafleurColors.ink
+        : grey
+        ? const Color(0xFF444444)
+        : const Color(0xFFBBBBBB);
+    final artist = t.artist.isEmpty ? s.unknownArtist : t.artist;
     final row = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
       decoration: BoxDecoration(
@@ -259,12 +323,14 @@ class PhoneTrackRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  t.artist.isEmpty ? s.unknownArtist : t.artist,
+                  playable ? artist : s.notOnDevice(artist, onIphone),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: selected
                         ? LafleurColors.ink
+                        : grey
+                        ? const Color(0xFF444444)
                         : const Color(0xFF999999),
                     fontSize: 12,
                   ),

@@ -595,6 +595,16 @@ class LibraryDb extends _$LibraryDb {
     );
   }
 
+  /// Albums whose every server track has a finished copy (⬇ rose de l'Accueil).
+  Stream<Set<String>> watchKeptAlbums() => customSelect(
+    'SELECT t.album AS album FROM tracks t '
+    'LEFT JOIN offline o ON o.track_path = t.path AND o.state = ? '
+    "WHERE t.path LIKE 'subsonic://%' "
+    'GROUP BY t.album HAVING COUNT(*) = COUNT(o.track_path)',
+    variables: [Variable(OfflineState.done.name)],
+    readsFrom: {tracks, offline},
+  ).watch().map((rows) => {for (final r in rows) r.read<String>('album')});
+
   Stream<List<Track>> watchAlbumTracks(String album) =>
       (select(tracks)
             ..where((t) => t.album.equals(album))

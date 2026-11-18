@@ -2,10 +2,14 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
+import '../library/db.dart' show OfflineRow;
 import '../library/models.dart';
 import '../theme/colors.dart';
+import 'keep_actions.dart';
+import 'phone/keep_screen.dart';
+import 'phone/phone_shell.dart' show pushPhone;
 
-enum _Action { playNext, enqueue }
+enum _Action { playNext, enqueue, keep, remove, select }
 
 PopupMenuItem<_Action> _item(_Action a, String label) => PopupMenuItem(
   value: a,
@@ -36,6 +40,8 @@ Future<void> showTrackMenu(BuildContext context, Offset at, Track track) async {
       await app.player.playNext([track]);
     case _Action.enqueue:
       await app.player.enqueue([track]);
+    case _Action.keep || _Action.remove || _Action.select:
+      break; // seulement dans la feuille du téléphone
   }
 }
 
@@ -80,7 +86,8 @@ class TrackMenuArea extends StatelessWidget {
 }
 
 /// Téléphone (maquette 1, écran 4) : appui long → feuille du bas « Lire ensuite » / « Ajouter à la file »
-/// pour [tracks] (un morceau, ou tout un album). En-tête : [title] · [sub].
+/// pour [tracks] (un morceau, ou tout un album), puis « Garder sur mon iPhone » (ou « Retirer du téléphone »
+/// quand tout est gardé) et « Sélectionner… » pour les morceaux d'un serveur. En-tête : [title] · [sub].
 Future<void> showTrackSheet(
   BuildContext context, {
   required String title,
@@ -89,6 +96,14 @@ Future<void> showTrackSheet(
 }) async {
   final app = AppScope.of(context);
   final s = app.strings;
+  final list = await tracks();
+  final remote = list.where(isRemote).toList();
+  final rows = app.downloader == null || remote.isEmpty
+      ? const <String, OfflineRow>{}
+      : await app.db.watchOffline().first;
+  final canKeep = app.downloader != null && remote.isNotEmpty;
+  final allKept = canKeep && remote.every((t) => isKept(t, rows));
+  if (!context.mounted) return;
   Widget option(BuildContext ctx, _Action a, String label, {bool hl = false}) =>
       Material(
         type: MaterialType.transparency,
@@ -168,17 +183,41 @@ Future<void> showTrackSheet(
             ),
             option(ctx, _Action.playNext, s.playNextAction, hl: true),
             option(ctx, _Action.enqueue, s.addToQueue),
+            if (canKeep) ...[
+              const Divider(
+                color: Color(0xFF3A3A3A),
+                height: 11,
+                thickness: 1,
+                indent: 4,
+                endIndent: 4,
+              ),
+              allKept
+                  ? option(ctx, _Action.remove, s.removeFromDevice(onIphone))
+                  : option(ctx, _Action.keep, s.keepOnDevice(onIphone)),
+              option(ctx, _Action.select, s.select),
+            ],
           ],
         ),
       ),
     ),
   );
   if (a == null) return;
-  final list = await tracks();
-  if (a == _Action.playNext) {
-    await app.player.playNext(list);
-  } else {
-    await app.player.enqueue(list);
+  switch (a) {
+    case _Action.playNext:
+      await app.player.playNext(list);
+    case _Action.enqueue:
+      await app.player.enqueue(list);
+    case _Action.keep:
+      if (context.mounted) await keepTracks(context, remote);
+    case _Action.remove:
+      if (context.mounted) await forgetTracks(context, remote);
+    case _Action.select:
+      if (context.mounted) {
+        await pushPhone(
+          context,
+          KeepScreen(preselect: {for (final t in remote) t.album}),
+        );
+      }
   }
 }
 

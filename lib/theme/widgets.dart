@@ -6,20 +6,24 @@ import 'colors.dart';
 class PillButton extends StatelessWidget {
   const PillButton({
     super.key,
-    required this.label,
+    this.label,
     this.icon,
+    this.iconColor,
     this.primary = false,
     this.onPressed,
+    this.tooltip,
   });
-  final String label;
+  final String? label; // rien : un bouton rond avec seulement l'icône
   final IconData? icon;
+  final Color? iconColor; // l'icône seule, d'une autre couleur
+  final String? tooltip;
   final bool primary;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     final fg = primary ? LafleurColors.ink : LafleurColors.text;
-    return Opacity(
+    final button = Opacity(
       opacity: onPressed == null ? 0.4 : 1,
       child: InkWell(
         onTap: onPressed,
@@ -34,23 +38,23 @@ class PillButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (icon != null) ...[
-                Icon(icon, size: 16, color: fg),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                label,
-                style: TextStyle(
-                  color: fg,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+              if (icon != null) Icon(icon, size: 16, color: iconColor ?? fg),
+              if (icon != null && label != null) const SizedBox(width: 8),
+              if (label != null)
+                Text(
+                  label!,
+                  style: TextStyle(
+                    color: fg,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
       ),
     );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 

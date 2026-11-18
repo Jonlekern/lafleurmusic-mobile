@@ -35,4 +35,15 @@ void main() {
     expect(fr.minutes(36), '36 min');
     expect(fr.upNext, 'À SUIVRE');
   });
+  test('tailles : Mo sous un Go, sinon Go avec la virgule', () {
+    const mb = 1024 * 1024, gb = 1024 * mb;
+    final fr = Strings.of(const Locale('fr'));
+    final en = Strings.of(const Locale('en'));
+    expect(fr.size(310 * mb), '310 Mo');
+    expect(fr.size(0), '0 Mo');
+    expect(fr.size(gb + 205 * mb), '1,2 Go');
+    expect(fr.size(10 * gb), '10 Go');
+    expect(en.size(gb + 205 * mb), '1.2 GB');
+    expect(en.size(260 * mb), '260 MB');
+  });
 }

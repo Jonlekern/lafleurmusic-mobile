@@ -52,6 +52,105 @@ abstract final class DemoLibrary {
 
   static List<Track> get tracks => [...studio, ...surf, ...summer];
 
+  static const _mib = 1024 * 1024;
+
+  static Track _r(
+    String album,
+    int no,
+    String title,
+    String artist,
+    int seconds,
+    int bytes,
+  ) => Track(
+    path: 'subsonic://demo/$album/$no',
+    folderId: 0,
+    accountId: 'demo',
+    remoteId: '$album/$no',
+    title: title,
+    artist: artist,
+    album: album,
+    trackNo: no,
+    durationMs: seconds * 1000,
+    hasCover: true,
+    mtime: 1,
+    size: bytes,
+  );
+
+  static List<Track> _remoteAlbum(
+    String album,
+    int minutes,
+    int mib,
+    List<(String, String)> songs,
+  ) => [
+    for (final (i, (title, artist)) in songs.indexed)
+      _r(
+        album,
+        i + 1,
+        title,
+        artist,
+        minutes * 60 ~/ songs.length,
+        mib * _mib ~/ songs.length,
+      ),
+  ];
+
+  /// La bibliothèque d'un serveur pour l'écran « Garder sur mon iPhone » (maquette 2, écran 8) :
+  /// Studio Lafleur 36 min · 310 Mo, Summer Mix 52 min · 480 Mo, Night Drive 41 min · 390 Mo,
+  /// Ports 28 min · 260 Mo ; Lafleur Surf est déjà gardé ([keptPaths]).
+  static final remote = [
+    for (final t in studio) // les vrais titres et durées : 36 min
+      _r(
+        'Studio Lafleur',
+        t.trackNo!,
+        t.title,
+        t.artist,
+        t.durationMs ~/ 1000,
+        310 * _mib ~/ studio.length,
+      ),
+    ..._remoteAlbum('Lafleur Surf', 8, 190, [
+      ('Lafleur Surf', 'LAFLEURSTUDIO'),
+      ('Surf Radio', 'LAFLEURSTUDIO'),
+    ]),
+    ..._remoteAlbum('Summer Mix', 52, 480, [
+      ('Palm Springs', 'Divers'),
+      ('Heatwave', 'Johnny'),
+      ('Sunburn', 'Divers'),
+      ('Last Light', 'Divers'),
+    ]),
+    ..._remoteAlbum('Night Drive', 41, 390, [
+      ('Nightcall', 'Kavinsky'),
+      ('Rampage', 'Kavinsky'),
+      ('Odd Look', 'Kavinsky'),
+    ]),
+    ..._remoteAlbum('Ports', 28, 260, [
+      ('Harbour', 'Divers'),
+      ('Ferry', 'Divers'),
+    ]),
+  ];
+
+  /// Les morceaux de Lafleur Surf : copiés sur le téléphone.
+  static List<String> get keptPaths => [
+    for (final t in remote)
+      if (t.album == 'Lafleur Surf') t.path,
+  ];
+
+  /// Pas sur le téléphone et le serveur est injoignable : grisés (« Night Swim · Kavinsky »).
+  static List<String> get notOnPhonePaths => [
+    for (final t in remote)
+      if (t.album == 'Studio Lafleur' && t.artist == 'Kavinsky') t.path,
+  ];
+
+  /// Pochette de chaque morceau de [remote] (la couleur de son album).
+  static Map<String, img.Image> remoteCoverImages() {
+    final studioCover = _studioCover();
+    final colors = {
+      'Lafleur Surf': _surfCover(),
+      'Summer Mix': _solid(224, 181, 58),
+      'Night Drive': _solid(44, 59, 120),
+      'Ports': _solid(68, 68, 68),
+    };
+    return {for (final t in remote) t.path: colors[t.album] ?? studioCover};
+  }
+
   /// Lafleur Surf en cours (1:33 sur 4:05).
   static Track get playing => studio[1];
   static const position = Duration(seconds: 93);
@@ -105,11 +204,14 @@ abstract final class DemoLibrary {
   }
 
   /// Écrit les pochettes en JPEG dans [dir] : chemin du morceau → fichier.
-  static Map<String, File> writeCovers(Directory dir) {
+  static Map<String, File> writeCovers(
+    Directory dir, {
+    Map<String, img.Image>? images,
+  }) {
     final files = Map<img.Image, File>.identity();
     var n = 0;
     return {
-      for (final e in coverImages().entries)
+      for (final e in (images ?? coverImages()).entries)
         e.key: files.putIfAbsent(
           e.value,
           () =>

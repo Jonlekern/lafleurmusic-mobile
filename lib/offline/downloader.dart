@@ -19,7 +19,7 @@ import 'paths.dart';
 const _freeMargin = 200 * 1024 * 1024;
 
 /// Taille comptée pour un morceau dont le serveur ne dit pas la taille.
-const _unknownSize = 10 * 1024 * 1024;
+const unknownTrackSize = 10 * 1024 * 1024;
 
 /// Réponse de [Downloader.keep] et [Downloader.moveRoot].
 class KeepResult {
@@ -102,7 +102,7 @@ class Downloader extends ChangeNotifier {
   /// Se termine quand la boucle s'arrête (file vide, pause ou accès refusé).
   Future<void> whenIdle() => _loop ?? Future.value();
 
-  static int _sizeOf(Track t) => t.size > 0 ? t.size : _unknownSize;
+  static int _sizeOf(Track t) => t.size > 0 ? t.size : unknownTrackSize;
 
   /// Garde [tracks] : refuse tout si ça dépasse la limite ou la place libre.
   Future<KeepResult> keep(
@@ -134,7 +134,7 @@ class Downloader extends ChangeNotifier {
     for (final r in (await db.watchOffline().first).values) {
       if (r.state != OfflineState.queued.name) continue;
       final t = await db.trackByPath(r.trackPath);
-      backlog += t == null ? _unknownSize : _sizeOf(t);
+      backlog += t == null ? unknownTrackSize : _sizeOf(t);
     }
     final limit = (await settings()).storageLimitBytes;
     final root = await device.musicRoot();
