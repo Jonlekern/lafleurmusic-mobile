@@ -323,8 +323,16 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     return yes ?? _Missing.cancel;
   }
 
-  /// L'utilisateur désigne l'ancien dossier : s'il contient au moins une copie finie,
-  /// il redevient le dossier courant. Rien n'est déplacé, changé ni effacé.
+  /// La copie est là à la bonne taille ; un fichier mis de côté par iCloud compte sans taille.
+  bool _isKept(String root, OfflineRow o) {
+    final abs = p.join(root, o.filePath!);
+    final file = File(abs);
+    if (file.existsSync()) return file.lengthSync() == o.size;
+    return fileOrPlaceholderExists(abs);
+  }
+
+  /// L'utilisateur désigne l'ancien dossier : s'il contient toutes les copies finies
+  /// (même taille), il redevient le dossier courant. Rien n'est déplacé, changé ni effacé.
   Future<void> _relink(
     AppScope app,
     Device device,
@@ -348,15 +356,17 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     if (found == null) return;
     var has = false;
     try {
-      final rows = await app.db.offlineRows();
-      has = rows.any(
-        (o) =>
-            o.state == OfflineState.done.name &&
-            o.filePath != null &&
-            fileOrPlaceholderExists(p.join(found!.path, o.filePath!)),
-      );
+      final done = [
+        for (final o in await app.db.offlineRows())
+          if (o.state == OfflineState.done.name && o.filePath != null) o,
+      ];
+      // tous les fichiers gardés, à la bonne taille : un dossier qui n'en a que
+      // quelques-uns (ou des homonymes) n'est pas l'ancien dossier
+      has = done.isNotEmpty && done.every((o) => _isKept(found!.path, o));
     } on Object {
-      has = false;
+      await _release(device);
+      say(messenger, s.folderMoveFailed);
+      return;
     }
     if (!has || !mounted) {
       await _release(device);
