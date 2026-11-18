@@ -6,7 +6,8 @@ import UniformTypeIdentifiers
 final class DeviceChannel: NSObject, UIDocumentPickerDelegate {
   private let channel: FlutterMethodChannel
   private var pending: FlutterResult?
-  private var accessed: URL?  // dossier choisi, accès gardé ouvert
+  private var accessed: URL?  // dossier en service, accès gardé ouvert
+  private var candidate: URL?  // dossier choisi mais pas encore adopté, accès ouvert aussi
 
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(name: "studio.lafleur/device", binaryMessenger: messenger)
@@ -31,6 +32,17 @@ final class DeviceChannel: NSObject, UIDocumentPickerDelegate {
       }
     case "pickFolder":
       pickFolder(result)
+    case "commitFolder":
+      // le candidat devient le dossier en service ; l'ancien accès est fermé
+      if let c = candidate {
+        stopAccess()
+        accessed = c
+        candidate = nil
+      }
+      result(nil)
+    case "releaseCandidate":
+      stopCandidate()
+      result(nil)
     case "openBookmark":
       guard let b64 = args?["bookmark"] as? String, let data = Data(base64Encoded: b64) else {
         result(FlutterError(code: "bookmark", message: nil, details: nil))
@@ -74,6 +86,11 @@ final class DeviceChannel: NSObject, UIDocumentPickerDelegate {
     result(out)
   }
 
+  private func stopCandidate() {
+    candidate?.stopAccessingSecurityScopedResource()
+    candidate = nil
+  }
+
   private func stopAccess() {
     accessed?.stopAccessingSecurityScopedResource()
     accessed = nil
@@ -109,8 +126,8 @@ final class DeviceChannel: NSObject, UIDocumentPickerDelegate {
     do {
       let data = try url.bookmarkData(
         options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
-      stopAccess()
-      accessed = url
+      stopCandidate()  // un choix précédent jamais adopté
+      candidate = url  // le dossier en service garde son accès jusqu'à commitFolder
       result?(["path": url.path, "bookmark": data.base64EncodedString()])
     } catch {
       url.stopAccessingSecurityScopedResource()

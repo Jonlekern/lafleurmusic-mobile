@@ -182,6 +182,28 @@ class LibraryDb extends _$LibraryDb {
     updates: {offline},
   );
 
+  /// Après un déplacement de dossier, en une transaction : les nouveaux chemins relatifs,
+  /// et les copies introuvables passent en échec sans chemin (jamais un chemin périmé).
+  Future<void> applyOfflineMove(
+    Map<String, String> newRel,
+    List<String> lost,
+  ) => transaction(() async {
+    for (final e in newRel.entries) {
+      await (update(offline)..where((o) => o.trackPath.equals(e.key))).write(
+        OfflineCompanion(filePath: Value(e.value)),
+      );
+    }
+    for (final t in lost) {
+      await (update(offline)..where((o) => o.trackPath.equals(t))).write(
+        OfflineCompanion(
+          filePath: const Value(null),
+          size: const Value(0),
+          state: Value(OfflineState.failed.name),
+        ),
+      );
+    }
+  });
+
   /// Après un refus du serveur : le morceau passe derrière les autres de la file.
   Future<void> sendOfflineToBack(String trackPath) => customUpdate(
     'UPDATE offline SET added_at = '

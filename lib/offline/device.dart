@@ -14,6 +14,9 @@ abstract class Device {
   /// téléphone (Android), [FolderNotWritableException] si l'appli ne peut pas y écrire.
   Future<PickedFolder?> pickFolder();
 
+  /// Abandonne le candidat (déplacement raté ou annulé) : iOS ferme son accès.
+  Future<void> releaseCandidate();
+
   /// Adopte le candidat : [musicRoot] renvoie ce dossier, le choix est enregistré.
   Future<void> commitFolder(PickedFolder c);
 
@@ -130,10 +133,17 @@ class ChannelDevice implements Device {
 
   @override
   Future<void> commitFolder(PickedFolder c) async {
+    // iOS : l'accès du candidat passe en service (l'ancien se ferme)
+    if (_ios) await _ch.invokeMethod<void>('commitFolder');
     settings.musicFolder = c.bookmark ?? c.path;
     await saveSettings();
     _chosen = Directory(c.path);
     _resolving = Future.value();
+  }
+
+  @override
+  Future<void> releaseCandidate() async {
+    if (_ios) await _ch.invokeMethod<void>('releaseCandidate');
   }
 
   @override

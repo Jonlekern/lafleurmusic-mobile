@@ -39,6 +39,7 @@ class _Device implements Device {
   _Device(this.root);
   Directory root;
   PickedFolder? committed;
+  int released = 0;
   int free = 100 * 1024 * _mb;
   bool access = true;
   int ensureCalls = 0;
@@ -59,6 +60,8 @@ class _Device implements Device {
   Future<bool> rootReachable() async => true;
   @override
   Future<PickedFolder?> pickFolder() async => null;
+  @override
+  Future<void> releaseCandidate() async => released++;
   @override
   Future<void> commitFolder(PickedFolder c) async {
     committed = c;
@@ -299,9 +302,9 @@ void main() {
     },
   );
 
-  test('server refusal counts, row goes behind, 3rd marks it failed', () async {
+  test('404 counts, row goes behind, 3rd marks it failed', () async {
     handler = (r) async => r.url.queryParameters['id'] == '1'
-        ? _ok([], code: 500)
+        ? _ok([], code: 404)
         : _ok([1, 2, 3, 4]);
     final d = make();
     await add(_t('1'));
@@ -318,7 +321,60 @@ void main() {
     expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
   });
 
-  test('a 200 HTML page (proxy login) is refused, never kept', () async {
+  test('Subsonic "not found" (code 70) counts', () async {
+    handler = (r) async => _ok(
+      '{"subsonic-response":{"status":"failed","error":{"code":70}}}'.codeUnits,
+      type: 'application/json',
+    );
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://acc/1'))!.failures, 3);
+  });
+
+  test(
+    '503, 401, other Subsonic errors: nothing counted, loop stops',
+    () async {
+      for (final code in [503, 429, 401, 403]) {
+        seen.clear();
+        handler = (r) async => _ok([], code: code);
+        final d = make();
+        await add(_t('1'));
+        await add(_t('2', no: 2));
+        await d.keep([_t('1'), _t('2', no: 2)]);
+        await d.whenIdle();
+        for (final id in ['1', '2']) {
+          final row = (await db.offlineOf('subsonic://acc/$id'))!;
+          expect((row.state, row.failures), ('queued', 0), reason: '$code');
+        }
+        expect(seen.every((r) => r.url.queryParameters['id'] == '1'), isTrue);
+        await db.removeOffline(['subsonic://acc/1', 'subsonic://acc/2']);
+      }
+      handler = (r) async => _ok(
+        '{"subsonic-response":{"status":"failed","error":{"code":40}}}'
+            .codeUnits,
+        type: 'application/json',
+      );
+      final d = make();
+      await d.keep([_t('1')]);
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://acc/1'))!.failures, 0);
+    },
+  );
+
+  test('a local write error (FileSystemException) is not counted', () async {
+    tmp.createSync(recursive: true);
+    File(root.path).writeAsStringSync('not a folder'); // root cannot be created
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    final row = (await db.offlineOf('subsonic://acc/1'))!;
+    expect((row.state, row.failures), ('queued', 0));
+  });
+
+  test('a 200 HTML page (proxy login): nothing counted, loop stops', () async {
     handler = (r) async =>
         _ok('<html>login</html>'.codeUnits, type: 'text/html');
     final d = make();
@@ -326,11 +382,8 @@ void main() {
     await d.keep([_t('1')]);
     await d.whenIdle();
     final row = (await db.offlineOf('subsonic://acc/1'))!;
-    expect((row.state, row.failures), ('failed', 3));
-    expect(
-      root.existsSync() ? root.listSync(recursive: true).whereType<File>() : [],
-      isEmpty,
-    );
+    expect((row.state, row.failures), ('queued', 0));
+    expect(File(root.path).existsSync() && root.listSync().isNotEmpty, isFalse);
   });
 
   test('octet-stream and missing content type are accepted', () async {
@@ -616,6 +669,35 @@ void main() {
         );
       },
     );
+
+    test('a done row whose file is gone is failed with no path', () async {
+      final d = await withDone(['1', '2']);
+      File('${root.path}/Art/Alb/02 Song 2.mp3').deleteSync();
+      final to = Directory('${tmp.path}/sd');
+      File('${to.path}/Art/Alb/02 Song 2.mp3')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('user'); // a user file at the stale path
+      final r = await d.moveRoot(from: device.root, to: to);
+      expect((r.ok, r.count), (true, 1));
+      final lost = (await db.offlineOf('subsonic://acc/2'))!;
+      expect((lost.state, lost.filePath, lost.size), ('failed', null, 0));
+      expect(
+        File('${to.path}/Art/Alb/02 Song 2.mp3').readAsStringSync(),
+        'user',
+      );
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+    });
+
+    test('a failed move releases the candidate', () async {
+      final d = await withDone(['1']);
+      final r = await d.moveRoot(
+        from: device.root,
+        to: Directory('${tmp.path}/sd'),
+        commit: () async => throw const FileSystemException('no'),
+      );
+      expect(r.ok, isFalse);
+      expect(device.released, 1);
+    });
 
     test('collision: the user file is kept, ours gets a free name', () async {
       final d = await withDone(['1']);

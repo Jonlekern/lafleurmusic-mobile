@@ -83,6 +83,24 @@ void main() {
     expect(settings.musicFolder, 'Ym0=');
   });
 
+  test(
+    'iOS: commitFolder and releaseCandidate reach the native side',
+    () async {
+      native = (c) async => {'path': '/p', 'bookmark': 'Ym0='};
+      final d = device(ios: true);
+      final c = (await d.pickFolder())!;
+      calls.clear();
+      await d.releaseCandidate();
+      await d.commitFolder(c);
+      expect(calls.map((c) => c.method), ['releaseCandidate', 'commitFolder']);
+      calls.clear();
+      final a = device();
+      await a.releaseCandidate();
+      await a.commitFolder(const PickedFolder('/x'));
+      expect(calls, isEmpty, reason: 'Android has nothing to keep open');
+    },
+  );
+
   test('pickFolder cancelled: null, nothing stored', () async {
     final d = device();
     expect(await d.pickFolder(), isNull);

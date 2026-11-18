@@ -38,6 +38,11 @@ class KeepResult {
 /// Suffixe de nos fichiers en cours : on n'efface jamais les `.part` des autres.
 const _partSuffix = '.lafleur.part';
 
+/// Le serveur refuse CE morceau (introuvable, vide, format inconnu) : seul cas compté
+/// comme un échec. Tout le reste (réseau, 5xx, 401/403, page de proxy, disque…) arrête
+/// la file sans rien compter.
+class _Refusal implements Exception {}
+
 /// Une réponse que le serveur n'a pas servie comme fichier (4xx, ou erreur Subsonic en JSON/XML).
 class _NotAFile implements Exception {}
 
@@ -201,7 +206,7 @@ class Downloader extends ChangeNotifier {
       return true;
     } catch (e) {
       if (active.cancelled) return true; // pause ou oubli : pas un échec
-      if (_isNetwork(e)) return false;
+      if (e is! _Refusal) return false;
       await db.markOfflineFailed(row.trackPath);
       await db.sendOfflineToBack(row.trackPath);
       return true;
@@ -213,17 +218,11 @@ class Downloader extends ChangeNotifier {
     }
   }
 
-  static bool _isNetwork(Object e) =>
-      e is SocketException ||
-      e is TimeoutException ||
-      e is http.ClientException ||
-      e is TlsException;
-
   /// Télécharge le morceau ; renvoie le chemin relatif, null si abandonné.
   Future<String?> _download(OfflineRow row, _Active active) async {
     final key = parseRemoteKey(row.trackPath);
     final t = await db.trackByPath(row.trackPath);
-    if (key == null || t == null) throw StateError('unknown track');
+    if (key == null || t == null) throw StateError('unknown track'); // pas un refus du serveur
     final source = await resolver.source(key.$1);
     final root = await device.musicRoot();
 
@@ -248,7 +247,7 @@ class Downloader extends ChangeNotifier {
     } else {
       ext = fromType ?? (suffix ?? '');
     }
-    if (ext.isEmpty) throw StateError('unknown format');
+    if (ext.isEmpty) throw _Refusal();
 
     final rel = _chooseName(root, t, ext);
     final file = File(p.join(root.path, rel));
@@ -271,7 +270,7 @@ class Downloader extends ChangeNotifier {
         return null;
       }
       final len = res.contentLength;
-      if (got == 0) throw StateError('empty body');
+      if (got == 0) throw _Refusal();
       if (len != null && len != got) {
         throw http.ClientException('truncated'); // coupure : comme le réseau
       }
@@ -325,9 +324,23 @@ class Downloader extends ChangeNotifier {
     // ou une page HTML (connexion d'un proxy, Cloudflare Access) : seul de l'audio passe
     final bad = res.statusCode >= 400 || !_isAudioType(type);
     if (!bad) return res;
-    await res.stream.drain<void>().timeout(requestTimeout);
-    if (fallback) throw StateError('server refused');
-    throw _NotAFile();
+    if (!fallback) {
+      await res.stream.drain<void>().timeout(requestTimeout);
+      throw _NotAFile();
+    }
+    var notFound = res.statusCode == 404 || res.statusCode == 410;
+    if (type.contains('json') || type.contains('xml')) {
+      // erreur Subsonic 70 : « donnée introuvable »
+      final body = String.fromCharCodes(
+        (await res.stream.toBytes().timeout(requestTimeout)).take(4096),
+      );
+      notFound =
+          notFound ||
+          RegExp(r'"code"\s*:\s*70\b|code="70"').hasMatch(body);
+    } else {
+      await res.stream.drain<void>().timeout(requestTimeout);
+    }
+    throw notFound ? _Refusal() : StateError('server refused');
   }
 
   /// `Artiste/Album/NN Titre.ext`, sans écraser un fichier existant ni un nom déjà donné.
@@ -491,12 +504,23 @@ class Downloader extends ChangeNotifier {
     _active?.cancel();
     try {
       await whenIdle();
-      return await _move(from, to, commit);
+      final r = await _move(from, to, commit);
+      if (!r.ok) await _releaseQuietly();
+      return r;
+    } catch (_) {
+      await _releaseQuietly();
+      rethrow;
     } finally {
       _moving = false;
       _reserved.clear();
       start();
     }
+  }
+
+  Future<void> _releaseQuietly() async {
+    try {
+      await device.releaseCandidate();
+    } catch (_) {}
   }
 
   Future<KeepResult> _move(
@@ -556,10 +580,18 @@ class Downloader extends ChangeNotifier {
       }
       return const KeepResult.failed();
     }
+    // une transaction avant d'effacer quoi que ce soit : une ligne ne pointe jamais
+    // vers un fichier qui n'est pas le nôtre
+    try {
+      await db.applyOfflineMove(newRel, [
+        for (final r in rows)
+          if (!newRel.containsKey(r.trackPath)) r.trackPath,
+      ]);
+    } catch (_) {
+      return KeepResult.queued(newRel.length, bytes); // originaux gardés
+    }
     for (final r in rows) {
-      final rel = newRel[r.trackPath];
-      if (rel == null) continue;
-      await db.markOfflineDone(r.trackPath, rel, r.size);
+      if (!newRel.containsKey(r.trackPath)) continue;
       final src = _inside(from, r.filePath!);
       if (src == null) continue;
       await _drop(src);
