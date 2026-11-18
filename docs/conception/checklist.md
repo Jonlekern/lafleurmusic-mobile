@@ -52,7 +52,7 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ En cours : grosse pochette, égaliseur, À suivre
 - ✅ Commandes sur l'écran verrouillé, dans les notifications et sur les écouteurs Bluetooth
 - ✅ Glisser vers la gauche = Lire ensuite ; appui long = menu
-- ✅ Mode caché : molette d'iPod tactile
+- ✅ Mode Classic (molette d'iPod, version A de la maquette 6) ou Mode normal, au choix dans Réglages
 - ✅ Fondu enchaîné et Volume égal
 - ✅ Playlists = albums, comme sur le Mac et la console
 - ✅ En plus : section « Playlists du serveur » sous les albums (lecture seule, gardables)

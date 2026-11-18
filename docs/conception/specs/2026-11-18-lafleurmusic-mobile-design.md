@@ -115,7 +115,7 @@ lib/
 - **Couché** (maquette 2, écran 5) : Cover Flow plein écran ; glisser pour défiler, toucher la pochette du milieu = Lecture. Pas de Cover Flow couché sur l'écran En cours.
 - **Tablette** (largeur ≥ 900 px) : la disposition en colonnes du Mac.
 - **Réglages → Comptes** (écrans 6 et 7) et **Sur mon iPhone** (écran 8).
-- **Mode molette caché** : une molette cliquable d'iPod tactile en bas de l'écran. **Maquette à faire et à valider par Johnny avant sa tâche** (déclencheur et dessin pas encore décidés).
+- **Mode Classic** (molette d'iPod) : choisi dans Réglages, voir §8 et `maquettes/6-molette.png` (version A, validée).
 
 ### 4.6 Lecture
 - Copie du lecteur du Mac. Les flux HTTP reçoivent les en-têtes du compte par `Media.httpHeaders`.
@@ -153,3 +153,4 @@ lib/
 - **Limite de place** : 10 Go au départ, réglable de 1 Go à toute la place libre. Quand elle est atteinte, le Top 100 automatique s'arrête ; ce que Johnny a gardé lui-même n'est jamais retiré tout seul.
 - **Dossier choisi par l'utilisateur** (Johnny, 18.11.2026 : « il peut aussi sélectionner l'endroit du dossier ; dans le cloud c'est aussi OK ») : par défaut `LAFLEURMUSIC` (iPhone : Fichiers → Sur mon iPhone ; Android : `Music/LAFLEURMUSIC`). Dans « Sur mon iPhone », « Choisir le dossier… » ouvre le sélecteur du système. iPhone : n'importe quel dossier de Fichiers, **iCloud Drive compris** (accès gardé par un signet de sécurité). Android : un dossier du téléphone ou de la carte SD ; un dossier cloud seulement s'il existe comme vrai dossier (appli de synchro) — Google Drive n'en donne pas. Changer de dossier **déplace** les morceaux déjà gardés vers le nouveau (copie puis effacement), avec la place nécessaire vérifiée avant. Un fichier dans le cloud que le système a retiré du téléphone (iCloud « Optimiser le stockage ») se télécharge quand on le joue : il faut alors du réseau. La limite reste choisie par l'utilisateur (1 Go → toute la place libre).
 - **Mode clair** (Johnny, 18.11.2026) : l'affichage actuel s'appelle **mode sombre**. Un **mode clair** s'ajoute : fond blanc, logo écrit en noir, détails en rose `#F26EF2`. Plan à part (plan 7), **maquette d'abord, validée par Johnny** ; il suit **automatiquement** le réglage du téléphone (clair / sombre), sans choix dans l'appli (réponse de Johnny : 1).
+- **Molette = « Mode Classic »** (Johnny, 18.11.2026) : deux modes, choisis dans **Réglages** (pas de geste caché) : **Mode normal** (l'appli actuelle, sans molette) et **Mode Classic** (version A de `maquettes/6-molette.png` : menu façon iPod en haut, grande molette cliquable en bas ; tourner = monter / descendre avec un petit clic, rond du milieu = choisir, MENU = retour, ⏮ ⏭ ▶︎❙❙ sur l'anneau). La version B (molette sous En cours) n'est pas retenue.
