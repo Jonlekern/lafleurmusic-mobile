@@ -8,7 +8,14 @@ part 'db.g.dart';
 class Tracks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get path => text().unique()();
-  IntColumn get folderId => integer()();
+  IntColumn get folderId => integer().withDefault(const Constant(0))();
+  TextColumn get accountId => text().withDefault(const Constant('local'))();
+  TextColumn get remoteId => text().withDefault(const Constant(''))();
+  TextColumn get albumArtist => text().withDefault(const Constant(''))();
+  IntColumn get disc => integer().nullable()();
+  TextColumn get coverId => text().nullable()();
+  TextColumn get suffix => text().nullable()();
+  RealColumn get replayGain => real().nullable()();
   TextColumn get title => text()();
   TextColumn get artist => text()();
   TextColumn get album => text()();
@@ -17,7 +24,7 @@ class Tracks extends Table {
   IntColumn get trackNo => integer().nullable()();
   IntColumn get durationMs => integer()();
   BoolColumn get hasCover => boolean()();
-  IntColumn get mtime => integer()();
+  IntColumn get mtime => integer().withDefault(const Constant(0))();
   IntColumn get size => integer()();
   BoolColumn get missing => boolean().withDefault(const Constant(false))();
   BoolColumn get toRepair => boolean().withDefault(const Constant(false))();
@@ -74,6 +81,13 @@ class LibraryDb extends _$LibraryDb {
     id: r.id,
     path: r.path,
     folderId: r.folderId,
+    accountId: r.accountId,
+    remoteId: r.remoteId,
+    albumArtist: r.albumArtist,
+    disc: r.disc,
+    coverId: r.coverId,
+    suffix: r.suffix,
+    replayGain: r.replayGain,
     title: r.title,
     artist: r.artist,
     album: r.album,
@@ -92,7 +106,14 @@ class LibraryDb extends _$LibraryDb {
     for (final t in list) {
       final row = TracksCompanion.insert(
         path: t.path,
-        folderId: t.folderId,
+        folderId: Value(t.folderId),
+        accountId: Value(t.accountId),
+        remoteId: Value(t.remoteId),
+        albumArtist: Value(t.albumArtist),
+        disc: Value(t.disc),
+        coverId: Value(t.coverId),
+        suffix: Value(t.suffix),
+        replayGain: Value(t.replayGain),
         title: t.title,
         artist: t.artist,
         album: t.album,
@@ -101,7 +122,7 @@ class LibraryDb extends _$LibraryDb {
         trackNo: Value(t.trackNo),
         durationMs: t.durationMs,
         hasCover: t.hasCover,
-        mtime: t.mtime,
+        mtime: Value(t.mtime),
         size: t.size,
         missing: Value(t.missing),
         searchKey: sortKey('${t.title}\n${t.artist}\n${t.album}'),
@@ -123,6 +144,34 @@ class LibraryDb extends _$LibraryDb {
       tracks,
     )..where((t) => t.path.equals(path))).getSingleOrNull();
     return r == null ? null : _fromRow(r);
+  }
+
+  /// Tracks of one account, with their play counts and loudness.
+  Future<void> deleteAccountTracks(String accountId) => transaction(() async {
+    final paths =
+        await (selectOnly(tracks)
+              ..addColumns([tracks.path])
+              ..where(tracks.accountId.equals(accountId)))
+            .map((r) => r.read(tracks.path)!)
+            .get();
+    for (var i = 0; i < paths.length; i += 500) {
+      await deletePaths(paths.skip(i).take(500).toList());
+    }
+  });
+
+  /// Raises counts to [counts] (path -> count) where higher; never lowers one.
+  Future<void> raisePlayCounts(Map<String, int> counts) async {
+    for (final e in counts.entries) {
+      await into(playCounts).insert(
+        PlayCountsCompanion.insert(path: e.key, count: e.value, lastPlayed: 0),
+        onConflict: DoUpdate(
+          (_) => PlayCountsCompanion.custom(
+            count: const CustomExpression('max(count, excluded.count)'),
+          ),
+          target: [playCounts.path],
+        ),
+      );
+    }
   }
 
   Future<void> deletePaths(List<String> paths) => transaction(() async {

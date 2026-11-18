@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
 import 'package:lafleurmusic/sources/subsonic.dart';
 
@@ -85,6 +86,31 @@ void main() {
     await accounts.remove(a.id);
     expect(secrets.data, isEmpty);
     expect(await accounts.watch().first, isEmpty);
+  });
+
+  test('remove deletes the tracks of that account only', () async {
+    final a = await addOne('Home');
+    final b = await addOne('Other');
+    Track tr(String path, String acc) => Track(
+      path: path,
+      accountId: acc,
+      title: 't',
+      artist: 'a',
+      album: 'A',
+      durationMs: 1,
+      hasCover: false,
+      size: 1,
+    );
+    await db.upsertTracks([
+      tr('subsonic://${a.id}/1', a.id),
+      tr('subsonic://${b.id}/1', b.id),
+      tr('/m/x.flac', 'local'),
+    ]);
+    await db.addPlay('subsonic://${a.id}/1', DateTime(2026));
+    await accounts.remove(a.id);
+    final left = await db.select(db.tracks).get();
+    expect(left.map((r) => r.accountId).toSet(), {b.id, 'local'});
+    expect(await db.select(db.playCounts).get(), isEmpty);
   });
 
   test('new accounts go last; reorder changes watch() order', () async {

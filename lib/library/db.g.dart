@@ -40,7 +40,84 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     aliasedName,
     false,
     type: DriftSqlType.int,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('local'),
+  );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _albumArtistMeta = const VerificationMeta(
+    'albumArtist',
+  );
+  @override
+  late final GeneratedColumn<String> albumArtist = GeneratedColumn<String>(
+    'album_artist',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _discMeta = const VerificationMeta('disc');
+  @override
+  late final GeneratedColumn<int> disc = GeneratedColumn<int>(
+    'disc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverIdMeta = const VerificationMeta(
+    'coverId',
+  );
+  @override
+  late final GeneratedColumn<String> coverId = GeneratedColumn<String>(
+    'cover_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _suffixMeta = const VerificationMeta('suffix');
+  @override
+  late final GeneratedColumn<String> suffix = GeneratedColumn<String>(
+    'suffix',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _replayGainMeta = const VerificationMeta(
+    'replayGain',
+  );
+  @override
+  late final GeneratedColumn<double> replayGain = GeneratedColumn<double>(
+    'replay_gain',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
@@ -133,7 +210,8 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     aliasedName,
     false,
     type: DriftSqlType.int,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
   );
   static const VerificationMeta _sizeMeta = const VerificationMeta('size');
   @override
@@ -190,6 +268,13 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     id,
     path,
     folderId,
+    accountId,
+    remoteId,
+    albumArtist,
+    disc,
+    coverId,
+    suffix,
+    replayGain,
     title,
     artist,
     album,
@@ -232,8 +317,51 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         _folderIdMeta,
         folderId.isAcceptableOrUnknown(data['folder_id']!, _folderIdMeta),
       );
-    } else if (isInserting) {
-      context.missing(_folderIdMeta);
+    }
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
+    }
+    if (data.containsKey('album_artist')) {
+      context.handle(
+        _albumArtistMeta,
+        albumArtist.isAcceptableOrUnknown(
+          data['album_artist']!,
+          _albumArtistMeta,
+        ),
+      );
+    }
+    if (data.containsKey('disc')) {
+      context.handle(
+        _discMeta,
+        disc.isAcceptableOrUnknown(data['disc']!, _discMeta),
+      );
+    }
+    if (data.containsKey('cover_id')) {
+      context.handle(
+        _coverIdMeta,
+        coverId.isAcceptableOrUnknown(data['cover_id']!, _coverIdMeta),
+      );
+    }
+    if (data.containsKey('suffix')) {
+      context.handle(
+        _suffixMeta,
+        suffix.isAcceptableOrUnknown(data['suffix']!, _suffixMeta),
+      );
+    }
+    if (data.containsKey('replay_gain')) {
+      context.handle(
+        _replayGainMeta,
+        replayGain.isAcceptableOrUnknown(data['replay_gain']!, _replayGainMeta),
+      );
     }
     if (data.containsKey('title')) {
       context.handle(
@@ -300,8 +428,6 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         _mtimeMeta,
         mtime.isAcceptableOrUnknown(data['mtime']!, _mtimeMeta),
       );
-    } else if (isInserting) {
-      context.missing(_mtimeMeta);
     }
     if (data.containsKey('size')) {
       context.handle(
@@ -352,6 +478,34 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}folder_id'],
       )!,
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      )!,
+      albumArtist: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}album_artist'],
+      )!,
+      disc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}disc'],
+      ),
+      coverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_id'],
+      ),
+      suffix: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}suffix'],
+      ),
+      replayGain: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}replay_gain'],
+      ),
       title: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}title'],
@@ -417,6 +571,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final int id;
   final String path;
   final int folderId;
+  final String accountId;
+  final String remoteId;
+  final String albumArtist;
+  final int? disc;
+  final String? coverId;
+  final String? suffix;
+  final double? replayGain;
   final String title;
   final String artist;
   final String album;
@@ -434,6 +595,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.id,
     required this.path,
     required this.folderId,
+    required this.accountId,
+    required this.remoteId,
+    required this.albumArtist,
+    this.disc,
+    this.coverId,
+    this.suffix,
+    this.replayGain,
     required this.title,
     required this.artist,
     required this.album,
@@ -454,6 +622,21 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     map['id'] = Variable<int>(id);
     map['path'] = Variable<String>(path);
     map['folder_id'] = Variable<int>(folderId);
+    map['account_id'] = Variable<String>(accountId);
+    map['remote_id'] = Variable<String>(remoteId);
+    map['album_artist'] = Variable<String>(albumArtist);
+    if (!nullToAbsent || disc != null) {
+      map['disc'] = Variable<int>(disc);
+    }
+    if (!nullToAbsent || coverId != null) {
+      map['cover_id'] = Variable<String>(coverId);
+    }
+    if (!nullToAbsent || suffix != null) {
+      map['suffix'] = Variable<String>(suffix);
+    }
+    if (!nullToAbsent || replayGain != null) {
+      map['replay_gain'] = Variable<double>(replayGain);
+    }
     map['title'] = Variable<String>(title);
     map['artist'] = Variable<String>(artist);
     map['album'] = Variable<String>(album);
@@ -477,6 +660,19 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       id: Value(id),
       path: Value(path),
       folderId: Value(folderId),
+      accountId: Value(accountId),
+      remoteId: Value(remoteId),
+      albumArtist: Value(albumArtist),
+      disc: disc == null && nullToAbsent ? const Value.absent() : Value(disc),
+      coverId: coverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coverId),
+      suffix: suffix == null && nullToAbsent
+          ? const Value.absent()
+          : Value(suffix),
+      replayGain: replayGain == null && nullToAbsent
+          ? const Value.absent()
+          : Value(replayGain),
       title: Value(title),
       artist: Value(artist),
       album: Value(album),
@@ -504,6 +700,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       id: serializer.fromJson<int>(json['id']),
       path: serializer.fromJson<String>(json['path']),
       folderId: serializer.fromJson<int>(json['folderId']),
+      accountId: serializer.fromJson<String>(json['accountId']),
+      remoteId: serializer.fromJson<String>(json['remoteId']),
+      albumArtist: serializer.fromJson<String>(json['albumArtist']),
+      disc: serializer.fromJson<int?>(json['disc']),
+      coverId: serializer.fromJson<String?>(json['coverId']),
+      suffix: serializer.fromJson<String?>(json['suffix']),
+      replayGain: serializer.fromJson<double?>(json['replayGain']),
       title: serializer.fromJson<String>(json['title']),
       artist: serializer.fromJson<String>(json['artist']),
       album: serializer.fromJson<String>(json['album']),
@@ -526,6 +729,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'id': serializer.toJson<int>(id),
       'path': serializer.toJson<String>(path),
       'folderId': serializer.toJson<int>(folderId),
+      'accountId': serializer.toJson<String>(accountId),
+      'remoteId': serializer.toJson<String>(remoteId),
+      'albumArtist': serializer.toJson<String>(albumArtist),
+      'disc': serializer.toJson<int?>(disc),
+      'coverId': serializer.toJson<String?>(coverId),
+      'suffix': serializer.toJson<String?>(suffix),
+      'replayGain': serializer.toJson<double?>(replayGain),
       'title': serializer.toJson<String>(title),
       'artist': serializer.toJson<String>(artist),
       'album': serializer.toJson<String>(album),
@@ -546,6 +756,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     int? id,
     String? path,
     int? folderId,
+    String? accountId,
+    String? remoteId,
+    String? albumArtist,
+    Value<int?> disc = const Value.absent(),
+    Value<String?> coverId = const Value.absent(),
+    Value<String?> suffix = const Value.absent(),
+    Value<double?> replayGain = const Value.absent(),
     String? title,
     String? artist,
     String? album,
@@ -563,6 +780,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     id: id ?? this.id,
     path: path ?? this.path,
     folderId: folderId ?? this.folderId,
+    accountId: accountId ?? this.accountId,
+    remoteId: remoteId ?? this.remoteId,
+    albumArtist: albumArtist ?? this.albumArtist,
+    disc: disc.present ? disc.value : this.disc,
+    coverId: coverId.present ? coverId.value : this.coverId,
+    suffix: suffix.present ? suffix.value : this.suffix,
+    replayGain: replayGain.present ? replayGain.value : this.replayGain,
     title: title ?? this.title,
     artist: artist ?? this.artist,
     album: album ?? this.album,
@@ -582,6 +806,17 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       id: data.id.present ? data.id.value : this.id,
       path: data.path.present ? data.path.value : this.path,
       folderId: data.folderId.present ? data.folderId.value : this.folderId,
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
+      albumArtist: data.albumArtist.present
+          ? data.albumArtist.value
+          : this.albumArtist,
+      disc: data.disc.present ? data.disc.value : this.disc,
+      coverId: data.coverId.present ? data.coverId.value : this.coverId,
+      suffix: data.suffix.present ? data.suffix.value : this.suffix,
+      replayGain: data.replayGain.present
+          ? data.replayGain.value
+          : this.replayGain,
       title: data.title.present ? data.title.value : this.title,
       artist: data.artist.present ? data.artist.value : this.artist,
       album: data.album.present ? data.album.value : this.album,
@@ -606,6 +841,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('id: $id, ')
           ..write('path: $path, ')
           ..write('folderId: $folderId, ')
+          ..write('accountId: $accountId, ')
+          ..write('remoteId: $remoteId, ')
+          ..write('albumArtist: $albumArtist, ')
+          ..write('disc: $disc, ')
+          ..write('coverId: $coverId, ')
+          ..write('suffix: $suffix, ')
+          ..write('replayGain: $replayGain, ')
           ..write('title: $title, ')
           ..write('artist: $artist, ')
           ..write('album: $album, ')
@@ -624,10 +866,17 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     path,
     folderId,
+    accountId,
+    remoteId,
+    albumArtist,
+    disc,
+    coverId,
+    suffix,
+    replayGain,
     title,
     artist,
     album,
@@ -641,7 +890,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     missing,
     toRepair,
     searchKey,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -649,6 +898,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.id == this.id &&
           other.path == this.path &&
           other.folderId == this.folderId &&
+          other.accountId == this.accountId &&
+          other.remoteId == this.remoteId &&
+          other.albumArtist == this.albumArtist &&
+          other.disc == this.disc &&
+          other.coverId == this.coverId &&
+          other.suffix == this.suffix &&
+          other.replayGain == this.replayGain &&
           other.title == this.title &&
           other.artist == this.artist &&
           other.album == this.album &&
@@ -668,6 +924,13 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<int> id;
   final Value<String> path;
   final Value<int> folderId;
+  final Value<String> accountId;
+  final Value<String> remoteId;
+  final Value<String> albumArtist;
+  final Value<int?> disc;
+  final Value<String?> coverId;
+  final Value<String?> suffix;
+  final Value<double?> replayGain;
   final Value<String> title;
   final Value<String> artist;
   final Value<String> album;
@@ -685,6 +948,13 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.id = const Value.absent(),
     this.path = const Value.absent(),
     this.folderId = const Value.absent(),
+    this.accountId = const Value.absent(),
+    this.remoteId = const Value.absent(),
+    this.albumArtist = const Value.absent(),
+    this.disc = const Value.absent(),
+    this.coverId = const Value.absent(),
+    this.suffix = const Value.absent(),
+    this.replayGain = const Value.absent(),
     this.title = const Value.absent(),
     this.artist = const Value.absent(),
     this.album = const Value.absent(),
@@ -702,7 +972,14 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   TracksCompanion.insert({
     this.id = const Value.absent(),
     required String path,
-    required int folderId,
+    this.folderId = const Value.absent(),
+    this.accountId = const Value.absent(),
+    this.remoteId = const Value.absent(),
+    this.albumArtist = const Value.absent(),
+    this.disc = const Value.absent(),
+    this.coverId = const Value.absent(),
+    this.suffix = const Value.absent(),
+    this.replayGain = const Value.absent(),
     required String title,
     required String artist,
     required String album,
@@ -711,26 +988,31 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.trackNo = const Value.absent(),
     required int durationMs,
     required bool hasCover,
-    required int mtime,
+    this.mtime = const Value.absent(),
     required int size,
     this.missing = const Value.absent(),
     this.toRepair = const Value.absent(),
     required String searchKey,
   }) : path = Value(path),
-       folderId = Value(folderId),
        title = Value(title),
        artist = Value(artist),
        album = Value(album),
        albumKey = Value(albumKey),
        durationMs = Value(durationMs),
        hasCover = Value(hasCover),
-       mtime = Value(mtime),
        size = Value(size),
        searchKey = Value(searchKey);
   static Insertable<TrackRow> custom({
     Expression<int>? id,
     Expression<String>? path,
     Expression<int>? folderId,
+    Expression<String>? accountId,
+    Expression<String>? remoteId,
+    Expression<String>? albumArtist,
+    Expression<int>? disc,
+    Expression<String>? coverId,
+    Expression<String>? suffix,
+    Expression<double>? replayGain,
     Expression<String>? title,
     Expression<String>? artist,
     Expression<String>? album,
@@ -749,6 +1031,13 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (id != null) 'id': id,
       if (path != null) 'path': path,
       if (folderId != null) 'folder_id': folderId,
+      if (accountId != null) 'account_id': accountId,
+      if (remoteId != null) 'remote_id': remoteId,
+      if (albumArtist != null) 'album_artist': albumArtist,
+      if (disc != null) 'disc': disc,
+      if (coverId != null) 'cover_id': coverId,
+      if (suffix != null) 'suffix': suffix,
+      if (replayGain != null) 'replay_gain': replayGain,
       if (title != null) 'title': title,
       if (artist != null) 'artist': artist,
       if (album != null) 'album': album,
@@ -769,6 +1058,13 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<int>? id,
     Value<String>? path,
     Value<int>? folderId,
+    Value<String>? accountId,
+    Value<String>? remoteId,
+    Value<String>? albumArtist,
+    Value<int?>? disc,
+    Value<String?>? coverId,
+    Value<String?>? suffix,
+    Value<double?>? replayGain,
     Value<String>? title,
     Value<String>? artist,
     Value<String>? album,
@@ -787,6 +1083,13 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       id: id ?? this.id,
       path: path ?? this.path,
       folderId: folderId ?? this.folderId,
+      accountId: accountId ?? this.accountId,
+      remoteId: remoteId ?? this.remoteId,
+      albumArtist: albumArtist ?? this.albumArtist,
+      disc: disc ?? this.disc,
+      coverId: coverId ?? this.coverId,
+      suffix: suffix ?? this.suffix,
+      replayGain: replayGain ?? this.replayGain,
       title: title ?? this.title,
       artist: artist ?? this.artist,
       album: album ?? this.album,
@@ -814,6 +1117,27 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     }
     if (folderId.present) {
       map['folder_id'] = Variable<int>(folderId.value);
+    }
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
+    }
+    if (albumArtist.present) {
+      map['album_artist'] = Variable<String>(albumArtist.value);
+    }
+    if (disc.present) {
+      map['disc'] = Variable<int>(disc.value);
+    }
+    if (coverId.present) {
+      map['cover_id'] = Variable<String>(coverId.value);
+    }
+    if (suffix.present) {
+      map['suffix'] = Variable<String>(suffix.value);
+    }
+    if (replayGain.present) {
+      map['replay_gain'] = Variable<double>(replayGain.value);
     }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
@@ -863,6 +1187,13 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('id: $id, ')
           ..write('path: $path, ')
           ..write('folderId: $folderId, ')
+          ..write('accountId: $accountId, ')
+          ..write('remoteId: $remoteId, ')
+          ..write('albumArtist: $albumArtist, ')
+          ..write('disc: $disc, ')
+          ..write('coverId: $coverId, ')
+          ..write('suffix: $suffix, ')
+          ..write('replayGain: $replayGain, ')
           ..write('title: $title, ')
           ..write('artist: $artist, ')
           ..write('album: $album, ')
@@ -1818,7 +2149,14 @@ abstract class _$LibraryDb extends GeneratedDatabase {
 typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<int> id,
   required String path,
-  required int folderId,
+  Value<int> folderId,
+  Value<String> accountId,
+  Value<String> remoteId,
+  Value<String> albumArtist,
+  Value<int?> disc,
+  Value<String?> coverId,
+  Value<String?> suffix,
+  Value<double?> replayGain,
   required String title,
   required String artist,
   required String album,
@@ -1827,7 +2165,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<int?> trackNo,
   required int durationMs,
   required bool hasCover,
-  required int mtime,
+  Value<int> mtime,
   required int size,
   Value<bool> missing,
   Value<bool> toRepair,
@@ -1837,6 +2175,13 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> id,
   Value<String> path,
   Value<int> folderId,
+  Value<String> accountId,
+  Value<String> remoteId,
+  Value<String> albumArtist,
+  Value<int?> disc,
+  Value<String?> coverId,
+  Value<String?> suffix,
+  Value<double?> replayGain,
   Value<String> title,
   Value<String> artist,
   Value<String> album,
@@ -1872,6 +2217,41 @@ class $$TracksTableFilterComposer extends Composer<_$LibraryDb, $TracksTable> {
 
   ColumnFilters<int> get folderId => $composableBuilder(
     column: $table.folderId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get albumArtist => $composableBuilder(
+    column: $table.albumArtist,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get disc => $composableBuilder(
+    column: $table.disc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverId => $composableBuilder(
+    column: $table.coverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get suffix => $composableBuilder(
+    column: $table.suffix,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get replayGain => $composableBuilder(
+    column: $table.replayGain,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1965,6 +2345,41 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get albumArtist => $composableBuilder(
+    column: $table.albumArtist,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get disc => $composableBuilder(
+    column: $table.disc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverId => $composableBuilder(
+    column: $table.coverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get suffix => $composableBuilder(
+    column: $table.suffix,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get replayGain => $composableBuilder(
+    column: $table.replayGain,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get title => $composableBuilder(
     column: $table.title,
     builder: (column) => ColumnOrderings(column),
@@ -2049,6 +2464,31 @@ class $$TracksTableAnnotationComposer
   GeneratedColumn<int> get folderId =>
       $composableBuilder(column: $table.folderId, builder: (column) => column);
 
+  GeneratedColumn<String> get accountId =>
+      $composableBuilder(column: $table.accountId, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
+
+  GeneratedColumn<String> get albumArtist => $composableBuilder(
+    column: $table.albumArtist,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get disc =>
+      $composableBuilder(column: $table.disc, builder: (column) => column);
+
+  GeneratedColumn<String> get coverId =>
+      $composableBuilder(column: $table.coverId, builder: (column) => column);
+
+  GeneratedColumn<String> get suffix =>
+      $composableBuilder(column: $table.suffix, builder: (column) => column);
+
+  GeneratedColumn<double> get replayGain => $composableBuilder(
+    column: $table.replayGain,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
 
@@ -2122,6 +2562,13 @@ class $$TracksTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> path = const Value.absent(),
                 Value<int> folderId = const Value.absent(),
+                Value<String> accountId = const Value.absent(),
+                Value<String> remoteId = const Value.absent(),
+                Value<String> albumArtist = const Value.absent(),
+                Value<int?> disc = const Value.absent(),
+                Value<String?> coverId = const Value.absent(),
+                Value<String?> suffix = const Value.absent(),
+                Value<double?> replayGain = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String> artist = const Value.absent(),
                 Value<String> album = const Value.absent(),
@@ -2139,6 +2586,13 @@ class $$TracksTableTableManager
                 id: id,
                 path: path,
                 folderId: folderId,
+                accountId: accountId,
+                remoteId: remoteId,
+                albumArtist: albumArtist,
+                disc: disc,
+                coverId: coverId,
+                suffix: suffix,
+                replayGain: replayGain,
                 title: title,
                 artist: artist,
                 album: album,
@@ -2157,7 +2611,14 @@ class $$TracksTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required String path,
-                required int folderId,
+                Value<int> folderId = const Value.absent(),
+                Value<String> accountId = const Value.absent(),
+                Value<String> remoteId = const Value.absent(),
+                Value<String> albumArtist = const Value.absent(),
+                Value<int?> disc = const Value.absent(),
+                Value<String?> coverId = const Value.absent(),
+                Value<String?> suffix = const Value.absent(),
+                Value<double?> replayGain = const Value.absent(),
                 required String title,
                 required String artist,
                 required String album,
@@ -2166,7 +2627,7 @@ class $$TracksTableTableManager
                 Value<int?> trackNo = const Value.absent(),
                 required int durationMs,
                 required bool hasCover,
-                required int mtime,
+                Value<int> mtime = const Value.absent(),
                 required int size,
                 Value<bool> missing = const Value.absent(),
                 Value<bool> toRepair = const Value.absent(),
@@ -2175,6 +2636,13 @@ class $$TracksTableTableManager
                 id: id,
                 path: path,
                 folderId: folderId,
+                accountId: accountId,
+                remoteId: remoteId,
+                albumArtist: albumArtist,
+                disc: disc,
+                coverId: coverId,
+                suffix: suffix,
+                replayGain: replayGain,
                 title: title,
                 artist: artist,
                 album: album,

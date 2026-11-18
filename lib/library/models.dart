@@ -3,7 +3,14 @@ class Track {
   const Track({
     this.id,
     required this.path,
-    required this.folderId,
+    this.folderId = 0,
+    this.accountId = 'local',
+    this.remoteId = '',
+    this.albumArtist = '',
+    this.disc,
+    this.coverId,
+    this.suffix,
+    this.replayGain,
     required this.title,
     required this.artist,
     required this.album,
@@ -11,7 +18,7 @@ class Track {
     this.trackNo,
     required this.durationMs,
     required this.hasCover,
-    required this.mtime,
+    this.mtime = 0,
     required this.size,
     this.missing = false,
   });
@@ -19,6 +26,12 @@ class Track {
   final int? id;
   final String path;
   final int folderId;
+  final String accountId; // 'local' for scanned files
+  final String remoteId; // server song id
+  final String albumArtist;
+  final int? disc;
+  final String? coverId, suffix;
+  final double? replayGain;
   final String title;
   final String artist;
   final String album;
