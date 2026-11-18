@@ -73,3 +73,9 @@ String sortKey(String s) {
       .replaceAll('œ', 'oe')
       .replaceAll('ß', 'ss');
 }
+
+/// Pourquoi un morceau est gardé hors ligne : choisi par l'utilisateur, ou Top 100 automatique.
+enum OfflineReason { user, top100 }
+
+/// État d'une copie hors ligne : en attente, téléchargée, abandonnée après 3 échecs.
+enum OfflineState { queued, done, failed }

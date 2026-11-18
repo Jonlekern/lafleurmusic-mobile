@@ -2127,6 +2127,753 @@ class AccountRowsCompanion extends UpdateCompanion<AccountRow> {
   }
 }
 
+class $OfflineTable extends Offline with TableInfo<$OfflineTable, OfflineRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OfflineTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _trackPathMeta = const VerificationMeta(
+    'trackPath',
+  );
+  @override
+  late final GeneratedColumn<String> trackPath = GeneratedColumn<String>(
+    'track_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _filePathMeta = const VerificationMeta(
+    'filePath',
+  );
+  @override
+  late final GeneratedColumn<String> filePath = GeneratedColumn<String>(
+    'file_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sizeMeta = const VerificationMeta('size');
+  @override
+  late final GeneratedColumn<int> size = GeneratedColumn<int>(
+    'size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _addedAtMeta = const VerificationMeta(
+    'addedAt',
+  );
+  @override
+  late final GeneratedColumn<int> addedAt = GeneratedColumn<int>(
+    'added_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _failuresMeta = const VerificationMeta(
+    'failures',
+  );
+  @override
+  late final GeneratedColumn<int> failures = GeneratedColumn<int>(
+    'failures',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    trackPath,
+    filePath,
+    size,
+    addedAt,
+    reason,
+    state,
+    failures,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'offline';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OfflineRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('track_path')) {
+      context.handle(
+        _trackPathMeta,
+        trackPath.isAcceptableOrUnknown(data['track_path']!, _trackPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_trackPathMeta);
+    }
+    if (data.containsKey('file_path')) {
+      context.handle(
+        _filePathMeta,
+        filePath.isAcceptableOrUnknown(data['file_path']!, _filePathMeta),
+      );
+    }
+    if (data.containsKey('size')) {
+      context.handle(
+        _sizeMeta,
+        size.isAcceptableOrUnknown(data['size']!, _sizeMeta),
+      );
+    }
+    if (data.containsKey('added_at')) {
+      context.handle(
+        _addedAtMeta,
+        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_addedAtMeta);
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    if (data.containsKey('failures')) {
+      context.handle(
+        _failuresMeta,
+        failures.isAcceptableOrUnknown(data['failures']!, _failuresMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {trackPath};
+  @override
+  OfflineRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OfflineRow(
+      trackPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}track_path'],
+      )!,
+      filePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_path'],
+      ),
+      size: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size'],
+      )!,
+      addedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}added_at'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      failures: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}failures'],
+      )!,
+    );
+  }
+
+  @override
+  $OfflineTable createAlias(String alias) {
+    return $OfflineTable(attachedDatabase, alias);
+  }
+}
+
+class OfflineRow extends DataClass implements Insertable<OfflineRow> {
+  final String trackPath;
+  final String? filePath;
+  final int size;
+  final int addedAt;
+  final String reason;
+  final String state;
+  final int failures;
+  const OfflineRow({
+    required this.trackPath,
+    this.filePath,
+    required this.size,
+    required this.addedAt,
+    required this.reason,
+    required this.state,
+    required this.failures,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['track_path'] = Variable<String>(trackPath);
+    if (!nullToAbsent || filePath != null) {
+      map['file_path'] = Variable<String>(filePath);
+    }
+    map['size'] = Variable<int>(size);
+    map['added_at'] = Variable<int>(addedAt);
+    map['reason'] = Variable<String>(reason);
+    map['state'] = Variable<String>(state);
+    map['failures'] = Variable<int>(failures);
+    return map;
+  }
+
+  OfflineCompanion toCompanion(bool nullToAbsent) {
+    return OfflineCompanion(
+      trackPath: Value(trackPath),
+      filePath: filePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(filePath),
+      size: Value(size),
+      addedAt: Value(addedAt),
+      reason: Value(reason),
+      state: Value(state),
+      failures: Value(failures),
+    );
+  }
+
+  factory OfflineRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OfflineRow(
+      trackPath: serializer.fromJson<String>(json['trackPath']),
+      filePath: serializer.fromJson<String?>(json['filePath']),
+      size: serializer.fromJson<int>(json['size']),
+      addedAt: serializer.fromJson<int>(json['addedAt']),
+      reason: serializer.fromJson<String>(json['reason']),
+      state: serializer.fromJson<String>(json['state']),
+      failures: serializer.fromJson<int>(json['failures']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'trackPath': serializer.toJson<String>(trackPath),
+      'filePath': serializer.toJson<String?>(filePath),
+      'size': serializer.toJson<int>(size),
+      'addedAt': serializer.toJson<int>(addedAt),
+      'reason': serializer.toJson<String>(reason),
+      'state': serializer.toJson<String>(state),
+      'failures': serializer.toJson<int>(failures),
+    };
+  }
+
+  OfflineRow copyWith({
+    String? trackPath,
+    Value<String?> filePath = const Value.absent(),
+    int? size,
+    int? addedAt,
+    String? reason,
+    String? state,
+    int? failures,
+  }) => OfflineRow(
+    trackPath: trackPath ?? this.trackPath,
+    filePath: filePath.present ? filePath.value : this.filePath,
+    size: size ?? this.size,
+    addedAt: addedAt ?? this.addedAt,
+    reason: reason ?? this.reason,
+    state: state ?? this.state,
+    failures: failures ?? this.failures,
+  );
+  OfflineRow copyWithCompanion(OfflineCompanion data) {
+    return OfflineRow(
+      trackPath: data.trackPath.present ? data.trackPath.value : this.trackPath,
+      filePath: data.filePath.present ? data.filePath.value : this.filePath,
+      size: data.size.present ? data.size.value : this.size,
+      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      state: data.state.present ? data.state.value : this.state,
+      failures: data.failures.present ? data.failures.value : this.failures,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OfflineRow(')
+          ..write('trackPath: $trackPath, ')
+          ..write('filePath: $filePath, ')
+          ..write('size: $size, ')
+          ..write('addedAt: $addedAt, ')
+          ..write('reason: $reason, ')
+          ..write('state: $state, ')
+          ..write('failures: $failures')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(trackPath, filePath, size, addedAt, reason, state, failures);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OfflineRow &&
+          other.trackPath == this.trackPath &&
+          other.filePath == this.filePath &&
+          other.size == this.size &&
+          other.addedAt == this.addedAt &&
+          other.reason == this.reason &&
+          other.state == this.state &&
+          other.failures == this.failures);
+}
+
+class OfflineCompanion extends UpdateCompanion<OfflineRow> {
+  final Value<String> trackPath;
+  final Value<String?> filePath;
+  final Value<int> size;
+  final Value<int> addedAt;
+  final Value<String> reason;
+  final Value<String> state;
+  final Value<int> failures;
+  final Value<int> rowid;
+  const OfflineCompanion({
+    this.trackPath = const Value.absent(),
+    this.filePath = const Value.absent(),
+    this.size = const Value.absent(),
+    this.addedAt = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.state = const Value.absent(),
+    this.failures = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OfflineCompanion.insert({
+    required String trackPath,
+    this.filePath = const Value.absent(),
+    this.size = const Value.absent(),
+    required int addedAt,
+    required String reason,
+    required String state,
+    this.failures = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : trackPath = Value(trackPath),
+       addedAt = Value(addedAt),
+       reason = Value(reason),
+       state = Value(state);
+  static Insertable<OfflineRow> custom({
+    Expression<String>? trackPath,
+    Expression<String>? filePath,
+    Expression<int>? size,
+    Expression<int>? addedAt,
+    Expression<String>? reason,
+    Expression<String>? state,
+    Expression<int>? failures,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (trackPath != null) 'track_path': trackPath,
+      if (filePath != null) 'file_path': filePath,
+      if (size != null) 'size': size,
+      if (addedAt != null) 'added_at': addedAt,
+      if (reason != null) 'reason': reason,
+      if (state != null) 'state': state,
+      if (failures != null) 'failures': failures,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OfflineCompanion copyWith({
+    Value<String>? trackPath,
+    Value<String?>? filePath,
+    Value<int>? size,
+    Value<int>? addedAt,
+    Value<String>? reason,
+    Value<String>? state,
+    Value<int>? failures,
+    Value<int>? rowid,
+  }) {
+    return OfflineCompanion(
+      trackPath: trackPath ?? this.trackPath,
+      filePath: filePath ?? this.filePath,
+      size: size ?? this.size,
+      addedAt: addedAt ?? this.addedAt,
+      reason: reason ?? this.reason,
+      state: state ?? this.state,
+      failures: failures ?? this.failures,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (trackPath.present) {
+      map['track_path'] = Variable<String>(trackPath.value);
+    }
+    if (filePath.present) {
+      map['file_path'] = Variable<String>(filePath.value);
+    }
+    if (size.present) {
+      map['size'] = Variable<int>(size.value);
+    }
+    if (addedAt.present) {
+      map['added_at'] = Variable<int>(addedAt.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (failures.present) {
+      map['failures'] = Variable<int>(failures.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OfflineCompanion(')
+          ..write('trackPath: $trackPath, ')
+          ..write('filePath: $filePath, ')
+          ..write('size: $size, ')
+          ..write('addedAt: $addedAt, ')
+          ..write('reason: $reason, ')
+          ..write('state: $state, ')
+          ..write('failures: $failures, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $PendingScrobblesTable extends PendingScrobbles
+    with TableInfo<$PendingScrobblesTable, PendingScrobble> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PendingScrobblesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _atMeta = const VerificationMeta('at');
+  @override
+  late final GeneratedColumn<int> at = GeneratedColumn<int>(
+    'at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, accountId, remoteId, at];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'pending_scrobbles';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PendingScrobble> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_remoteIdMeta);
+    }
+    if (data.containsKey('at')) {
+      context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
+    } else if (isInserting) {
+      context.missing(_atMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PendingScrobble map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PendingScrobble(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      )!,
+      at: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}at'],
+      )!,
+    );
+  }
+
+  @override
+  $PendingScrobblesTable createAlias(String alias) {
+    return $PendingScrobblesTable(attachedDatabase, alias);
+  }
+}
+
+class PendingScrobble extends DataClass implements Insertable<PendingScrobble> {
+  final int id;
+  final String accountId;
+  final String remoteId;
+  final int at;
+  const PendingScrobble({
+    required this.id,
+    required this.accountId,
+    required this.remoteId,
+    required this.at,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['account_id'] = Variable<String>(accountId);
+    map['remote_id'] = Variable<String>(remoteId);
+    map['at'] = Variable<int>(at);
+    return map;
+  }
+
+  PendingScrobblesCompanion toCompanion(bool nullToAbsent) {
+    return PendingScrobblesCompanion(
+      id: Value(id),
+      accountId: Value(accountId),
+      remoteId: Value(remoteId),
+      at: Value(at),
+    );
+  }
+
+  factory PendingScrobble.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PendingScrobble(
+      id: serializer.fromJson<int>(json['id']),
+      accountId: serializer.fromJson<String>(json['accountId']),
+      remoteId: serializer.fromJson<String>(json['remoteId']),
+      at: serializer.fromJson<int>(json['at']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'accountId': serializer.toJson<String>(accountId),
+      'remoteId': serializer.toJson<String>(remoteId),
+      'at': serializer.toJson<int>(at),
+    };
+  }
+
+  PendingScrobble copyWith({
+    int? id,
+    String? accountId,
+    String? remoteId,
+    int? at,
+  }) => PendingScrobble(
+    id: id ?? this.id,
+    accountId: accountId ?? this.accountId,
+    remoteId: remoteId ?? this.remoteId,
+    at: at ?? this.at,
+  );
+  PendingScrobble copyWithCompanion(PendingScrobblesCompanion data) {
+    return PendingScrobble(
+      id: data.id.present ? data.id.value : this.id,
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
+      at: data.at.present ? data.at.value : this.at,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PendingScrobble(')
+          ..write('id: $id, ')
+          ..write('accountId: $accountId, ')
+          ..write('remoteId: $remoteId, ')
+          ..write('at: $at')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, accountId, remoteId, at);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PendingScrobble &&
+          other.id == this.id &&
+          other.accountId == this.accountId &&
+          other.remoteId == this.remoteId &&
+          other.at == this.at);
+}
+
+class PendingScrobblesCompanion extends UpdateCompanion<PendingScrobble> {
+  final Value<int> id;
+  final Value<String> accountId;
+  final Value<String> remoteId;
+  final Value<int> at;
+  const PendingScrobblesCompanion({
+    this.id = const Value.absent(),
+    this.accountId = const Value.absent(),
+    this.remoteId = const Value.absent(),
+    this.at = const Value.absent(),
+  });
+  PendingScrobblesCompanion.insert({
+    this.id = const Value.absent(),
+    required String accountId,
+    required String remoteId,
+    required int at,
+  }) : accountId = Value(accountId),
+       remoteId = Value(remoteId),
+       at = Value(at);
+  static Insertable<PendingScrobble> custom({
+    Expression<int>? id,
+    Expression<String>? accountId,
+    Expression<String>? remoteId,
+    Expression<int>? at,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (accountId != null) 'account_id': accountId,
+      if (remoteId != null) 'remote_id': remoteId,
+      if (at != null) 'at': at,
+    });
+  }
+
+  PendingScrobblesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? accountId,
+    Value<String>? remoteId,
+    Value<int>? at,
+  }) {
+    return PendingScrobblesCompanion(
+      id: id ?? this.id,
+      accountId: accountId ?? this.accountId,
+      remoteId: remoteId ?? this.remoteId,
+      at: at ?? this.at,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
+    }
+    if (at.present) {
+      map['at'] = Variable<int>(at.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PendingScrobblesCompanion(')
+          ..write('id: $id, ')
+          ..write('accountId: $accountId, ')
+          ..write('remoteId: $remoteId, ')
+          ..write('at: $at')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LibraryDb extends GeneratedDatabase {
   _$LibraryDb(QueryExecutor e) : super(e);
   $LibraryDbManager get managers => $LibraryDbManager(this);
@@ -2134,6 +2881,10 @@ abstract class _$LibraryDb extends GeneratedDatabase {
   late final $PlayCountsTable playCounts = $PlayCountsTable(this);
   late final $LoudnessTable loudness = $LoudnessTable(this);
   late final $AccountRowsTable accountRows = $AccountRowsTable(this);
+  late final $OfflineTable offline = $OfflineTable(this);
+  late final $PendingScrobblesTable pendingScrobbles = $PendingScrobblesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2143,6 +2894,8 @@ abstract class _$LibraryDb extends GeneratedDatabase {
     playCounts,
     loudness,
     accountRows,
+    offline,
+    pendingScrobbles,
   ];
 }
 
@@ -3244,6 +3997,435 @@ typedef $$AccountRowsTableProcessedTableManager =
       AccountRow,
       PrefetchHooks Function()
     >;
+typedef $$OfflineTableCreateCompanionBuilder = OfflineCompanion Function({
+  required String trackPath,
+  Value<String?> filePath,
+  Value<int> size,
+  required int addedAt,
+  required String reason,
+  required String state,
+  Value<int> failures,
+  Value<int> rowid,
+});
+typedef $$OfflineTableUpdateCompanionBuilder = OfflineCompanion Function({
+  Value<String> trackPath,
+  Value<String?> filePath,
+  Value<int> size,
+  Value<int> addedAt,
+  Value<String> reason,
+  Value<String> state,
+  Value<int> failures,
+  Value<int> rowid,
+});
+
+class $$OfflineTableFilterComposer
+    extends Composer<_$LibraryDb, $OfflineTable> {
+  $$OfflineTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get trackPath => $composableBuilder(
+    column: $table.trackPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get filePath => $composableBuilder(
+    column: $table.filePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get failures => $composableBuilder(
+    column: $table.failures,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OfflineTableOrderingComposer
+    extends Composer<_$LibraryDb, $OfflineTable> {
+  $$OfflineTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get trackPath => $composableBuilder(
+    column: $table.trackPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get filePath => $composableBuilder(
+    column: $table.filePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get failures => $composableBuilder(
+    column: $table.failures,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OfflineTableAnnotationComposer
+    extends Composer<_$LibraryDb, $OfflineTable> {
+  $$OfflineTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get trackPath =>
+      $composableBuilder(column: $table.trackPath, builder: (column) => column);
+
+  GeneratedColumn<String> get filePath =>
+      $composableBuilder(column: $table.filePath, builder: (column) => column);
+
+  GeneratedColumn<int> get size =>
+      $composableBuilder(column: $table.size, builder: (column) => column);
+
+  GeneratedColumn<int> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<int> get failures =>
+      $composableBuilder(column: $table.failures, builder: (column) => column);
+}
+
+class $$OfflineTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDb,
+          $OfflineTable,
+          OfflineRow,
+          $$OfflineTableFilterComposer,
+          $$OfflineTableOrderingComposer,
+          $$OfflineTableAnnotationComposer,
+          $$OfflineTableCreateCompanionBuilder,
+          $$OfflineTableUpdateCompanionBuilder,
+          (OfflineRow, BaseReferences<_$LibraryDb, $OfflineTable, OfflineRow>),
+          OfflineRow,
+          PrefetchHooks Function()
+        > {
+  $$OfflineTableTableManager(_$LibraryDb db, $OfflineTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OfflineTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OfflineTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OfflineTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> trackPath = const Value.absent(),
+                Value<String?> filePath = const Value.absent(),
+                Value<int> size = const Value.absent(),
+                Value<int> addedAt = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<int> failures = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OfflineCompanion(
+                trackPath: trackPath,
+                filePath: filePath,
+                size: size,
+                addedAt: addedAt,
+                reason: reason,
+                state: state,
+                failures: failures,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String trackPath,
+                Value<String?> filePath = const Value.absent(),
+                Value<int> size = const Value.absent(),
+                required int addedAt,
+                required String reason,
+                required String state,
+                Value<int> failures = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OfflineCompanion.insert(
+                trackPath: trackPath,
+                filePath: filePath,
+                size: size,
+                addedAt: addedAt,
+                reason: reason,
+                state: state,
+                failures: failures,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$OfflineTable, OfflineRow>(table),
+                  BaseReferences<_$LibraryDb, $OfflineTable, OfflineRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OfflineTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDb,
+      $OfflineTable,
+      OfflineRow,
+      $$OfflineTableFilterComposer,
+      $$OfflineTableOrderingComposer,
+      $$OfflineTableAnnotationComposer,
+      $$OfflineTableCreateCompanionBuilder,
+      $$OfflineTableUpdateCompanionBuilder,
+      (OfflineRow, BaseReferences<_$LibraryDb, $OfflineTable, OfflineRow>),
+      OfflineRow,
+      PrefetchHooks Function()
+    >;
+typedef $$PendingScrobblesTableCreateCompanionBuilder =
+    PendingScrobblesCompanion Function({
+      Value<int> id,
+      required String accountId,
+      required String remoteId,
+      required int at,
+    });
+typedef $$PendingScrobblesTableUpdateCompanionBuilder =
+    PendingScrobblesCompanion Function({
+      Value<int> id,
+      Value<String> accountId,
+      Value<String> remoteId,
+      Value<int> at,
+    });
+
+class $$PendingScrobblesTableFilterComposer
+    extends Composer<_$LibraryDb, $PendingScrobblesTable> {
+  $$PendingScrobblesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PendingScrobblesTableOrderingComposer
+    extends Composer<_$LibraryDb, $PendingScrobblesTable> {
+  $$PendingScrobblesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PendingScrobblesTableAnnotationComposer
+    extends Composer<_$LibraryDb, $PendingScrobblesTable> {
+  $$PendingScrobblesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get accountId =>
+      $composableBuilder(column: $table.accountId, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
+
+  GeneratedColumn<int> get at =>
+      $composableBuilder(column: $table.at, builder: (column) => column);
+}
+
+class $$PendingScrobblesTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDb,
+          $PendingScrobblesTable,
+          PendingScrobble,
+          $$PendingScrobblesTableFilterComposer,
+          $$PendingScrobblesTableOrderingComposer,
+          $$PendingScrobblesTableAnnotationComposer,
+          $$PendingScrobblesTableCreateCompanionBuilder,
+          $$PendingScrobblesTableUpdateCompanionBuilder,
+          (
+            PendingScrobble,
+            BaseReferences<
+              _$LibraryDb,
+              $PendingScrobblesTable,
+              PendingScrobble
+            >,
+          ),
+          PendingScrobble,
+          PrefetchHooks Function()
+        > {
+  $$PendingScrobblesTableTableManager(
+    _$LibraryDb db,
+    $PendingScrobblesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PendingScrobblesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PendingScrobblesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PendingScrobblesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> accountId = const Value.absent(),
+                Value<String> remoteId = const Value.absent(),
+                Value<int> at = const Value.absent(),
+              }) => PendingScrobblesCompanion(
+                id: id,
+                accountId: accountId,
+                remoteId: remoteId,
+                at: at,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String accountId,
+                required String remoteId,
+                required int at,
+              }) => PendingScrobblesCompanion.insert(
+                id: id,
+                accountId: accountId,
+                remoteId: remoteId,
+                at: at,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PendingScrobblesTable, PendingScrobble>(table),
+                  BaseReferences<
+                    _$LibraryDb,
+                    $PendingScrobblesTable,
+                    PendingScrobble
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PendingScrobblesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDb,
+      $PendingScrobblesTable,
+      PendingScrobble,
+      $$PendingScrobblesTableFilterComposer,
+      $$PendingScrobblesTableOrderingComposer,
+      $$PendingScrobblesTableAnnotationComposer,
+      $$PendingScrobblesTableCreateCompanionBuilder,
+      $$PendingScrobblesTableUpdateCompanionBuilder,
+      (
+        PendingScrobble,
+        BaseReferences<_$LibraryDb, $PendingScrobblesTable, PendingScrobble>,
+      ),
+      PendingScrobble,
+      PrefetchHooks Function()
+    >;
 
 class $LibraryDbManager {
   final _$LibraryDb _db;
@@ -3256,4 +4438,8 @@ class $LibraryDbManager {
       $$LoudnessTableTableManager(_db, _db.loudness);
   $$AccountRowsTableTableManager get accountRows =>
       $$AccountRowsTableTableManager(_db, _db.accountRows);
+  $$OfflineTableTableManager get offline =>
+      $$OfflineTableTableManager(_db, _db.offline);
+  $$PendingScrobblesTableTableManager get pendingScrobbles =>
+      $$PendingScrobblesTableTableManager(_db, _db.pendingScrobbles);
 }

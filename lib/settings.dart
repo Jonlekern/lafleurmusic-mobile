@@ -21,6 +21,7 @@ class AppSettings {
     this.equalVolume = false,
     this.crossfade = false,
     this.crossfadeSeconds = 5,
+    this.storageLimitBytes = defaultStorageLimitBytes,
   }) : equalizer = equalizer ?? Equalizer.named('flat');
   Equalizer equalizer;
   bool artistGrid; // vue Artistes : grille de photos (sinon liste)
@@ -37,6 +38,10 @@ class AppSettings {
   bool equalVolume; // tous les morceaux au même niveau sonore
   bool crossfade; // fondu enchaîné
   int crossfadeSeconds; // 1 à 10 s
+  int
+  storageLimitBytes; // place maximale des copies hors ligne (bornes : l'écran)
+
+  static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
 
   static Future<AppSettings> load(File f) async {
     try {
@@ -68,6 +73,11 @@ class AppSettings {
           crossfadeSeconds: j['crossfadeSeconds'] is int
               ? (j['crossfadeSeconds']! as int).clamp(1, 10)
               : 5,
+          storageLimitBytes:
+              j['storageLimitBytes'] is int &&
+                  (j['storageLimitBytes']! as int) > 0
+              ? j['storageLimitBytes']! as int
+              : defaultStorageLimitBytes,
         );
       }
     } on Object {
@@ -100,6 +110,7 @@ class AppSettings {
         'equalVolume': equalVolume,
         'crossfade': crossfade,
         'crossfadeSeconds': crossfadeSeconds,
+        'storageLimitBytes': storageLimitBytes,
       }),
     );
     await tmp.rename(f.path);

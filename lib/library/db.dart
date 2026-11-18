@@ -65,17 +65,167 @@ class AccountRows extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [Tracks, PlayCounts, Loudness, AccountRows])
+/// Copies gardées hors ligne : une ligne par morceau de serveur (clé = Tracks.path).
+@DataClassName('OfflineRow')
+class Offline extends Table {
+  TextColumn get trackPath => text()();
+  TextColumn get filePath =>
+      text().nullable()(); // relatif à la racine LAFLEURMUSIC
+  IntColumn get size => integer().withDefault(const Constant(0))();
+  IntColumn get addedAt => integer()(); // ms
+  TextColumn get reason => text()(); // OfflineReason.name
+  TextColumn get state => text()(); // OfflineState.name
+  IntColumn get failures => integer().withDefault(const Constant(0))();
+  @override
+  Set<Column> get primaryKey => {trackPath};
+}
+
+/// Écoutes faites hors ligne, à envoyer au serveur (scrobble) au retour du réseau.
+@DataClassName('PendingScrobble')
+class PendingScrobbles extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get accountId => text()();
+  TextColumn get remoteId => text()();
+  IntColumn get at => integer()(); // ms
+}
+
+@DriftDatabase(
+  tables: [
+    Tracks,
+    PlayCounts,
+    Loudness,
+    AccountRows,
+    Offline,
+    PendingScrobbles,
+  ],
+)
 class LibraryDb extends _$LibraryDb {
   LibraryDb(super.e);
 
-  // Base neuve du téléphone : pas de migration depuis le Mac.
+  // v2 : copies hors ligne et écoutes en attente.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
-  MigrationStrategy get migration =>
-      MigrationStrategy(onCreate: (m) => m.createAll());
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable(offline);
+        await m.createTable(pendingScrobbles);
+      }
+    },
+  );
+
+  /// Met en file les morceaux [trackPaths] ; ne rétrograde jamais `user` en `top100`.
+  /// Une copie déjà faite reste ; une copie abandonnée repart à zéro.
+  Future<void> queueOffline(List<String> trackPaths, OfflineReason reason) =>
+      transaction(() async {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        for (final p in trackPaths) {
+          final old = await offlineOf(p);
+          if (old == null) {
+            await into(offline).insert(
+              OfflineCompanion.insert(
+                trackPath: p,
+                addedAt: now,
+                reason: reason.name,
+                state: OfflineState.queued.name,
+              ),
+            );
+            continue;
+          }
+          final keepUser = old.reason == OfflineReason.user.name;
+          final failed = old.state == OfflineState.failed.name;
+          await (update(offline)..where((o) => o.trackPath.equals(p))).write(
+            OfflineCompanion(
+              reason: Value(keepUser ? old.reason : reason.name),
+              state: failed
+                  ? Value(OfflineState.queued.name)
+                  : const Value.absent(),
+              failures: failed ? const Value(0) : const Value.absent(),
+            ),
+          );
+        }
+      });
+
+  /// Le plus ancien morceau en attente (moins de 3 échecs).
+  Future<OfflineRow?> nextQueued() =>
+      (select(offline)
+            ..where(
+              (o) =>
+                  o.state.equals(OfflineState.queued.name) &
+                  o.failures.isSmallerThanValue(3),
+            )
+            ..orderBy([
+              (o) => OrderingTerm.asc(o.addedAt),
+              (o) => OrderingTerm.asc(o.trackPath),
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
+  Future<void> markOfflineDone(String trackPath, String filePath, int size) =>
+      (update(offline)..where((o) => o.trackPath.equals(trackPath))).write(
+        OfflineCompanion(
+          filePath: Value(filePath),
+          size: Value(size),
+          state: Value(OfflineState.done.name),
+        ),
+      );
+
+  /// Un échec de plus ; au 3e le morceau passe en `failed`.
+  Future<void> markOfflineFailed(String trackPath) => customUpdate(
+    'UPDATE offline SET failures = failures + 1, '
+    "state = CASE WHEN failures + 1 >= 3 THEN 'failed' ELSE state END "
+    'WHERE track_path = ?',
+    variables: [Variable(trackPath)],
+    updates: {offline},
+  );
+
+  Future<void> removeOffline(List<String> trackPaths) => transaction(() async {
+    for (var i = 0; i < trackPaths.length; i += 500) {
+      final chunk = trackPaths.skip(i).take(500).toList();
+      await (delete(offline)..where((o) => o.trackPath.isIn(chunk))).go();
+    }
+  });
+
+  Stream<Map<String, OfflineRow>> watchOffline() =>
+      select(offline)
+          .watch()
+          .map((rows) => {for (final r in rows) r.trackPath: r});
+
+  Future<OfflineRow?> offlineOf(String trackPath) => (select(
+    offline,
+  )..where((o) => o.trackPath.equals(trackPath))).getSingleOrNull();
+
+  /// Octets des copies terminées.
+  Future<int> offlineBytes() async {
+    final total = offline.size.sum();
+    final r =
+        await (selectOnly(offline)
+              ..addColumns([total])
+              ..where(offline.state.equals(OfflineState.done.name)))
+            .getSingle();
+    return r.read(total) ?? 0;
+  }
+
+  Future<void> addPending(String accountId, String remoteId, DateTime at) =>
+      into(pendingScrobbles).insert(
+        PendingScrobblesCompanion.insert(
+          accountId: accountId,
+          remoteId: remoteId,
+          at: at.millisecondsSinceEpoch,
+        ),
+      );
+
+  Future<List<PendingScrobble>> pending(String accountId) =>
+      (select(pendingScrobbles)
+            ..where((p) => p.accountId.equals(accountId))
+            ..orderBy([(p) => OrderingTerm.asc(p.id)]))
+          .get();
+
+  Future<void> deletePending(List<int> ids) =>
+      (delete(pendingScrobbles)..where((p) => p.id.isIn(ids))).go();
 
   Track _fromRow(TrackRow r) => Track(
     id: r.id,
