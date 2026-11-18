@@ -17,9 +17,14 @@ void main() {
   late List<MethodCall> calls;
   late Future<Object?> Function(MethodCall) native;
 
+  Future<void> Function()? save;
+
   ChannelDevice device({bool ios = false}) => ChannelDevice(
     settings: settings,
-    saveSettings: () async => saves++,
+    saveSettings: () async {
+      saves++;
+      await save?.call();
+    },
     channel: ch,
     ios: ios,
   );
@@ -28,6 +33,7 @@ void main() {
     tmp = Directory.systemTemp.createTempSync('dev');
     settings = AppSettings();
     saves = 0;
+    save = null;
     calls = [];
     native = (c) async => c.method == 'defaultRoot' ? '${tmp.path}/def' : null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -201,6 +207,66 @@ void main() {
     calls.clear();
     expect(await device(ios: true).ensureAccess(readOthers: true), true);
     expect(calls, isEmpty);
+  });
+
+  test('commitFolder: a failed save changes nothing, native side untouched', () async {
+    final x = Directory('${tmp.path}/X')..createSync();
+    settings.musicFolder = x.path;
+    final d = device(ios: true);
+    native = (c) async => switch (c.method) {
+      'openBookmark' => {'path': x.path},
+      _ => null,
+    };
+    expect((await d.musicRoot()).path, x.path);
+    save = () async => throw const FileSystemException('disk full');
+    calls.clear();
+    await expectLater(
+      d.commitFolder(const PickedFolder('/new', 'Ym0=')),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(settings.musicFolder, x.path);
+    expect(calls.map((c) => c.method), isNot(contains('commitFolder')));
+    expect((await d.musicRoot()).path, x.path);
+  });
+
+  test('commitFolder: a native failure puts the old choice back, saved', () async {
+    settings.musicFolder = 'old';
+    native = (c) async => switch (c.method) {
+      'openBookmark' => {'path': '${tmp.path}/old'},
+      'commitFolder' => throw PlatformException(code: 'no_candidate'),
+      _ => '${tmp.path}/def',
+    };
+    final d = device(ios: true);
+    await expectLater(
+      d.commitFolder(const PickedFolder('/new', 'Ym0=')),
+      throwsA(isA<PlatformException>()),
+    );
+    expect(settings.musicFolder, 'old');
+    expect(saves, 2, reason: 'new value saved, then the old one again');
+    expect((await d.musicRoot()).path, '${tmp.path}/old');
+  });
+
+  test('ensureAccess: one native request at a time, busy waits', () async {
+    var inFlight = 0, most = 0, busyOnce = true;
+    native = (c) async {
+      if (c.method != 'ensureAccess') return null;
+      if (busyOnce) {
+        busyOnce = false;
+        throw PlatformException(code: 'busy');
+      }
+      inFlight++;
+      most = inFlight > most ? inFlight : most;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      inFlight--;
+      return true;
+    };
+    final d = device();
+    final r = await Future.wait([
+      d.ensureAccess(readOthers: true),
+      d.ensureAccess(),
+    ]);
+    expect(r, [true, true]);
+    expect(most, 1);
   });
 
   group('docs:// keys', () {

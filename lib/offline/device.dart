@@ -11,7 +11,8 @@ const docsScheme = 'docs://';
 
 /// Ce que l'appli demande au téléphone : dossier des copies, sélecteur, place libre.
 abstract class Device {
-  /// Le dossier choisi s'il est accessible, sinon le dossier par défaut (créé au besoin).
+  /// Le dossier choisi s'il est accessible, sinon le dossier par défaut (Android : peut-être
+  /// pas encore créé, faute de droit d'écriture ; le premier téléchargement le crée).
   Future<Directory> musicRoot();
 
   /// Sélecteur de dossier du système. Renvoie un candidat (sans changer de dossier),
@@ -29,7 +30,7 @@ abstract class Device {
   /// [musicRoot] retombe alors sur le dossier par défaut.
   Future<bool> rootReachable();
 
-  /// Android : demande les droits de stockage (écriture avant l'API 29 ; lecture des
+  /// Android : demande les droits de stockage (écriture jusqu'à l'API 29 ; lecture des
   /// autres fichiers si [readOthers]). Vrai si accordés ou inutiles. iOS : toujours vrai.
   Future<bool> ensureAccess({bool readOthers = false});
 
@@ -144,10 +145,27 @@ class ChannelDevice implements Device {
 
   @override
   Future<void> commitFolder(PickedFolder c) async {
-    // iOS : l'accès du candidat passe en service (l'ancien se ferme)
-    if (_ios) await _ch.invokeMethod<void>('commitFolder');
+    // enregistré d'abord ; une erreur (disque, côté natif) remet l'ancien choix
+    final before = settings.musicFolder;
     settings.musicFolder = c.bookmark ?? c.path;
-    await saveSettings();
+    try {
+      await saveSettings();
+    } on Object {
+      settings.musicFolder = before;
+      rethrow;
+    }
+    try {
+      // iOS : l'accès du candidat passe en service (l'ancien se ferme)
+      if (_ios) await _ch.invokeMethod<void>('commitFolder');
+    } on Object {
+      settings.musicFolder = before;
+      try {
+        await saveSettings();
+      } on Object {
+        // le fichier garde le nouveau choix ; relu au prochain lancement, il retombe au défaut s'il manque
+      }
+      rethrow;
+    }
     _chosen = Directory(c.path);
     _resolving = Future.value();
   }
@@ -157,13 +175,40 @@ class ChannelDevice implements Device {
     if (_ios) await _ch.invokeMethod<void>('releaseCandidate');
   }
 
+  Future<bool>? _asking; // une seule demande native à la fois
+
   @override
   Future<bool> ensureAccess({bool readOthers = false}) async {
     if (_ios) return true;
-    return await _ch.invokeMethod<bool>('ensureAccess', {
-          'readOthers': readOthers,
-        }) ??
-        false;
+    // une demande en cours (l'autre jeu de droits) : on attend sa réponse, puis on demande
+    while (_asking != null) {
+      try {
+        await _asking;
+      } on Object {
+        // son erreur est la sienne
+      }
+    }
+    final f = _asking = _ask(readOthers);
+    try {
+      return await f;
+    } finally {
+      if (identical(_asking, f)) _asking = null;
+    }
+  }
+
+  /// « busy » : une demande d'avant (redémarrage à chaud) attend encore sa réponse.
+  Future<bool> _ask(bool readOthers) async {
+    for (var i = 0; ; i++) {
+      try {
+        return await _ch.invokeMethod<bool>('ensureAccess', {
+              'readOthers': readOthers,
+            }) ??
+            false;
+      } on PlatformException catch (e) {
+        if (e.code != 'busy' || i >= 400) rethrow;
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+    }
   }
 
   // Documents = le parent du dossier par défaut (Documents/LAFLEURMUSIC)
