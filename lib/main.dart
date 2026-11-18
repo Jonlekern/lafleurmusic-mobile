@@ -15,8 +15,11 @@ import 'library/db.dart';
 import 'library/play_counter.dart';
 import 'player/equalizer.dart';
 import 'player/loudness.dart';
+import 'player/media_resolver.dart';
 import 'player/player.dart';
 import 'settings.dart';
+import 'sources/accounts.dart';
+import 'sources/secret_store.dart';
 import 'theme/lafleur_theme.dart';
 import 'ui/library_screen.dart';
 
@@ -31,7 +34,20 @@ Future<void> main() async {
   // réglages (égaliseur) : rechargés, appliqués tout de suite, enregistrés à chaque changement
   final settingsFile = File(p.join(support.path, 'settings.json'));
   final settings = await AppSettings.load(settingsFile);
-  final player = LafleurPlayer();
+  final db = LibraryDb(
+    NativeDatabase.createInBackground(
+      File(p.join(support.path, 'library.sqlite')),
+    ),
+  );
+  // morceaux du serveur : flux et pochettes avec les en-têtes du compte (une source par compte)
+  final resolver = MediaResolver(Accounts(db, SecureSecretStore()).source);
+  final covers = Covers(
+    cacheDir: Directory(p.join(support.path, 'covers')),
+    remote: remoteCovers(resolver, db.trackByPath),
+  );
+  final player = LafleurPlayer(resolver: resolver)
+    // écran verrouillé : la pochette du serveur en octets, jamais une URL
+    ..artworkOf = (t) async => (await covers.get(t.path, 600))?.readAsBytes();
   await player.setEqualizer(settings.equalizer);
   await player.setCrossfade(
     settings.crossfade ? settings.crossfadeSeconds : null,
@@ -49,11 +65,6 @@ Future<void> main() async {
     settings.artistGrid = artistGrid.value;
     settings.save(settingsFile);
   });
-  final db = LibraryDb(
-    NativeDatabase.createInBackground(
-      File(p.join(support.path, 'library.sqlite')),
-    ),
-  );
   // Volume égal : mesures gardées dans la base, allumé si on l'avait laissé allumé
   final loudness = LoudnessService(db, player)..enabled = settings.equalVolume;
   player.gainOf =
@@ -62,7 +73,8 @@ Future<void> main() async {
     LafleurApp(
       db: db,
       loudness: loudness,
-      covers: Covers(cacheDir: Directory(p.join(support.path, 'covers'))),
+      covers: covers,
+      resolver: resolver,
       player: player,
       equalizer: equalizer,
       artistGrid: artistGrid,
@@ -85,8 +97,10 @@ class LafleurApp extends StatefulWidget {
     required this.settings,
     required this.saveSettings,
     required this.loudness,
+    required this.resolver,
   });
   final LoudnessService loudness;
+  final MediaResolver resolver;
   final AppSettings settings;
   final VoidCallback saveSettings;
   final ValueNotifier<bool> artistGrid;
@@ -104,6 +118,8 @@ class _LafleurAppState extends State<LafleurApp> {
   late final PlayCounter _plays = PlayCounter(
     widget.player.state,
     widget.db,
+    sourceOf:
+        widget.resolver.source, // écoute d'un morceau du serveur → scrobble
   ); // Top 100
 
   @override

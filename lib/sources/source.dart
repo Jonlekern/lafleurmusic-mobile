@@ -91,3 +91,8 @@ abstract interface class MusicSource {
   Map<String, String> get headers;
   Future<void> scrobble(String songId, DateTime at);
 }
+
+/// A source reached over HTTP: its client also fetches the covers (same connection pool, mockable in tests).
+abstract interface class HttpSource {
+  http.Client get httpClient;
+}

@@ -40,11 +40,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final app = AppScope.of(context);
     _skipped ??= app.player.skipped.listen((path) {
       if (!mounted) return;
+      // morceau du serveur : son titre (le chemin n'est qu'une clé subsonic://)
+      final title =
+          app.player.queue?.order
+              .where((t) => t.path == path)
+              .firstOrNull
+              ?.title ??
+          p.basename(path);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: LafleurColors.bar,
           content: Text(
-            '${app.strings.fr ? 'Illisible, passé' : 'Unreadable, skipped'} : ${p.basename(path)}',
+            '${app.strings.fr ? 'Illisible, passé' : 'Unreadable, skipped'} : $title',
             style: const TextStyle(color: LafleurColors.text),
           ),
         ),

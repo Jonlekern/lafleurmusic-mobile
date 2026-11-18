@@ -18,7 +18,7 @@ class SubsonicException implements Exception {
   String toString() => 'SubsonicException(${code ?? '-'}): $message';
 }
 
-class SubsonicSource implements MusicSource {
+class SubsonicSource implements MusicSource, HttpSource {
   SubsonicSource({
     required this.accountId,
     required this._base,
@@ -50,6 +50,9 @@ class SubsonicSource implements MusicSource {
 
   @override
   Map<String, String> get headers => _headers;
+
+  @override
+  http.Client get httpClient => _client;
 
   Uri _uri(String method, [Map<String, String> params = const {}]) {
     final salt = _salt();

@@ -91,6 +91,72 @@ void main() {
     expect(await covers.get(track, 64), isNotNull);
   });
 
+  group('pochettes du serveur (subsonic://)', () {
+    late int downloads;
+    late Covers server;
+    late Uint8List? served;
+    setUp(() {
+      downloads = 0;
+      served = png(250);
+      server = Covers(
+        cacheDir: Directory('${dir.path}/cache'),
+        embedded: (p) async {
+          embeddedCalls++;
+          return null;
+        },
+        remote: (path, size) async {
+          downloads++;
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+          return served;
+        },
+      );
+    });
+
+    test('deux appels → un seul téléchargement, fichier en cache', () async {
+      final both = await Future.wait([
+        server.get('subsonic://acc1/s9', 300),
+        server.get('subsonic://acc1/s9', 300),
+      ]);
+      expect(downloads, 1);
+      expect(embeddedCalls, 0); // jamais TagLib sur une clé de serveur
+      final f = both.first!;
+      expect(f.existsSync(), isTrue);
+      expect(f.parent.path, '${dir.path}/cache');
+      expect(img.decodeJpg(f.readAsBytesSync())!.width, 300);
+      expect(red(f), greaterThan(200));
+      // relancement de l'appli : servi par le disque, sans réseau
+      final again = Covers(
+        cacheDir: Directory('${dir.path}/cache'),
+        remote: (_, _) async => fail('downloaded again'),
+      );
+      expect((await again.get('subsonic://acc1/s9', 300))!.path, f.path);
+    });
+
+    test('pas de pochette sur le serveur → null', () async {
+      served = null;
+      expect(await server.get('subsonic://acc1/s9', 64), isNull);
+    });
+
+    test('réseau coupé → null, et redemandé plus tard', () async {
+      var fail = true;
+      final flaky = Covers(
+        cacheDir: Directory('${dir.path}/cache'),
+        remote: (_, _) async {
+          if (fail) throw Exception('offline');
+          return png(10);
+        },
+      );
+      expect(await flaky.get('subsonic://acc1/s9', 64), isNull);
+      fail = false;
+      expect(await flaky.get('subsonic://acc1/s9', 64), isNotNull);
+    });
+
+    test('sans fonction remote : pas de pochette', () async {
+      expect(await covers.get('subsonic://acc1/s9', 64), isNull);
+      expect(embeddedCalls, 0);
+    });
+  });
+
   testWidgets('forget retire aussi l’image affichée du cache de Flutter', (
     tester,
   ) async {

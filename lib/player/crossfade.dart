@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:mpv_audio_kit/mpv_audio_kit.dart';
 
+import 'media_resolver.dart';
 import 'queue.dart';
 
 /// Quand commencer le fondu et comment croiser les volumes.
@@ -66,6 +67,9 @@ abstract interface class Deck {
 
 /// 2e lecteur mpv, créé au premier fondu.
 class MpvDeck implements Deck {
+  MpvDeck([MediaResolver? resolver])
+    : _resolver = resolver ?? MediaResolver.localOnly();
+  final MediaResolver _resolver;
   Player? _p;
   Player get _player => _p ??=
       Player(
@@ -82,8 +86,9 @@ class MpvDeck implements Deck {
 
   @override
   Future<void> play(String path) async {
+    final media = await _resolver.media(path);
     await _player.setVolume(0);
-    await _player.open(Media(path));
+    await _player.open(media);
   }
 
   @override

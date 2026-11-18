@@ -11,6 +11,9 @@ import 'package:path/path.dart' as p;
 
 typedef EmbeddedCover = Future<Uint8List?> Function(String trackPath);
 
+/// Cover of a server track (`subsonic://…`), fetched with the account headers.
+typedef RemoteCover = Future<Uint8List?> Function(String trackPath, int size);
+
 /// Pochette intégrée lue avec TagLib (dans un isolate).
 Future<Uint8List?> taglibCover(String path) => Isolate.run(() {
   final f = TagLibFile.open(path);
@@ -23,10 +26,12 @@ Future<Uint8List?> taglibCover(String path) => Isolate.run(() {
 });
 
 /// Pochettes réduites (64, 300, 600 px) en cache : image intégrée, sinon cover / folder / front.jpg du dossier.
+/// Morceau du serveur : téléchargée par [remote], même cache disque.
 class Covers {
-  Covers({required this.cacheDir, this.embedded = taglibCover});
+  Covers({required this.cacheDir, this.embedded = taglibCover, this.remote});
   final Directory cacheDir;
   final EmbeddedCover embedded;
+  final RemoteCover? remote;
 
   static const folderNames = [
     'cover.jpg',
@@ -43,8 +48,16 @@ class Covers {
   // Résultats en mémoire, « pas de pochette » compris : l'interface redemande la même image à chaque image.
   final _memo = <String, Future<File?>>{};
 
-  Future<File?> get(String trackPath, int size) =>
-      _memo.putIfAbsent('$size|$trackPath', () => _load(trackPath, size));
+  Future<File?> get(String trackPath, int size) {
+    final key = '$size|$trackPath';
+    return _memo.putIfAbsent(
+      key,
+      () => _load(trackPath, size).catchError((Object _) {
+        _memo.remove(key); // réseau coupé : on redemandera plus tard
+        return null;
+      }),
+    );
+  }
 
   /// Après une modification de pochette : la prochaine demande relit le fichier.
   void forget(String trackPath) {
@@ -59,8 +72,11 @@ class Covers {
   Future<File?> _load(String trackPath, int size) async {
     final cached = _cacheFile(trackPath, size);
     if (await cached.exists()) return cached;
-    Uint8List? bytes = await embedded(trackPath);
-    if (bytes == null || bytes.isEmpty) {
+    final remote = trackPath.startsWith('subsonic://');
+    Uint8List? bytes = remote
+        ? await this.remote?.call(trackPath, size)
+        : await embedded(trackPath);
+    if (!remote && (bytes == null || bytes.isEmpty)) {
       for (final name in folderNames) {
         final f = File(p.join(p.dirname(trackPath), name));
         if (await f.exists()) {
@@ -69,7 +85,7 @@ class Covers {
         }
       }
     }
-    if (bytes == null) return null;
+    if (bytes == null || bytes.isEmpty) return null;
     final src = bytes;
     final jpg = await Isolate.run(() {
       final image = img.decodeImage(src);

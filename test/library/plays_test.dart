@@ -6,6 +6,23 @@ import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/library/play_counter.dart';
 import 'package:lafleurmusic/player/player.dart';
+import 'package:lafleurmusic/sources/source.dart';
+
+class _ScrobbleSource implements MusicSource {
+  _ScrobbleSource(this.accountId, this.log, {this.fail = false});
+  @override
+  final String accountId;
+  final List<(String, String, DateTime)> log;
+  final bool fail;
+  @override
+  Future<void> scrobble(String songId, DateTime at) async {
+    if (fail) throw SourceNetworkException(Exception('offline'));
+    log.add((accountId, songId, at));
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
 
 Track t(String path, {bool missing = false, int ms = 300000}) => Track(
   path: path,
@@ -127,6 +144,69 @@ void main() {
       ctrl.add(s(t('/long'), 245, dur: 720));
       expect(await plays('/long'), 1);
     });
+    group('écoute d’un morceau du serveur → scrobble', () {
+      late List<(String, String, DateTime)> scrobbles;
+      late PlayCounter remote;
+      late StreamController<PlayerState> rctrl;
+      Track server(String song) => Track(
+        path: 'subsonic://acc1/$song',
+        accountId: 'acc1',
+        remoteId: song,
+        title: song,
+        artist: 'a',
+        album: 'A',
+        durationMs: 300000,
+        hasCover: false,
+        size: 1,
+      );
+      setUp(() {
+        scrobbles = [];
+        rctrl = StreamController<PlayerState>();
+        remote = PlayCounter(
+          rctrl.stream,
+          db,
+          now: () => DateTime(2026, 10, 17),
+          sourceOf: (id) async => _ScrobbleSource(id, scrobbles),
+        );
+      });
+      tearDown(() => remote.dispose());
+
+      test('à 50 % → scrobble une fois, avec l’id du serveur', () async {
+        rctrl
+          ..add(s(server('s9'), 10))
+          ..add(s(server('s9'), 150))
+          ..add(s(server('s9'), 200));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(scrobbles, [('acc1', 's9', DateTime(2026, 10, 17))]);
+      });
+
+      test('morceau local → pas de scrobble', () async {
+        rctrl
+          ..add(s(t('/a'), 10))
+          ..add(s(t('/a'), 180));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(scrobbles, isEmpty);
+      });
+
+      test('serveur injoignable → ignoré (file d’attente au plan 2)', () async {
+        final errors = <Object>[];
+        await runZonedGuarded(() async {
+          final c = StreamController<PlayerState>();
+          final failing = PlayCounter(
+            c.stream,
+            db,
+            sourceOf: (id) async => _ScrobbleSource(id, scrobbles, fail: true),
+          );
+          c
+            ..add(s(server('s1'), 10))
+            ..add(s(server('s1'), 200));
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await failing.dispose();
+        }, (e, _) => errors.add(e));
+        expect(errors, isEmpty);
+      });
+    });
+
     test('rejoué depuis le début → 2', () async {
       ctrl
         ..add(s(t('/a'), 5))

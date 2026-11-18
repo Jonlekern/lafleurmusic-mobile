@@ -1,16 +1,25 @@
 import 'dart:async';
 
+import '../player/media_resolver.dart';
 import '../player/player.dart';
+import '../sources/source.dart';
 import 'db.dart';
+import 'models.dart';
 
 /// Compte une écoute quand on a écouté la moitié du morceau ou 4 min, une fois par lecture.
+/// Morceau du serveur : l'écoute est aussi envoyée au serveur (scrobble) par [sourceOf].
 class PlayCounter {
-  PlayCounter(Stream<PlayerState> states, this.db, {DateTime Function()? now})
-    : _now = now ?? DateTime.now {
+  PlayCounter(
+    Stream<PlayerState> states,
+    this.db, {
+    DateTime Function()? now,
+    this.sourceOf,
+  }) : _now = now ?? DateTime.now {
     _sub = states.listen(_on);
   }
 
   final LibraryDb db;
+  final Future<MusicSource> Function(String accountId)? sourceOf;
   final DateTime Function() _now;
   late final StreamSubscription<PlayerState> _sub;
   String? _path;
@@ -42,7 +51,19 @@ class PlayCounter {
       _armed = true;
     } else if (_armed) {
       _counted = true;
-      unawaited(db.addPlay(t.path, _now()));
+      final at = _now();
+      unawaited(db.addPlay(t.path, at));
+      unawaited(_scrobble(t, at));
+    }
+  }
+
+  Future<void> _scrobble(Track t, DateTime at) async {
+    final key = parseRemoteKey(t.path), of = sourceOf;
+    if (key == null || of == null) return;
+    try {
+      await (await of(key.$1)).scrobble(key.$2, at);
+    } on Object {
+      // serveur injoignable : écoute perdue pour le serveur (file d'attente au plan 2) ; rien dans les journaux
     }
   }
 

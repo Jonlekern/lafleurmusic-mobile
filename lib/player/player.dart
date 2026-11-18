@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:async/async.dart' show StreamGroup;
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' hide Track;
@@ -8,6 +9,7 @@ import '../library/models.dart';
 import 'crossfade.dart';
 import 'eq_effects.dart';
 import 'equalizer.dart';
+import 'media_resolver.dart';
 import 'mpv_port.dart';
 import 'queue.dart';
 import 'skip_guard.dart';
@@ -91,8 +93,10 @@ abstract interface class PlayerController {
 
 /// Lecteur : la file d'attente (PlayQueue) décide de l'ordre, mpv joue la liste sans blanc.
 class LafleurPlayer implements PlayerController {
-  LafleurPlayer()
-    : _mpv = Player(configuration: const PlayerConfiguration(autoPlay: true)) {
+  /// [resolver] : comment ouvrir un morceau du serveur (sans lui, seulement les fichiers locaux).
+  LafleurPlayer({MediaResolver? resolver})
+    : _resolver = resolver ?? MediaResolver.localOnly(),
+      _mpv = Player(configuration: const PlayerConfiguration(autoPlay: true)) {
     _mpv.setGapless(Gapless.weak);
     // sortie audio fixe (48 kHz, float, stéréo) : mpv ne rouvre pas CoreAudio à chaque changement de format,
     // ce qui faisait planter mpv_audio_kit sur le Mac (44,1 kHz → 48 kHz)
@@ -101,16 +105,16 @@ class LafleurPlayer implements PlayerController {
     _mpv.setAudioChannels(Channels.stereo);
     _mpv.setReplayGain(const ReplayGainSettings(mode: ReplayGain.track));
     _mpv.setMediaSession(const MediaSession());
-    _sync = QueueSync<Track>(PlayerPort(_mpv), (t) => t.path);
+    _sync = QueueSync<Track>(PlayerPort(_mpv, _resolver), (t) => t.path);
     _subs.addAll([
       _mpv.stream.playlist.listen((p) async {
         final q = _queue;
         // nos propres changements : la file est déjà à jour
         if (_editing > 0) return;
-        if (p.index >= 0) _mpvIndex = p.index;
+        if (p.index >= 0) _ends.mpvIndex = p.index;
         if (q != null && p.index >= 0 && p.index != q.position) {
           await _sync.advanced(q, p.index); // mpv est passé au suivant
-          _mpvIndex = q.position;
+          _ends.mpvIndex = q.position;
           _queueChanged.add(null);
         }
         _emit();
@@ -124,30 +128,22 @@ class LafleurPlayer implements PlayerController {
       // Un événement « fin de fichier » par morceau, dans l'ordre de la liste mpv : la raison dit s'il a échoué.
       _mpv.stream.endFile.listen((e) {
         final q = _queue;
-        if (q == null || q.order.isEmpty) return;
-        final i = _mpvIndex.clamp(0, q.order.length - 1);
-        if (e.reason == MpvEndFileReason.error) {
-          switch (_guard.onError()) {
-            case SkipAction.warn:
-              _skipped.add(q.order[i].path); // illisible : mpv passe au suivant
-            case SkipAction.quiet:
-              break;
-            case SkipAction.stop:
-              _mpv.pause(); // 5 fichiers illisibles de suite : le NAS est sans doute tombé
-              _skipped.add(q.order[i].path);
-          }
-        } else if (e.reason == MpvEndFileReason.eof) {
-          _guard.onPlayed();
-        }
-        if (e.reason == MpvEndFileReason.eof ||
-            e.reason == MpvEndFileReason.error) {
-          _mpvIndex = q.repeat == Repeat.one ? i : (i + 1) % q.order.length;
-        }
+        if (q == null) return;
+        final r = _ends.ended(q, switch (e.reason) {
+          MpvEndFileReason.eof => FileEnd.eof,
+          MpvEndFileReason.error =>
+            FileEnd.error, // illisible, ou disparu du serveur (404)
+          _ => FileEnd.other,
+        });
+        if (r.stop) _mpv.pause(); // 5 échecs de suite : le NAS ou le serveur est sans doute tombé
+        // mpv passe au suivant
+        if (r.skipped case final t?) _skipped.add(t.path);
       }),
     ]);
   }
 
   final Player _mpv;
+  final MediaResolver _resolver;
   late final QueueSync<Track> _sync;
   int _editing = 0;
   final _queueChanged = StreamController<void>.broadcast();
@@ -165,7 +161,7 @@ class LafleurPlayer implements PlayerController {
     } finally {
       _editing--;
     }
-    _mpvIndex = q.position;
+    _ends.mpvIndex = q.position;
     _queueChanged.add(null);
     _emit();
     await _checkFade();
@@ -194,7 +190,7 @@ class LafleurPlayer implements PlayerController {
 
   // fondu enchaîné : un 2e lecteur joue le début du suivant, puis mpv reprend au même endroit
   int? _crossfade;
-  final _deck = MpvDeck();
+  late final _deck = MpvDeck(_resolver);
   late final _fader = Crossfader(
     deck: _deck,
     setMainVolume: _mpv.setVolume,
@@ -278,7 +274,7 @@ class LafleurPlayer implements PlayerController {
         } finally {
           _editing--;
         }
-        _mpvIndex = q.position;
+        _ends.mpvIndex = q.position;
         _queueChanged.add(null);
         _emit();
         if (_fader.aborted) return;
@@ -328,8 +324,10 @@ class LafleurPlayer implements PlayerController {
   final _skipped = StreamController<String>.broadcast();
   final _rand = Random();
   PlayQueue<Track>? _queue;
-  final _guard = SkipGuard();
-  int _mpvIndex = 0; // morceau que mpv joue ou essaie d'ouvrir
+  final _ends =
+      EndFiles<
+        Track
+      >(); // _ends.mpvIndex : morceau que mpv joue ou essaie d'ouvrir
   PlayerState _last = const PlayerState();
 
   @override
@@ -341,10 +339,35 @@ class LafleurPlayer implements PlayerController {
   @override
   PlayQueue<Track>? get queue => _queue;
 
+  /// Pochette de l'écran verrouillé pour un morceau du serveur, en octets (donnée par Covers dans main).
+  Future<Uint8List?> Function(Track track)? artworkOf;
+  String? _sessionPath;
+
+  /// Écran verrouillé : morceau du serveur → tags de la bibliothèque et pochette en octets ; fichier local → mpv.
+  Future<void> _updateSession(Track t) async {
+    if (t.path == _sessionPath) return;
+    final wasRemote =
+        _sessionPath != null && parseRemoteKey(_sessionPath!) != null;
+    _sessionPath = t.path;
+    final remote = parseRemoteKey(t.path) != null;
+    if (!remote && !wasRemote) return; // déjà la session par défaut
+    try {
+      await _mpv.setMediaSession(sessionFor(t, null));
+      if (!remote) return;
+      final art = await artworkOf?.call(t);
+      // passé à un autre morceau entre-temps : rien à montrer
+      if (art == null || _sessionPath != t.path) return;
+      await _mpv.setMediaSession(sessionFor(t, art));
+    } on Object {
+      // pochette introuvable ou lecteur fermé : l'écran verrouillé garde ce qu'il a
+    }
+  }
+
   void _emit({Duration? position, Duration? duration, bool? playing}) {
     final track = _queue?.current;
     // nouveau morceau : on n'hérite pas de la position et de la durée de l'ancien
     final same = track?.path == _last.track?.path;
+    if (track != null && !same) unawaited(_updateSession(track));
     _last = PlayerState(
       track: track,
       position: position ?? (same ? _last.position : Duration.zero),
@@ -357,7 +380,7 @@ class LafleurPlayer implements PlayerController {
   Future<void> _open({Duration? at}) async {
     final q = _queue;
     if (q == null || q.order.isEmpty) return;
-    _mpvIndex = q.position;
+    _ends.mpvIndex = q.position;
     _editing++;
     try {
       await _sync.open(q);
@@ -424,7 +447,7 @@ class LafleurPlayer implements PlayerController {
     if (q.position == before) {
       await _mpv.seek(Duration.zero);
     } else {
-      _mpvIndex = q.position;
+      _ends.mpvIndex = q.position;
       await _mpv.jump(q.position);
     }
     _emit();

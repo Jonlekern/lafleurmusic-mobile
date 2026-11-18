@@ -1,5 +1,6 @@
 import 'package:mpv_audio_kit/mpv_audio_kit.dart';
 
+import 'media_resolver.dart';
 import 'queue.dart';
 
 /// La liste de lecture de mpv, vue par l'appli. [move] prend la place **finale** du morceau.
@@ -13,20 +14,24 @@ abstract interface class MpvPort {
 }
 
 /// mpv réel. On tient la longueur de la liste nous-mêmes : l'appli est seule à la modifier.
+/// Chaque chemin passe par [resolver] (fichier local, ou flux du serveur avec les en-têtes du compte).
 class PlayerPort implements MpvPort {
-  PlayerPort(this.player);
+  PlayerPort(this.player, [MediaResolver? resolver])
+    : resolver = resolver ?? MediaResolver.localOnly();
   final Player player;
+  final MediaResolver resolver;
   int _length = 0;
 
   @override
   Future<void> openAll(List<String> paths, int index) async {
+    final media = await Future.wait(paths.map(resolver.media));
     _length = paths.length;
-    await player.openAll([for (final p in paths) Media(p)], index: index);
+    await player.openAll(media, index: index);
   }
 
   @override
   Future<void> insertAt(int at, String path) async {
-    await player.add(Media(path)); // ajouté à la fin…
+    await player.add(await resolver.media(path)); // ajouté à la fin…
     _length++;
     if (at < _length - 1) await player.move(_length - 1, at); // …puis remonté
   }
@@ -48,8 +53,8 @@ class PlayerPort implements MpvPort {
   Future<void> jump(int index) => player.jump(index);
 
   @override
-  Future<void> replace(int index, String path) =>
-      player.replace(index, Media(path));
+  Future<void> replace(int index, String path) async =>
+      player.replace(index, await resolver.media(path));
 }
 
 /// Applique chaque changement à la [PlayQueue] **et** à mpv, sans rouvrir la liste (pas de coupure).
