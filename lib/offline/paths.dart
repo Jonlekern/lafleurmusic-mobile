@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 
 const _maxNameBytes = 120;
 
@@ -84,3 +87,12 @@ bool isPartialName(String path) =>
 
 /// L'ancien nom du fichier en cours de [path], à effacer aussi.
 String legacyPartialPath(String path) => '$path$_legacyPartSuffix';
+
+/// iOS : un fichier qu'iCloud Drive a mis de côté devient `.nom.icloud` à côté ; il
+/// revient tout seul à l'ouverture (avec le réseau).
+String icloudPlaceholder(String path) =>
+    p.join(p.dirname(path), '.${p.basename(path)}.icloud');
+
+/// Le fichier est là, ou iCloud l'a seulement mis de côté : il n'est pas perdu.
+bool fileOrPlaceholderExists(String path) =>
+    File(path).existsSync() || File(icloudPlaceholder(path)).existsSync();

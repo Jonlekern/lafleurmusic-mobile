@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/offline/paths.dart';
@@ -142,5 +143,17 @@ void main() {
       expect(isPartialName('A/lafleur-part.mp3'), isFalse);
       expect(isPartialName('A/x.lafleur-part.y.mp3'), isFalse);
     });
+  });
+
+  test('fileOrPlaceholderExists: the file, or the iCloud placeholder of it', () {
+    final tmp = Directory.systemTemp.createTempSync('ph');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final f = '${tmp.path}/01 Song.mp3';
+    expect(fileOrPlaceholderExists(f), isFalse);
+    File('${tmp.path}/.01 Song.mp3.icloud').createSync();
+    expect(fileOrPlaceholderExists(f), isTrue);
+    File(f).createSync();
+    expect(fileOrPlaceholderExists(f), isTrue);
+    expect(icloudPlaceholder(f), '${tmp.path}/.01 Song.mp3.icloud');
   });
 }
