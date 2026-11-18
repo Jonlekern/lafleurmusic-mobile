@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' show MpvAudioKit;
 import 'package:path/path.dart' as p;
@@ -21,7 +21,7 @@ import 'settings.dart';
 import 'sources/accounts.dart';
 import 'sources/secret_store.dart';
 import 'theme/lafleur_theme.dart';
-import 'ui/library_screen.dart';
+import 'ui/phone/phone_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +40,8 @@ Future<void> main() async {
     ),
   );
   // morceaux du serveur : flux et pochettes avec les en-têtes du compte (une source par compte)
-  final resolver = MediaResolver(Accounts(db, SecureSecretStore()).source);
+  final accounts = Accounts(db, SecureSecretStore());
+  final resolver = MediaResolver(accounts.source);
   final covers = Covers(
     cacheDir: Directory(p.join(support.path, 'covers')),
     remote: remoteCovers(resolver, db.trackByPath),
@@ -76,6 +77,7 @@ Future<void> main() async {
       loudness: loudness,
       covers: covers,
       resolver: resolver,
+      accounts: accounts,
       player: player,
       equalizer: equalizer,
       artistGrid: artistGrid,
@@ -99,9 +101,12 @@ class LafleurApp extends StatefulWidget {
     required this.saveSettings,
     required this.loudness,
     required this.resolver,
+    required this.accounts,
   });
   final LoudnessService loudness;
   final MediaResolver resolver;
+  // le même pour le lecteur (MediaResolver) et les écrans
+  final Accounts accounts;
   final AppSettings settings;
   final VoidCallback saveSettings;
   final ValueNotifier<bool> artistGrid;
@@ -140,11 +145,12 @@ class _LafleurAppState extends State<LafleurApp> {
     settings: widget.settings,
     saveSettings: widget.saveSettings,
     loudness: widget.loudness,
+    accounts: widget.accounts,
     child: MaterialApp(
       title: 'LAFLEURMUSIC',
       debugShowCheckedModeBanner: false,
       theme: lafleurTheme(),
-      home: const LibraryScreen(),
+      home: const AdaptiveHome(), // < 900 px : téléphone ; sinon les colonnes du Mac
     ),
   );
 }

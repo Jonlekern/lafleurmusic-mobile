@@ -202,4 +202,13 @@ class Strings {
     'The end of a song blends into the start of the next.',
   );
   String seconds(int n) => '$n s';
+  // plan 1 (téléphone) : écrans debout (maquette 1)
+  String get home => _t('Accueil', 'Home');
+  String get albumsBack => 'Albums';
+  String get allAccounts => _t('Tout', 'All');
+  String onDevice(bool iphone) => iphone
+      ? _t('Sur mon iPhone', 'On my iPhone')
+      : _t('Sur mon téléphone', 'On my phone');
+  String get upNextTab => _t('À suivre', 'Up next');
+  String get swipePlayNext => '← $playNextAction';
 }

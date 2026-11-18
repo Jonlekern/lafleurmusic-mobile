@@ -1,0 +1,121 @@
+import 'dart:io';
+
+import 'package:image/image.dart' as img;
+
+import '../library/models.dart';
+
+/// Bibliothèque inventée des maquettes (Studio Lafleur, Lafleur Surf, Summer Mix…) :
+/// images de référence des tests et mode démo (debug seulement), sans serveur ni son.
+abstract final class DemoLibrary {
+  static Track _t(
+    String album,
+    int no,
+    String title,
+    String artist,
+    int seconds,
+  ) => Track(
+    path: 'demo://$album/$no',
+    folderId: 1,
+    title: title,
+    artist: artist,
+    album: album,
+    trackNo: no,
+    durationMs: seconds * 1000,
+    hasCover: true,
+    mtime: 1,
+    size: 1,
+  );
+
+  /// Studio Lafleur : 9 morceaux, 36 min.
+  static final studio = [
+    _t('Studio Lafleur', 1, 'Ocean Drive', 'Johnny', 222),
+    _t('Studio Lafleur', 2, 'Lafleur Surf', 'LAFLEURSTUDIO', 245),
+    _t('Studio Lafleur', 3, 'Golden Hour', 'Divers', 198),
+    _t('Studio Lafleur', 4, 'Night Swim', 'Kavinsky', 301),
+    _t('Studio Lafleur', 5, 'Paradise Club', 'Divers', 235),
+    _t('Studio Lafleur', 6, 'Sunset Tape', 'Divers', 252),
+    _t('Studio Lafleur', 7, 'Palm Waves', 'Johnny', 242),
+    _t('Studio Lafleur', 8, 'Late Bloom', 'Divers', 238),
+    _t('Studio Lafleur', 9, 'Studio 9', 'LAFLEURSTUDIO', 250),
+  ];
+  static final surf = [
+    _t('Lafleur Surf', 1, 'Lafleur Surf', 'LAFLEURSTUDIO', 245),
+    _t('Lafleur Surf', 2, 'Surf Radio', 'LAFLEURSTUDIO', 214),
+  ];
+  static final summer = [
+    _t('Summer Mix', 1, 'Palm Springs', 'Divers', 231),
+    _t('Summer Mix', 2, 'Heatwave', 'Johnny', 207),
+  ];
+
+  /// Ajouté à la file par l'utilisateur (hors bibliothèque).
+  static final nightcall = _t('Night Drive', 1, 'Nightcall', 'Kavinsky', 258);
+
+  static List<Track> get tracks => [...studio, ...surf, ...summer];
+
+  /// Lafleur Surf en cours (1:33 sur 4:05).
+  static Track get playing => studio[1];
+  static const position = Duration(seconds: 93);
+
+  static img.Image _solid(int r, int g, int b) =>
+      img.Image(width: 300, height: 300)..clear(img.ColorRgb8(r, g, b));
+
+  static img.Image _studioCover() {
+    final im = _solid(237, 232, 222);
+    return img.fillRect(
+      im,
+      x1: 30,
+      y1: 90,
+      x2: 270,
+      y2: 210,
+      color: img.ColorRgb8(91, 138, 94),
+    );
+  }
+
+  // ovale rouge cerclé de crème sur fond crème (pochette de « Lafleur Surf »)
+  static img.Image _surfCover() {
+    final im = _solid(237, 232, 222);
+    const cx = 150.0, cy = 150.0;
+    for (var y = 0; y < 300; y++) {
+      for (var x = 0; x < 300; x++) {
+        final dx = (x - cx) / 100, dy = (y - cy) / 55;
+        final d = dx * dx + dy * dy;
+        if (d <= 1) {
+          im.setPixelRgb(x, y, 158, 44, 54);
+        } else if (d <= 1.12) {
+          im.setPixelRgb(x, y, 240, 217, 160);
+        }
+      }
+    }
+    return im;
+  }
+
+  /// Une image de pochette par morceau.
+  static Map<String, img.Image> coverImages() {
+    final studioCover = _studioCover();
+    final surfCover = _surfCover();
+    final red = _solid(143, 31, 42);
+    final yellow = _solid(224, 181, 58);
+    return {
+      for (final t in studio) t.path: studioCover,
+      playing.path: surfCover,
+      for (final t in surf) t.path: red,
+      for (final t in summer) t.path: yellow,
+      nightcall.path: _solid(44, 59, 120),
+    };
+  }
+
+  /// Écrit les pochettes en JPEG dans [dir] : chemin du morceau → fichier.
+  static Map<String, File> writeCovers(Directory dir) {
+    final files = Map<img.Image, File>.identity();
+    var n = 0;
+    return {
+      for (final e in coverImages().entries)
+        e.key: files.putIfAbsent(
+          e.value,
+          () =>
+              File('${dir.path}/demo-${n++}.jpg')
+                ..writeAsBytesSync(img.encodeJpg(e.value)),
+        ),
+    };
+  }
+}

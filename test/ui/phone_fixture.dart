@@ -1,0 +1,125 @@
+import 'dart:io';
+
+import 'package:drift/drift.dart' show DatabaseConnection;
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/app_scope.dart';
+import 'package:lafleurmusic/demo/demo_library.dart';
+import 'package:lafleurmusic/l10n/strings.dart';
+import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/player/equalizer.dart';
+import 'package:lafleurmusic/player/player.dart';
+import 'package:lafleurmusic/player/queue.dart';
+import 'package:lafleurmusic/settings.dart';
+import 'package:lafleurmusic/sources/accounts.dart';
+import 'package:lafleurmusic/theme/lafleur_theme.dart';
+import 'package:lafleurmusic/ui/phone/phone_shell.dart';
+
+import '../sources/fake_secret_store.dart';
+import 'fake_player.dart';
+import 'morceaux_golden_test.dart' show ReadyCovers;
+
+/// iPhone debout : 390 × 844, barre d'état 44, barre d'accueil 30 (comme la maquette 1).
+void phoneSize(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  const pad = FakeViewPadding(top: 44, bottom: 30);
+  tester.view.padding = pad;
+  tester.view.viewPadding = pad;
+  addTearDown(tester.view.reset);
+}
+
+class PhoneFixture {
+  PhoneFixture(this.db, this.player, this.covers);
+  final LibraryDb db;
+  final FakePlayer player;
+  final Map<String, File> covers;
+}
+
+/// Laisse la base répondre (ses flux passent hors de l'horloge simulée).
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 5; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
+}
+
+/// Le téléphone sur la bibliothèque de la maquette : Lafleur Surf en cours, Nightcall ajouté à la file,
+/// deux comptes (Navidrome, Jellyfin). [images] : pochettes et logo décodés d'avance (images de référence).
+Future<PhoneFixture> pumpPhone(
+  WidgetTester tester, {
+  bool images = false,
+}) async {
+  phoneSize(tester);
+  final dir = Directory.systemTemp.createTempSync('phone');
+  final files = DemoLibrary.writeCovers(dir);
+  final db = LibraryDb(
+    DatabaseConnection(
+      NativeDatabase.memory(),
+      closeStreamsSynchronously: true,
+    ),
+  );
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(db.close);
+    dir.deleteSync(recursive: true);
+  });
+  if (images) await _precache(tester, files);
+  final accounts = Accounts(db, FakeSecretStore());
+  await tester.runAsync(() async {
+    await db.upsertTracks(DemoLibrary.tracks);
+    for (final (type, name) in [
+      (AccountType.subsonic, 'Navidrome'),
+      (AccountType.jellyfin, 'Jellyfin'),
+    ]) {
+      await accounts.add(
+        type: type,
+        name: name,
+        base: Uri.parse('https://music.example'),
+        user: 'demo',
+        password: 'demo',
+      );
+    }
+  });
+  final player = FakePlayer()
+    ..queue = (PlayQueue(DemoLibrary.studio, index: 1)
+      ..enqueue([DemoLibrary.nightcall]))
+    ..current = PlayerState(
+      track: DemoLibrary.playing,
+      position: DemoLibrary.position,
+      duration: Duration(milliseconds: DemoLibrary.playing.durationMs),
+      playing: true,
+    );
+  await tester.pumpWidget(
+    AppScope(
+      db: db,
+      player: player,
+      covers: ReadyCovers(files),
+      strings: Strings.of(const Locale('fr')),
+      equalizer: ValueNotifier(Equalizer.named('flat')),
+      settings: AppSettings(),
+      saveSettings: () {},
+      accounts: accounts,
+      child: MaterialApp(theme: lafleurTheme(), home: const PhoneShell()),
+    ),
+  );
+  await settle(tester);
+  return PhoneFixture(db, player, files);
+}
+
+/// Les images (pochettes, logo, fleur) se décodent hors de l'horloge simulée : avant que l'écran les demande.
+Future<void> _precache(WidgetTester tester, Map<String, File> covers) async {
+  await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+  final ctx = tester.element(find.byType(Scaffold));
+  await tester.runAsync(() async {
+    for (final file in covers.values.toSet()) {
+      await precacheImage(FileImage(file), ctx);
+    }
+    for (final a in ['assets/fleur-tile.png', 'assets/logo-texte-grand.png']) {
+      await precacheImage(AssetImage(a), ctx);
+    }
+  });
+}

@@ -15,12 +15,20 @@ class _PlaybackCardState extends State<PlaybackCard> {
 
   @override
   Widget build(BuildContext context) {
+    final set = AppScope.of(context).settings;
+    if (set == null) return const SizedBox.shrink();
+    final seconds = (_dragging ?? set.crossfadeSeconds.toDouble()).round();
+    return LayoutBuilder(
+      // étroit (téléphone debout) : le curseur passe sous le texte de son option
+      builder: (context, box) => _card(context, seconds, box.maxWidth < 520),
+    );
+  }
+
+  Widget _card(BuildContext context, int seconds, bool compact) {
     final app = AppScope.of(context);
     final s = app.strings;
-    final set = app.settings;
-    if (set == null) return const SizedBox.shrink();
+    final set = app.settings!;
     void save() => app.saveSettings?.call();
-    final seconds = (_dragging ?? set.crossfadeSeconds.toDouble()).round();
 
     Widget option({
       required Key key,
@@ -69,10 +77,34 @@ class _PlaybackCardState extends State<PlaybackCard> {
               ],
             ),
           ),
-          ?trailing,
+          if (!compact) ?trailing,
         ],
       ),
     );
+    Widget optionBelow({
+      required Key key,
+      required bool on,
+      required String title,
+      required String hint,
+      required ValueChanged<bool> onChanged,
+      Widget? trailing,
+      bool top = false,
+    }) {
+      final row = option(
+        key: key,
+        on: on,
+        title: title,
+        hint: hint,
+        onChanged: onChanged,
+        trailing: trailing,
+        top: top,
+      );
+      if (!compact || trailing == null) return row;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [row, trailing],
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.fromLTRB(26, 22, 26, 12),
@@ -100,7 +132,7 @@ class _PlaybackCardState extends State<PlaybackCard> {
               save();
             },
           ),
-          option(
+          optionBelow(
             key: const Key('crossfade'),
             top: true,
             on: set.crossfade,

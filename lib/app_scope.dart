@@ -7,6 +7,7 @@ import 'player/equalizer.dart';
 import 'player/loudness.dart';
 import 'player/player.dart';
 import 'settings.dart';
+import 'sources/accounts.dart';
 
 /// Les services de l'appli, accessibles depuis tous les écrans.
 class AppScope extends InheritedWidget {
@@ -21,6 +22,7 @@ class AppScope extends InheritedWidget {
     this.settings,
     this.saveSettings,
     this.loudness,
+    this.accounts,
     required super.child,
   }) : _eq = equalizer;
   final LibraryDb db;
@@ -33,6 +35,8 @@ class AppScope extends InheritedWidget {
   final AppSettings? settings; // réglages (enregistrés par saveSettings)
   final VoidCallback? saveSettings;
   final LoudnessService? loudness; // Volume égal
+  final Accounts?
+  accounts; // comptes de serveur (puces de l'Accueil du téléphone)
   static final _noEq = ValueNotifier(Equalizer.named('flat'));
 
   /// Réglage d'égaliseur en cours (l'appli l'applique au lecteur et l'enregistre à chaque changement).
