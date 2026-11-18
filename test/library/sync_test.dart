@@ -8,10 +8,11 @@ import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/sources/source.dart';
 
 class FakeSource implements MusicSource {
-  FakeSource(this.accountId, this.library, {this.failAtPage});
+  FakeSource(this.accountId, this.library, {this.failAtPage, this.failSongsOf});
   @override
   final String accountId;
   Map<SourceAlbum, List<SourceSong>> library;
+  String? failSongsOf; // album id whose songs fetch throws
   int? failAtPage; // 1-based page whose fetch throws
   int produced = 0, processed = 0, maxAlive = 0;
 
@@ -32,6 +33,7 @@ class FakeSource implements MusicSource {
   @override
   Future<List<SourceSong>> albumSongs(String albumId) async {
     processed++;
+    if (albumId == failSongsOf) throw const SocketException('cut');
     return library.entries.firstWhere((e) => e.key.id == albumId).value;
   }
 
@@ -146,9 +148,14 @@ void main() {
     await LibrarySync(db).run(FakeSource('acc2', lib3x()));
     final r = await LibrarySync(db).run(FakeSource('acc1', lib3x()));
     expect(r.removed, 0);
-    final r2 = await LibrarySync(db).run(FakeSource('acc1', {}));
-    expect((r2.removed, r2.complete), (20, true));
+    final r2 = await LibrarySync(db).run(
+      FakeSource('acc1', {
+        alb(0): [song('s0')],
+      }),
+    );
+    expect((r2.removed, r2.complete), (19, true));
     expect(await count('acc2'), 20);
+    expect(await count('acc1'), 1);
     expect(await count('local'), 1);
   });
 
@@ -169,5 +176,46 @@ void main() {
     expect(await cnt(), 12);
     await LibrarySync(db).run(FakeSource('acc1', one(20)));
     expect(await cnt(), 20);
+  });
+
+  test('albumSongs failing on the 3rd album: nothing deleted', () async {
+    Map<SourceAlbum, List<SourceSong>> five({String? rename}) => {
+      for (var i = 0; i < 5; i++)
+        alb(i): [
+          song('a$i', title: 'a$i' == rename ? 'New' : 'T'),
+          song('b$i'),
+        ],
+    };
+    await LibrarySync(db).run(FakeSource('acc1', five()));
+    expect(await count('acc1'), 10);
+    // album 0 renamed (before the failure), album 1 song dropped, 3rd fails
+    final lib = five(rename: 'a0');
+    lib[alb(1)] = [song('a1')];
+    final src = FakeSource('acc1', lib, failSongsOf: 'al2');
+    final r = await LibrarySync(db).run(src);
+    expect((r.complete, r.removed, r.updated), (false, 0, 1));
+    expect(await count('acc1'), 10);
+    expect((await db.trackByPath('subsonic://acc1/a0'))!.title, 'New');
+  });
+
+  test('an empty answer never wipes an account that has tracks', () async {
+    await LibrarySync(db).run(FakeSource('acc1', lib3x()));
+    await db.addPlay(trackKey('acc1', 's0'), DateTime(2026));
+    final r = await LibrarySync(db).run(FakeSource('acc1', {}));
+    expect((r.complete, r.removed), (false, 0));
+    expect(await count('acc1'), 20);
+    expect(await db.select(db.playCounts).get(), hasLength(1));
+    // an account with nothing stored yet syncs an empty server normally
+    final e = await LibrarySync(db).run(FakeSource('new', {}));
+    expect(e.complete, isTrue);
+  });
+
+  test('a song listed twice in an album counts once', () async {
+    final r = await LibrarySync(db).run(
+      FakeSource('acc1', {
+        alb(0): [song('s0'), song('s0'), song('s1')],
+      }),
+    );
+    expect(r.added, 2);
   });
 }

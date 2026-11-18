@@ -146,7 +146,7 @@ class LibraryDb extends _$LibraryDb {
     return r == null ? null : _fromRow(r);
   }
 
-  /// Tracks of one account, with their play counts and loudness.
+  /// Deletes all tracks of one account, plus those tracks' play counts and loudness rows.
   Future<void> deleteAccountTracks(String accountId) => transaction(() async {
     final paths =
         await (selectOnly(tracks)

@@ -25,9 +25,11 @@ class LibrarySync {
     var added = 0, updated = 0, removed = 0;
     var complete = true;
     final seen = <String>{};
+    var albumCount = 0;
     try {
       await for (final page in s.albums()) {
         for (final album in page) {
+          albumCount++;
           final songs = await s.albumSongs(album.id);
           final r = await _store(s.accountId, album, songs, seen);
           added += r.$1;
@@ -35,6 +37,11 @@ class LibrarySync {
         }
       }
     } on Exception {
+      complete = false;
+    }
+    // A server answering with no album at all (e.g. mid-rescan) must not wipe
+    // an account that already has tracks.
+    if (complete && albumCount == 0 && await _hasTracks(s.accountId)) {
       complete = false;
     }
     if (complete) {
@@ -54,6 +61,10 @@ class LibrarySync {
     List<SourceSong> songs,
     Set<String> seen,
   ) async {
+    final byId = {
+      for (final s in songs) s.id: s,
+    }; // a song listed twice counts once
+    songs = byId.values.toList();
     final tracks = [
       for (final s in songs)
         Track(
@@ -119,6 +130,13 @@ class LibrarySync {
       o.replayGain == t.replayGain &&
       o.size == t.size &&
       o.remoteId == t.remoteId;
+
+  Future<bool> _hasTracks(String acc) async =>
+      await (_db.select(_db.tracks)
+            ..where((t) => t.accountId.equals(acc))
+            ..limit(1))
+          .getSingleOrNull() !=
+      null;
 
   Future<int> _removeUnseen(String acc, Set<String> seen) =>
       _db.transaction(() async {
