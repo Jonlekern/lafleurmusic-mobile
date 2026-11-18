@@ -1,0 +1,4 @@
+{"subsonic-response":{"status":"ok","version":"1.16.1","type":"navidrome","serverVersion":"0.54.0","openSubsonic":true,"playlists":{"playlist":[
+{"id":"pl-1","name":"Summer Mix","songCount":12,"duration":3100,"owner":"johnny","public":false},
+{"id":"pl-2","name":"Lafleur Surf","songCount":8,"duration":1900,"owner":"johnny","public":true}
+]}}}

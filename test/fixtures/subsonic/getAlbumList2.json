@@ -1,0 +1,5 @@
+{"subsonic-response":{"status":"ok","version":"1.16.1","type":"navidrome","serverVersion":"0.54.0","openSubsonic":true,"albumList2":{"album":[
+{"id":"al-1","name":"Studio Lafleur","artist":"LAFLEURSTUDIO","artistId":"ar-1","coverArt":"al-1","songCount":10,"duration":2400,"year":2024},
+{"id":"al-2","name":"Lafleur Surf","artist":"Johnny","artistId":"ar-2","coverArt":"al-2","songCount":8,"duration":1900,"year":2023},
+{"id":"al-3","name":"Summer Mix","artist":"Divers","artistId":"ar-3","songCount":12,"duration":3100}
+]}}}
