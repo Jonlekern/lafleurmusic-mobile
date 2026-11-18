@@ -74,7 +74,9 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   int? _dragGb; // la limite pendant que le doigt glisse
   String?
   _folder; // dossier choisi (deux derniers noms) ; null = celui par défaut
-  bool _moving = false;
+  bool _moving = false; // le déplacement tourne (le bouton le dit)
+  bool _busy = false; // sélecteur ouvert ou déplacement : un seul à la fois
+  bool _loadingSpace = false;
 
   @override
   void didChangeDependencies() {
@@ -147,13 +149,17 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
 
   Future<void> _loadSpace(int used) async {
     final device = AppScope.of(context).device;
-    if (device == null) return;
+    if (device == null || _loadingSpace) return;
+    _loadingSpace = true;
     try {
       final root = await device.musicRoot();
       final free = await device.freeBytes(root.path);
       if (mounted) setState(() => _free = free + used);
     } on Object {
-      // place inconnue : le curseur s'arrête à la limite actuelle
+      // place inconnue : le curseur s'arrête à la limite (ou aux copies) ; la prochaine
+      // construction de l'écran réessaie
+    } finally {
+      _loadingSpace = false;
     }
   }
 
@@ -174,9 +180,19 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   }
 
   Future<void> _chooseFolder() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await _pickAndMove();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pickAndMove() async {
     final app = AppScope.of(context);
     final device = app.device, downloader = app.downloader;
-    if (device == null || downloader == null || _moving) return;
+    if (device == null || downloader == null) return;
     final s = app.strings;
     final messenger = ScaffoldMessenger.of(context);
     final Directory old;
@@ -195,7 +211,13 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       return;
     }
     final c = picked;
-    if (c == null || !mounted) return;
+    if (c == null) return;
+    if (!mounted) {
+      await _release(
+        device,
+      ); // l'écran est parti pendant le choix : le candidat est abandonné
+      return;
+    }
     setState(() => _moving = true);
     KeepResult? r;
     try {
@@ -211,8 +233,11 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       // un dossier adopté sans copie à déplacer ne prévient personne tout seul
       await app.accountService?.refreshRoot();
       unawaited(app.localFolder?.rescan());
-      await _loadFolder();
+      if (mounted) await _loadFolder();
     } else {
+      await _release(
+        device,
+      ); // déjà fait par le téléchargeur ; sans effet la deuxième fois
       say(
         messenger,
         r != null && r.neededBytes > 0
@@ -221,6 +246,14 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       );
     }
     if (mounted) setState(() => _moving = false);
+  }
+
+  Future<void> _release(Device device) async {
+    try {
+      await device.releaseCandidate();
+    } on Object {
+      // rien de plus à faire
+    }
   }
 
   Future<void> _retry(_Failed f) async {
@@ -309,8 +342,18 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     final gauge = limit <= 0 ? 0.0 : (d.used / limit).clamp(0.0, 1.0);
     final limitGb = math.max(1, (limit / _gib).round());
     final free = _free;
-    final maxGb = math.max(1, free == null ? limitGb : free ~/ _gib);
-    final shownGb = (_dragGb ?? limitGb).clamp(1, maxGb);
+    // la place libre n'abaisse jamais la limite réglée : elle ne fait que borner le curseur
+    final knownGb = free == null
+        ? (d.used + _gib - 1) ~/
+              _gib // place inconnue : au moins les copies
+        : free ~/ _gib;
+    final shownGb = _dragGb ?? limitGb;
+    final maxGb = math.max(math.max(1, knownGb), shownGb);
+    if (free == null && !_loadingSpace && app.device != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => mounted ? _loadSpace(_data.used) : null,
+      );
+    }
     return PhoneScaffold(
       mini: false,
       header: PhoneHeader(back: s.home),
@@ -672,7 +715,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     borderRadius: BorderRadius.circular(10),
     child: InkWell(
       borderRadius: BorderRadius.circular(10),
-      onTap: _moving ? null : _chooseFolder,
+      onTap: _busy ? null : _chooseFolder,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
@@ -699,13 +742,13 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   Widget _folderButton(Strings s) => Padding(
     padding: const EdgeInsets.only(top: 10),
     child: Opacity(
-      opacity: _moving ? 0.5 : 1,
+      opacity: _busy ? 0.5 : 1,
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           key: const Key('chooseFolder'),
           borderRadius: BorderRadius.circular(22),
-          onTap: _moving ? null : _chooseFolder,
+          onTap: _busy ? null : _chooseFolder,
           child: Container(
             alignment: Alignment.center,
             padding: const EdgeInsets.all(11),

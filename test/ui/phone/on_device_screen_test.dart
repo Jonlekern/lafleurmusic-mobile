@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/demo/demo_offline.dart';
+import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/offline/device.dart';
 import 'package:lafleurmusic/offline/downloader.dart';
@@ -51,18 +52,25 @@ Future<
 pumpOnDevice(
   WidgetTester tester, {
   DemoDownloader? downloader,
-  Future<void> Function(dynamic)? seed,
+  Future<void> Function(LibraryDb)? also, // données en plus de la démo
   bool images = false,
+  int? free,
+  Object? freeError,
 }) async {
   final settings = AppSettings();
   final device = DemoDevice(settings: settings);
+  if (free != null) device.free = free;
+  device.freeError = freeError;
   final folder = _FolderSpy();
   final services = <_CountingService>[];
   final saves = <int>[];
   final f = await pumpKeep(
     tester,
     images: images,
-    seed: seedOnDeviceDemo,
+    seed: (db) async {
+      await seedOnDeviceDemo(db);
+      await also?.call(db);
+    },
     home: const OnDeviceScreen(),
     device: device,
     localFolder: folder,
@@ -116,11 +124,11 @@ void main() {
         expect(find.text('Studio Lafleur'), findsOneWidget);
         expect(find.text('36 min · 310 Mo'), findsOneWidget);
         expect(find.text('420 Mo'), findsNothing); // durée d'abord
-        expect(find.text('8 min · 420 Mo'), findsOneWidget);
+        expect(find.text('48 min · 420 Mo'), findsOneWidget);
         // Night Drive : seulement le Top 100
         expect(find.text('Night Drive'), findsOneWidget);
         expect(find.text('TOP 100'), findsOneWidget);
-        expect(find.text('1 titre · 38 Mo'), findsOneWidget);
+        expect(find.text('4 titres · 38 Mo'), findsOneWidget);
         expect(find.text('À RÉESSAYER'), findsOneWidget);
         expect(find.text('Ports'), findsOneWidget);
         expect(find.text('Introuvable sur le serveur'), findsOneWidget);
@@ -207,7 +215,7 @@ void main() {
       await tester.tap(find.text('Retirer du téléphone'));
       await done(tester);
       expect(r.f.downloader.forgotten, [
-        ['subsonic://demo/Night Drive/1'],
+        [for (var i = 1; i <= 4; i++) 'subsonic://demo/Night Drive/$i'],
       ]);
     });
   });
@@ -399,6 +407,156 @@ void main() {
         gate.complete();
         await done(tester);
         expect(find.text('Choisir le dossier…'), findsOneWidget);
+      },
+    );
+  });
+
+  group('robustesse', () {
+    phoneTest(
+      'Retirer un album mêlé : seulement les copies de cet album',
+      TargetPlatform.iOS,
+      (tester) async {
+        // Summer Mix : un morceau fini, les autres en file
+        final r = await pumpOnDevice(
+          tester,
+          also: (db) async {
+            await db.queueOffline([
+              'subsonic://demo/Summer Mix/4',
+            ], OfflineReason.user);
+            await db.markOfflineDone(
+              'subsonic://demo/Summer Mix/4',
+              'kept/s4.mp3',
+              1000,
+            );
+          },
+        );
+        await tester.longPress(find.text('Summer Mix'));
+        await done(tester);
+        await tester.tap(find.text('Retirer du téléphone'));
+        await done(tester);
+        final batch = r.f.downloader.forgotten.single;
+        expect(
+          batch,
+          unorderedEquals([
+            'subsonic://demo/Summer Mix/1',
+            'subsonic://demo/Summer Mix/2',
+            'subsonic://demo/Summer Mix/3',
+            'subsonic://demo/Summer Mix/4',
+            'subsonic://demo/Summer Mix/5',
+          ]),
+        );
+      },
+    );
+
+    phoneTest('deux appuis rapides : un seul sélecteur', TargetPlatform.iOS, (
+      tester,
+    ) async {
+      final r = await pumpOnDevice(tester);
+      final gate = r.device.pickGate = Completer<void>();
+      await scrollTo(tester, find.byKey(const Key('chooseFolder')));
+      await tester.tap(find.byKey(const Key('chooseFolder')));
+      await tester.tap(find.byKey(const Key('chooseFolder')));
+      await tester.pump();
+      expect(r.device.picks, 1);
+      gate.complete();
+      await done(tester);
+      expect(r.device.picks, 1);
+    });
+
+    phoneTest(
+      'l\'écran part pendant le choix : le candidat est abandonné',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        final gate = r.device.pickGate = Completer<void>();
+        r.device.picked = const PickedFolder('/x/Cloud/LAFLEURMUSIC', 'b64');
+        await scrollTo(tester, find.byKey(const Key('chooseFolder')));
+        await tester.tap(find.byKey(const Key('chooseFolder')));
+        await tester.pump();
+        await tester.pumpWidget(const SizedBox()); // l'écran est fermé
+        gate.complete();
+        await done(tester);
+        expect(r.device.released, 1);
+        expect(r.f.downloader.moves, isEmpty);
+        expect(r.device.committed, isEmpty);
+      },
+    );
+
+    phoneTest(
+      'déplacement raté ou trop gros : le candidat est abandonné',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        r.device.picked = const PickedFolder('/x/Cloud/LAFLEURMUSIC', 'b64');
+        r.f.downloader.moveResult = const KeepResult.failed();
+        await scrollTo(tester, find.byKey(const Key('chooseFolder')));
+        await tester.tap(find.byKey(const Key('chooseFolder')));
+        await done(tester);
+        expect(r.device.released, 1);
+        r.f.downloader.moveResult = const KeepResult.tooBig(gib);
+        await tester.tap(find.byKey(const Key('chooseFolder')));
+        await done(tester);
+        expect(r.device.released, 2);
+      },
+    );
+
+    phoneTest(
+      'fermé pendant le déplacement : rien ne casse',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        r.device.picked = const PickedFolder('/x/Cloud/LAFLEURMUSIC', 'b64');
+        final gate = r.f.downloader.moveGate = Completer<void>();
+        await scrollTo(tester, find.byKey(const Key('chooseFolder')));
+        await tester.tap(find.byKey(const Key('chooseFolder')));
+        await tester.pump();
+        await tester.pumpWidget(const SizedBox());
+        gate.complete();
+        await done(tester);
+        expect(tester.takeException(), isNull);
+        expect(r.services.single.refreshes, 1);
+      },
+    );
+
+    phoneTest(
+      'la limite réglée reste affichée même sans assez de place',
+      TargetPlatform.iOS,
+      (tester) async {
+        await pumpOnDevice(tester, free: 0); // 4,2 Go en tout, limite 10 Go
+        await scrollTo(tester, find.byKey(const Key('limit')));
+        expect(
+          tester.widget<Text>(find.byKey(const Key('limit'))).data,
+          '10 Go',
+        );
+        final slider = tester.widget<Slider>(
+          find.byKey(const Key('limitSlider')),
+        );
+        expect(slider.max, 10);
+        expect(slider.value, 10);
+      },
+    );
+
+    phoneTest(
+      'place inconnue : borne sûre, puis on réessaie à la construction suivante',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester, freeError: StateError('nope'));
+        await scrollTo(tester, find.byKey(const Key('limitSlider')));
+        var slider = tester.widget<Slider>(
+          find.byKey(const Key('limitSlider')),
+        );
+        expect(
+          slider.max,
+          10,
+        ); // la limite, les copies (5 Go) étant plus petites
+        expect(find.text('toute la place libre · 10 Go'), findsOneWidget);
+        r.device.freeError = null;
+        await tester.drag(
+          find.byKey(const Key('limitSlider')),
+          const Offset(-20, 0),
+        );
+        await done(tester);
+        expect(find.text('toute la place libre · 54 Go'), findsOneWidget);
       },
     );
   });

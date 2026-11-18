@@ -137,6 +137,23 @@ abstract final class DemoLibrary {
     20552090,
   );
 
+  /// Lafleur Surf pour « Sur mon iPhone » : 48 min (la maquette 4), mêmes chemins que [remote].
+  static final surf48 = [
+    for (final t in remote)
+      if (t.album == 'Lafleur Surf')
+        _r(t.album, t.trackNo!, t.title, t.artist, 24 * 60, t.size),
+  ];
+
+  /// Le 4e titre de Night Drive (« 4 titres · 38 Mo » de la maquette 4).
+  static final nightDrive4 = _r(
+    'Night Drive',
+    4,
+    'A Real Hero',
+    'College',
+    270,
+    10 * _mib,
+  );
+
   /// Les morceaux de Lafleur Surf : copiés sur le téléphone.
   static List<String> get keptPaths => [
     for (final t in remote)

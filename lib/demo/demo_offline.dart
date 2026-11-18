@@ -138,6 +138,13 @@ class DemoDevice implements Device {
   Object? pickError;
   bool reachable = true;
 
+  /// Fait échouer [freeBytes] ; [pickGate] retient la réponse de [pickFolder] jusqu'à sa fin.
+  Object? freeError;
+
+  /// Appels à [pickFolder].
+  int picks = 0;
+  Completer<void>? pickGate;
+
   /// Dossiers adoptés par [commitFolder], et abandons par [releaseCandidate].
   final committed = <PickedFolder>[];
   int released = 0;
@@ -150,6 +157,8 @@ class DemoDevice implements Device {
 
   @override
   Future<PickedFolder?> pickFolder() async {
+    picks++;
+    await pickGate?.future;
     final e = pickError;
     if (e != null) throw e;
     return picked;
@@ -166,26 +175,42 @@ class DemoDevice implements Device {
   Future<void> releaseCandidate() async => released++;
 
   @override
-  Future<int> freeBytes(String path) async => free;
+  Future<int> freeBytes(String path) async {
+    final e = freeError;
+    if (e != null) throw e;
+    return free;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// Les données de la démo « Sur mon iPhone » (maquette 4) : Studio Lafleur et Lafleur Surf gardés,
-/// Night Drive gardé par le Top 100 (1 titre sur 3), « Golden Hour » en cours avec 3 titres derrière,
+/// Les données de la démo « Sur mon iPhone » (maquette 4) : Lafleur Surf (48 min), Studio Lafleur
+/// gardés, Night Drive gardé par le Top 100 (4 titres), « Golden Hour » en cours avec 3 titres derrière,
 /// « Ports » refusé par le serveur. 4,2 Go utilisés : le reste, des copies dont le morceau n'est plus
 /// dans la bibliothèque (rien à afficher, mais la place compte).
 Future<void> seedOnDeviceDemo(LibraryDb db) async {
-  await db.upsertTracks([...DemoLibrary.remote, DemoLibrary.goldenHour]);
+  await db.upsertTracks([
+    ...DemoLibrary.remote,
+    ...DemoLibrary.surf48,
+    DemoLibrary.nightDrive4,
+    DemoLibrary.goldenHour,
+  ]);
   String of(String album, int no) => 'subsonic://demo/$album/$no';
+  // l'ordre de la liste suit l'heure de mise en file : une pause d'une milliseconde entre albums
+  Future<void> next() => Future<void>.delayed(const Duration(milliseconds: 12));
+  await seedKept(db, DemoLibrary.keptPaths, 420 * _mib);
+  await next();
   await seedKept(db, [
     for (final t in DemoLibrary.remote)
       if (t.album == 'Studio Lafleur') t.path,
   ], 310 * _mib);
-  await seedKept(db, DemoLibrary.keptPaths, 420 * _mib);
-  await db.queueOffline([of('Night Drive', 1)], OfflineReason.top100);
-  await db.markOfflineDone(of('Night Drive', 1), 'kept/nd.mp3', 38 * _mib);
+  await next();
+  final night = [for (var i = 1; i <= 4; i++) of('Night Drive', i)];
+  await db.queueOffline(night, OfflineReason.top100);
+  for (final path in night) {
+    await db.markOfflineDone(path, 'kept/$path.mp3', 38 * _mib ~/ 4);
+  }
   await db.queueOffline([of('Other', 1)], OfflineReason.user);
   await db.markOfflineDone(
     of('Other', 1),
