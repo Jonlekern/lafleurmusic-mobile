@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -246,27 +247,46 @@ void main() {
     expect((await d.musicRoot()).path, '${tmp.path}/old');
   });
 
-  test('ensureAccess: one native request at a time, busy waits', () async {
-    var inFlight = 0, most = 0, busyOnce = true;
+  test('ensureAccess: a request that needs no dialog is never held behind a pending one', () async {
+    final dialog = Completer<bool>();
     native = (c) async {
       if (c.method != 'ensureAccess') return null;
-      if (busyOnce) {
-        busyOnce = false;
-        throw PlatformException(code: 'busy');
-      }
-      inFlight++;
-      most = inFlight > most ? inFlight : most;
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      inFlight--;
-      return true;
+      final a = c.arguments as Map;
+      return a['readOthers'] == true ? dialog.future : true;
     };
     final d = device();
-    final r = await Future.wait([
-      d.ensureAccess(readOthers: true),
-      d.ensureAccess(),
-    ]);
-    expect(r, [true, true]);
-    expect(most, 1);
+    final reading = d.ensureAccess(readOthers: true); // its dialog stays open
+    expect(await d.ensureAccess(), isTrue);
+    dialog.complete(true);
+    expect(await reading, isTrue);
+  });
+
+  test('ensureAccess: busy waits for the request in flight, then asks again', () async {
+    final dialog = Completer<bool>();
+    var open = false;
+    final order = <String>[];
+    native = (c) async {
+      if (c.method != 'ensureAccess') return null;
+      final read = (c.arguments as Map)['readOthers'] == true;
+      if (open) {
+        order.add('busy');
+        throw PlatformException(code: 'busy');
+      }
+      order.add(read ? 'read' : 'write');
+      if (!read) return true;
+      open = true;
+      final r = await dialog.future;
+      open = false;
+      return r;
+    };
+    final d = device();
+    final reading = d.ensureAccess(readOthers: true);
+    await Future<void>.delayed(Duration.zero);
+    final writing = d.ensureAccess();
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    dialog.complete(true);
+    expect(await Future.wait([reading, writing]), [true, true]);
+    expect(order, ['read', 'busy', 'write']);
   });
 
   group('docs:// keys', () {

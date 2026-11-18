@@ -175,38 +175,31 @@ class ChannelDevice implements Device {
     if (_ios) await _ch.invokeMethod<void>('releaseCandidate');
   }
 
-  Future<bool>? _asking; // une seule demande native à la fois
+  final _asking = <Future<bool>>{}; // demandes natives en cours
 
+  /// Une demande qui n'a besoin d'aucune fenêtre répond tout de suite ; si une autre fenêtre
+  /// de droits est déjà ouverte, le côté natif dit « busy » : on attend sa réponse, puis on
+  /// redemande (sans demande en cours ici, c'est un reste d'un redémarrage à chaud).
   @override
   Future<bool> ensureAccess({bool readOthers = false}) async {
     if (_ios) return true;
-    // une demande en cours (l'autre jeu de droits) : on attend sa réponse, puis on demande
-    while (_asking != null) {
-      try {
-        await _asking;
-      } on Object {
-        // son erreur est la sienne
-      }
-    }
-    final f = _asking = _ask(readOthers);
-    try {
-      return await f;
-    } finally {
-      if (identical(_asking, f)) _asking = null;
-    }
-  }
-
-  /// « busy » : une demande d'avant (redémarrage à chaud) attend encore sa réponse.
-  Future<bool> _ask(bool readOthers) async {
     for (var i = 0; ; i++) {
+      final f = _ch
+          .invokeMethod<bool>('ensureAccess', {'readOthers': readOthers})
+          .then((v) => v ?? false);
+      _asking.add(f);
       try {
-        return await _ch.invokeMethod<bool>('ensureAccess', {
-              'readOthers': readOthers,
-            }) ??
-            false;
+        return await f;
       } on PlatformException catch (e) {
         if (e.code != 'busy' || i >= 400) rethrow;
+      } finally {
+        _asking.remove(f);
+      }
+      final others = List.of(_asking);
+      if (others.isEmpty) {
         await Future<void>.delayed(const Duration(milliseconds: 300));
+      } else {
+        await Future.wait(others.map((o) => o.then((_) {}, onError: (_) {})));
       }
     }
   }
