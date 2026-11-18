@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Share of differing pixels accepted against a golden (1 %).
-const goldenTolerance = 0.01;
+/// Share of differing pixels accepted against a golden (0.8 %): the worst CI drift seen was 0.64 %,
+/// and on a 390×844 phone golden 0.8 % is about 2 600 pixels, kept tight so a swapped icon or label fails.
+const goldenTolerance = 0.008;
 
 /// [LocalFileComparator] that accepts a diff up to [tolerance] (see flutter_test_config.dart).
 class TolerantFileComparator extends LocalFileComparator {
@@ -16,6 +17,13 @@ class TolerantFileComparator extends LocalFileComparator {
       await getGoldenBytes(golden),
     );
     if (result.passed || result.diffPercent <= tolerance) {
+      if (!result.passed) {
+        // accepted, but shown, so a slow drift stays visible in the logs
+        debugPrint(
+          'Golden $golden: ${(result.diffPercent * 100).toStringAsFixed(2)} % '
+          'of pixels differ (accepted up to ${tolerance * 100} %)',
+        );
+      }
       result.dispose();
       return true;
     }

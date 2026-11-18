@@ -1,4 +1,4 @@
-// The golden comparator of flutter_test_config.dart: 0.5 % of pixels differ → pass, 2 % → fail.
+// The golden comparator of flutter_test_config.dart: 0.5 % of pixels differ → pass, 0.9 % and 2 % → fail.
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -35,18 +35,28 @@ void main() {
     expect(ok, isTrue);
   });
 
-  testWidgets('2 % of pixels differ: fails with failure images', (
-    tester,
-  ) async {
+  Future<Object?> failure(WidgetTester tester, int changed) async {
     Object? error;
     await tester.runAsync(() async {
       try {
-        await comparator.compare(png(200), Uri.parse('g.png'));
+        await comparator.compare(png(changed), Uri.parse('g.png'));
       } catch (e) {
         error = e;
       }
     });
-    expect(error, isA<FlutterError>());
+    return error;
+  }
+
+  testWidgets('0.9 % of pixels differ: fails (just above 0.8 %)', (
+    tester,
+  ) async {
+    expect(await failure(tester, 90), isA<FlutterError>());
+  });
+
+  testWidgets('2 % of pixels differ: fails with failure images', (
+    tester,
+  ) async {
+    expect(await failure(tester, 200), isA<FlutterError>());
     expect(Directory('${dir.path}/failures').existsSync(), isTrue);
   });
 }

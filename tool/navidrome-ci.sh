@@ -22,15 +22,18 @@ docker run -d --name navidrome-ci \
   -e ND_LOGLEVEL=info \
   "${IMAGE}"
 
+# every request is bounded; polling loops are bounded too (60 × 2 s)
+CURL=(curl -fsS --max-time 10)
+
 echo "Waiting for ${URL}/ping"
 for _ in $(seq 1 60); do
-  if curl -fsS "${URL}/ping" >/dev/null 2>&1; then break; fi
+  if "${CURL[@]}" "${URL}/ping" >/dev/null 2>&1; then break; fi
   sleep 2
 done
-curl -fsS "${URL}/ping" >/dev/null
+"${CURL[@]}" "${URL}/ping" >/dev/null
 
 echo "Creating the first admin"
-curl -fsS -X POST "${URL}/auth/createAdmin" \
+"${CURL[@]}" -X POST "${URL}/auth/createAdmin" \
   -H 'Content-Type: application/json' \
   --data "$(printf '{"username":"%s","password":"%s"}' "${NAVIDROME_USER}" "${NAVIDROME_PASSWORD}")" \
   >/dev/null
@@ -41,26 +44,29 @@ subsonic() {
   local salt token
   salt="$(openssl rand -hex 6)"
   token="$(printf '%s%s' "${NAVIDROME_PASSWORD}" "${salt}" | openssl md5 | awk '{print $NF}')"
-  curl -fsS -G "${URL}/rest/${method}.view" \
+  shift
+  "${CURL[@]}" -G "${URL}/rest/${method}.view" \
     --data-urlencode "u=${NAVIDROME_USER}" \
     --data-urlencode "t=${token}" \
     --data-urlencode "s=${salt}" \
     --data-urlencode "v=1.16.1" \
     --data-urlencode "c=lafleur-ci" \
-    --data-urlencode "f=json"
+    --data-urlencode "f=json" \
+    "$@"
 }
 
 echo "Scanning test/fixtures"
-subsonic startScan >/dev/null
+subsonic startScan >/dev/null || true # the scan on startup may already be running
+# done when the library really has an album, not merely when "scanning" is false
+albums=""
 for _ in $(seq 1 60); do
-  status="$(subsonic getScanStatus)"
-  if echo "${status}" | grep -q '"scanning":false' &&
-    ! echo "${status}" | grep -q '"count":0[,}]'; then
-    echo "Scan done: ${status}"
+  albums="$(subsonic getAlbumList2 --data-urlencode type=alphabeticalByName --data-urlencode size=10 || true)"
+  if echo "${albums}" | grep -q '"album":\[{'; then
+    echo "Scan done: $(subsonic getScanStatus || true)"
     exit 0
   fi
   sleep 2
 done
-echo "Scan did not finish in time: ${status}" >&2
+echo "No album after the scan: ${albums}" >&2
 docker logs navidrome-ci >&2 || true
 exit 1

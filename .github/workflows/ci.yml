@@ -32,6 +32,13 @@ jobs:
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs
       - run: flutter test
+      - name: Upload golden failure images
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures
+          path: test/**/failures/
+          if-no-files-found: ignore
 
   android:
     runs-on: ubuntu-latest
@@ -72,7 +79,7 @@ jobs:
       - name: Free disk space
         run: |
           df -h /
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "${AGENT_TOOLSDIRECTORY:?}"
           df -h /
       - uses: actions/checkout@v4
       - name: Enable KVM
@@ -92,7 +99,8 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs
-      # Gradle and the NDK do their heavy work now, not next to the emulator.
+      # Build once before the emulator starts, so Gradle and the NDK don't compete
+      # with it; the integration tests below then reuse the warm Gradle build.
       - name: Build the test APK before the emulator
         run: flutter build apk --debug -t integration_test/sound_proof_test.dart
       - uses: reactivecircus/android-emulator-runner@v2
