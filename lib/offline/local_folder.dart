@@ -7,6 +7,7 @@ import '../library/models.dart';
 import '../library/scanner.dart';
 import '../tags/tag_reader.dart';
 import 'device.dart';
+import 'paths.dart';
 
 /// Les fichiers posés à la main dans LAFLEURMUSIC/ deviennent des morceaux `local`.
 /// Lecture seule : un fichier posé n'est jamais écrit, renommé ni effacé.
@@ -139,7 +140,9 @@ class LocalFolder {
     if (!reachable || !access) return;
     final gone = [
       for (final e in known.entries)
-        if (!seen.contains(e.key) && !File(e.value.abs).existsSync()) e.key,
+        // un fichier qu'iCloud a mis de côté (`.nom.icloud`) est toujours là
+        if (!seen.contains(e.key) && !fileOrPlaceholderExists(e.value.abs))
+          e.key,
     ];
     if (gone.isNotEmpty) await db.deletePaths(gone);
   }

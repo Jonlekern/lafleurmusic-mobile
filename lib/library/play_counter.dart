@@ -69,7 +69,12 @@ class PlayCounter {
     } on Object catch (e) {
       // serveur injoignable ou en erreur : l'écoute attend son retour (rien dans les journaux) ;
       // morceau inconnu du serveur : inutile de réessayer
-      if (!scrobbleRefused(e)) await db.addPending(key.$1, key.$2, at);
+      if (scrobbleRefused(e)) return;
+      try {
+        await db.addPending(key.$1, key.$2, at);
+      } on Object {
+        // base fermée ou disque plein : cette écoute ne sera pas envoyée, rien de plus
+      }
     }
   }
 

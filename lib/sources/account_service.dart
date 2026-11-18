@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -8,6 +7,7 @@ import '../library/db.dart';
 import '../library/models.dart';
 import '../library/play_counter.dart';
 import '../offline/device.dart';
+import '../offline/paths.dart';
 import '../library/sync.dart';
 import '../player/media_resolver.dart';
 import 'accounts.dart';
@@ -163,17 +163,25 @@ class AccountService extends ChangeNotifier {
 
   Map<String, OfflineRow> _kept = const {};
   String? _root, _docs;
+  CopyRoot? _copyRoot; // the reachable copies' folder, as of the last [refreshRoot]
   StreamSubscription<Map<String, OfflineRow>>? _keptSub;
 
-  /// Follows the offline rows (and the copies' folder) so [playableNow] can answer at once.
-  /// The folder is read again at every change of the rows (a folder move rewrites them) and
-  /// on [refreshRoot].
+  /// Follows the offline rows so [playableNow] can answer at once. The folder is read on
+  /// [refreshRoot] only (a folder change calls it); an emit of the same rows notifies nobody.
   Future<void> watchOffline() async {
     await refreshRoot();
     await _keptSub?.cancel();
     _keptSub = _db.watchOffline().listen((m) async {
+      if (mapEquals(m, _kept)) return;
       _kept = m;
-      await refreshRoot();
+      final root = _copyRoot;
+      try {
+        // one query, nothing to do most of the time
+        if (root != null) await _db.adoptOrphans(root);
+      } on Object {
+        // the next change tries again
+      }
+      if (!_disposed) notifyListeners();
     });
   }
 
@@ -185,7 +193,7 @@ class AccountService extends ChangeNotifier {
       try {
         _root = (await d.musicRoot()).path;
         _docs = await d.absolutePath(docsScheme);
-        final root = await _copyRootOf(d);
+        final root = _copyRoot = await _copyRootOf(d);
         if (root != null) await _db.adoptOrphans(root);
       } on Object {
         // keep what we knew
@@ -204,7 +212,10 @@ class AccountService extends ChangeNotifier {
   /// exists, or its account hasn't been found unreachable. The track playing is never
   /// asked: it finishes if it is in memory; only the NEXT choice uses this.
   bool playableNow(Track t) {
-    if (parseRemoteKey(t.path) == null) return File(_absolute(t.path)).existsSync();
+    // a file iCloud put aside (`.name.icloud`) counts: iOS fetches it on open (online)
+    if (parseRemoteKey(t.path) == null) {
+      return fileOrPlaceholderExists(_absolute(t.path));
+    }
     final row = _kept[t.path];
     final rel = row?.filePath;
     final root = _root;
@@ -212,7 +223,7 @@ class AccountService extends ChangeNotifier {
         row.state == OfflineState.done.name &&
         rel != null &&
         root != null &&
-        File(p.join(root, rel)).existsSync()) {
+        fileOrPlaceholderExists(p.join(root, rel))) {
       return true;
     }
     return stateOf(t.accountId) != AccountState.absent;
@@ -368,13 +379,17 @@ class AccountService extends ChangeNotifier {
 
   final _flushing = <String>{};
 
+  /// Listens older than this are dropped instead of sent.
+  static const pendingMaxAge = Duration(days: 30);
+
   /// The server answered: sends the account's pending listens one at a time, oldest first,
-  /// each with its original date. A sent one is erased at once; the first failure stops the
+  /// each with its original date (those older than [pendingMaxAge] are dropped first). A sent one is erased at once; the first failure stops the
   /// run (the rest waits for the next return); a song the server doesn't know is dropped.
   /// Never two runs for one account.
   Future<void> _flushPending(String id) async {
     if (_removed.contains(id) || !_flushing.add(id)) return;
     try {
+      await _db.dropPendingBefore(id, DateTime.now().subtract(pendingMaxAge));
       final todo = await _db.pending(id)
         ..sort(
           (a, b) => a.at != b.at ? a.at.compareTo(b.at) : a.id.compareTo(b.id),

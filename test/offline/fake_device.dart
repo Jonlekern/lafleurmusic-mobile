@@ -8,8 +8,12 @@ class FakeDevice implements Device {
   Directory root;
   Directory? docs;
   bool reachable = true;
+  int rootReads = 0;
   @override
-  Future<Directory> musicRoot() async => root;
+  Future<Directory> musicRoot() async {
+    rootReads++;
+    return root;
+  }
   @override
   Future<bool> rootReachable() async => reachable;
   @override

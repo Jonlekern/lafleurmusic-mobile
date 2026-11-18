@@ -9,6 +9,14 @@ import 'package:lafleurmusic/player/player.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/sources/subsonic.dart';
 
+/// Base dont l'écriture des écoutes en attente échoue (disque plein…).
+class _NoPendingDb extends LibraryDb {
+  _NoPendingDb() : super(NativeDatabase.memory());
+  @override
+  Future<void> addPending(String accountId, String remoteId, DateTime at) =>
+      Future.error(StateError('disk full'));
+}
+
 class _ScrobbleSource implements MusicSource {
   _ScrobbleSource(this.accountId, this.log, {this.error});
   @override
@@ -235,6 +243,32 @@ void main() {
           await listen(SubsonicException('HTTP 502: not a Subsonic response')),
           hasLength(1),
         );
+      });
+
+      test('la base refuse l’écoute en attente : rien ne s’échappe', () async {
+        final errors = <Object>[];
+        await runZonedGuarded(() async {
+          final c = StreamController<PlayerState>();
+          final broken = _NoPendingDb();
+          await broken.upsertTracks([server('s1')]);
+          final failing = PlayCounter(
+            c.stream,
+            broken,
+            now: () => DateTime(2026, 10, 17),
+            sourceOf: (id) async => _ScrobbleSource(
+              id,
+              scrobbles,
+              error: SourceNetworkException(Exception('x')),
+            ),
+          );
+          c
+            ..add(s(server('s1'), 10))
+            ..add(s(server('s1'), 200));
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await failing.dispose();
+          await broken.close();
+        }, (e, _) => errors.add(e));
+        expect(errors, isEmpty);
       });
 
       test('morceau inconnu du serveur (code 70) → abandonné', () async {

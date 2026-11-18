@@ -278,6 +278,34 @@ void main() {
         expect(service.playableNow(tr(k, acc: a.id)), isTrue);
       });
 
+      test('an iCloud placeholder counts as there (iOS fetches it on open)', () async {
+        final k = 'subsonic://${a.id}/s1';
+        await service.checkAll([a.id]); // absent
+        await db.queueOffline([k], OfflineReason.user);
+        await db.markOfflineDone(k, 'A/s1.mp3', 1);
+        File('${tmp.path}/A/.s1.mp3.icloud').createSync(recursive: true);
+        await pumpEventQueue();
+        expect(service.playableNow(tr(k, acc: a.id)), isTrue);
+        File('${tmp.path}/.x.mp3.icloud').createSync();
+        expect(service.playableNow(tr('${tmp.path}/x.mp3')), isTrue);
+      });
+
+      test('an offline emit does not read the folder again; same rows: no notification', () async {
+        final k = 'subsonic://${a.id}/s1';
+        await db.queueOffline([k], OfflineReason.user);
+        await pumpEventQueue();
+        var n = 0;
+        service.addListener(() => n++);
+        final reads = device.rootReads;
+        await db.markOfflineDone(k, 'A/s1.mp3', 1);
+        await pumpEventQueue();
+        expect(n, 1);
+        await db.markOfflineDone(k, 'A/s1.mp3', 1); // same values: an emit, no change
+        await pumpEventQueue();
+        expect(n, 1);
+        expect(device.rootReads, reads);
+      });
+
       test('docs:// local track follows the Documents folder', () async {
         final docs = Directory('${tmp.path}/docs')..createSync();
         device.docs = docs;
@@ -362,6 +390,33 @@ void main() {
       expect(await db.select(db.offline).get(), isEmpty);
     });
 
+    test('an iCloud placeholder of a removed account\'s copy becomes a local track', () async {
+      final tmp = Directory.systemTemp.createTempSync('rm');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final k = 'subsonic://${a.id}/s1';
+      await db.upsertTrack(Track(
+        path: k,
+        accountId: a.id,
+        remoteId: 's1',
+        title: 'T',
+        artist: 'A',
+        album: 'B',
+        durationMs: 1,
+        hasCover: false,
+        size: 7,
+      ));
+      await db.queueOffline([k], OfflineReason.user);
+      await db.markOfflineDone(k, 'A/B/T.mp3', 7);
+      File('${tmp.path}/A/B/.T.mp3.icloud').createSync(recursive: true);
+      await db.addPlay(k, DateTime(2026));
+      final service = AccountService(accounts, db: db, device: FakeDevice(tmp));
+      await service.remove(a.id);
+      final abs = '${tmp.path}/A/B/T.mp3';
+      final local = (await db.trackByPath(abs))!;
+      expect((local.accountId, local.size), ('local', 7));
+      expect([for (final c in await db.select(db.playCounts).get()) c.path], [abs]);
+    });
+
     test('refreshRoot notifies even without a device', () async {
       final service = AccountService(accounts, db: db);
       var n = 0;
@@ -430,8 +485,10 @@ void main() {
     late LibraryDb db;
     late _ScrobbleFake src;
     late AccountService service;
-    final d1 = DateTime(2026, 11, 1, 10), d2 = DateTime(2026, 11, 1, 11);
-    final d3 = DateTime(2026, 11, 1, 12);
+    // recent dates: listens older than 30 days are dropped
+    final base = DateTime.now().millisecondsSinceEpoch - 2 * 86400000;
+    DateTime at(int h) => DateTime.fromMillisecondsSinceEpoch(base + h * 3600000);
+    final d1 = at(0), d2 = at(1), d3 = at(2);
 
     setUp(() async {
       db = LibraryDb(NativeDatabase.memory());
@@ -500,6 +557,14 @@ void main() {
       src.gate!.complete();
       await Future.wait([first, second]);
       expect([for (final s in src.sent) s.$1], ['s1', 's2', 's3']);
+    });
+
+    test('listens older than 30 days are dropped, never sent', () async {
+      final old = DateTime.now().subtract(const Duration(days: 31));
+      await db.addPending('acc', 'ancient', old);
+      await service.checkAll(['acc']);
+      expect([for (final s in src.sent) s.$1], ['s1', 's2', 's3']);
+      expect(await db.pending('acc'), isEmpty);
     });
 
     test('a finished sync sends them too', () async {

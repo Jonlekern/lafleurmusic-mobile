@@ -88,6 +88,16 @@ void main() {
     expect(await accounts.watch().first, isEmpty);
   });
 
+  test('remove drops the account\'s pending listens only', () async {
+    final a = await addOne('Home');
+    final b = await addOne('Other');
+    await db.addPending(a.id, 's1', DateTime.now());
+    await db.addPending(b.id, 's2', DateTime.now());
+    await accounts.remove(a.id, root: null);
+    expect(await db.pending(a.id), isEmpty);
+    expect(await db.pending(b.id), hasLength(1));
+  });
+
   test('remove deletes the tracks of that account only', () async {
     final a = await addOne('Home');
     final b = await addOne('Other');

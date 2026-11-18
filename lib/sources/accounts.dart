@@ -145,6 +145,9 @@ class Accounts {
     await _db.transaction(() async {
       await (_db.delete(_db.accountRows)..where((t) => t.id.equals(id))).go();
       await _db.deleteAccountTracks(id, root: root);
+      await (_db.delete(
+        _db.pendingScrobbles,
+      )..where((p) => p.accountId.equals(id))).go();
     });
     await _secrets.delete(_pwKey(id));
     await _secrets.delete(_hdrKey(id));

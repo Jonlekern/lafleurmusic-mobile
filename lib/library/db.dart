@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
+import '../offline/paths.dart';
 import 'models.dart';
 
 part 'db.g.dart';
@@ -304,6 +305,16 @@ class LibraryDb extends _$LibraryDb {
             ..orderBy([(p) => OrderingTerm.asc(p.id)]))
           .get();
 
+  /// Les écoutes en attente de [accountId] plus anciennes que [before] : trop vieilles
+  /// pour un scrobble utile.
+  Future<void> dropPendingBefore(String accountId, DateTime before) =>
+      (delete(pendingScrobbles)..where(
+            (p) =>
+                p.accountId.equals(accountId) &
+                p.at.isSmallerThanValue(before.millisecondsSinceEpoch),
+          ))
+          .go();
+
   Future<void> deletePending(List<int> ids) async {
     for (var i = 0; i < ids.length; i += 500) {
       final chunk = ids.sublist(i, i + 500 > ids.length ? ids.length : i + 500);
@@ -399,17 +410,11 @@ class LibraryDb extends _$LibraryDb {
   /// finished copies that are still on disk become local tracks, the rest goes ([dropServerTracks]).
   /// Safe to repeat; call it only with a reachable [root].
   Future<void> adoptOrphans(CopyRoot root) async {
-    final ids = (await select(accountRows).get()).map((r) => r.id).toSet();
-    final paths =
-        await (selectOnly(tracks)
-              ..addColumns([tracks.path, tracks.accountId])
-              ..where(tracks.accountId.equals('local').not()))
-            .map((r) => (r.read(tracks.path)!, r.read(tracks.accountId)!))
-            .get();
-    final orphans = [
-      for (final (path, acc) in paths)
-        if (!ids.contains(acc)) path,
-    ];
+    final orphans = await customSelect(
+      "SELECT path FROM tracks WHERE account_id <> 'local' "
+      'AND account_id NOT IN (SELECT id FROM accounts)',
+      readsFrom: {tracks, accountRows},
+    ).map((r) => r.read<String>('path')).get();
     if (orphans.isNotEmpty) await dropServerTracks(orphans, root: root);
   }
 
@@ -439,7 +444,8 @@ class LibraryDb extends _$LibraryDb {
         if (done && rel != null) {
           final abs = p.join(root!.path, rel);
           final file = File(abs);
-          final row = file.existsSync()
+          // iCloud a pu mettre le fichier de côté (`.nom.icloud`) : il est toujours là
+          final row = fileOrPlaceholderExists(abs)
               ? await (select(
                   tracks,
                 )..where((t) => t.path.equals(path))).getSingleOrNull()
@@ -464,8 +470,12 @@ class LibraryDb extends _$LibraryDb {
                 trackNo: t.trackNo,
                 durationMs: t.durationMs,
                 hasCover: t.hasCover,
-                mtime: file.statSync().modified.millisecondsSinceEpoch,
-                size: file.lengthSync(),
+                mtime: file.existsSync()
+                    ? file.statSync().modified.millisecondsSinceEpoch
+                    : t.mtime,
+                size: file.existsSync()
+                    ? file.lengthSync()
+                    : (o.size > 0 ? o.size : t.size),
               ),
             ]);
             await movePlays(path, key);

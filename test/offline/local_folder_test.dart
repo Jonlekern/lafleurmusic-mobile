@@ -182,6 +182,15 @@ void main() {
     },
   );
 
+  test('a file iCloud put aside (.name.icloud) is not removed', () async {
+    final f = put('A/x.mp3');
+    await folder.rescan();
+    expect(await db.localTracks(), hasLength(1));
+    f.renameSync('${root.path}/A/.x.mp3.icloud');
+    await folder.rescan();
+    expect(await db.localTracks(), hasLength(1));
+  });
+
   test('hand-placed files are never touched', () async {
     final f = put('keep.mp3', 'zzzz');
     final before = f.statSync();
