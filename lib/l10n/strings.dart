@@ -317,4 +317,8 @@ class Strings {
     'Ce dossier n’est pas sur le téléphone. Choisis un dossier du téléphone ou de la carte SD.',
     'This folder isn’t on the phone. Pick a folder on the phone or SD card.',
   );
+  String get folderNotWritable => _t(
+    'L’appli ne peut pas écrire dans ce dossier. Choisis-en un autre, par exemple dans Musique.',
+    'The app can’t write to this folder. Pick another one, for example in Music.',
+  );
 }

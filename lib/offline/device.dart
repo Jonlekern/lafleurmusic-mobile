@@ -10,12 +10,17 @@ abstract class Device {
   Future<Directory> musicRoot();
 
   /// Sélecteur de dossier du système. Renvoie le nouveau chemin, ou null si annulé.
-  /// Lève [FolderNotLocalException] si le dossier n'est pas sur le téléphone (Android).
+  /// Lève [FolderNotLocalException] si le dossier n'est pas sur le téléphone (Android),
+  /// [FolderNotWritableException] si l'appli ne peut pas y écrire.
   Future<String?> pickFolder();
 
   /// Faux si le dossier choisi ne répond plus (carte SD retirée, signet périmé) :
   /// [musicRoot] retombe alors sur le dossier par défaut.
   Future<bool> rootReachable();
+
+  /// Android : demande les droits de stockage (écriture avant l'API 29 ; lecture des
+  /// autres fichiers si [readOthers]). Vrai si accordés ou inutiles. iOS : toujours vrai.
+  Future<bool> ensureAccess({bool readOthers = false});
 
   Future<int> freeBytes(String path);
 
@@ -27,6 +32,12 @@ abstract class Device {
 class FolderNotLocalException implements Exception {
   @override
   String toString() => 'FolderNotLocalException';
+}
+
+/// Le dossier choisi est sur le téléphone mais l'appli ne peut pas y écrire.
+class FolderNotWritableException implements Exception {
+  @override
+  String toString() => 'FolderNotWritableException';
 }
 
 /// [Device] réel, par le canal natif `studio.lafleur/device`.
@@ -45,15 +56,15 @@ class ChannelDevice implements Device {
   final bool _ios;
 
   Directory? _chosen; // dossier choisi, résolu et accessible
-  bool _resolved = false;
+  Future<void>? _resolving;
 
   Future<Directory> _default() async =>
       Directory((await _ch.invokeMethod<String>('defaultRoot'))!);
 
   /// Résout le dossier choisi une fois (iOS : signet relu, accès démarré).
-  Future<void> _resolve() async {
-    if (_resolved) return;
-    _resolved = true;
+  Future<void> _resolve() => _resolving ??= _doResolve();
+
+  Future<void> _doResolve() async {
     final saved = settings.musicFolder;
     if (saved == null) return;
     try {
@@ -73,8 +84,8 @@ class ChannelDevice implements Device {
         final d = Directory(saved);
         if (await d.exists()) _chosen = d;
       }
-    } on PlatformException {
-      _chosen = null;
+    } on Object {
+      _chosen = null; // plugin absent, signet périmé, dossier illisible…
     }
   }
 
@@ -97,6 +108,7 @@ class ChannelDevice implements Device {
       r = await _ch.invokeMapMethod<String, Object?>('pickFolder');
     } on PlatformException catch (e) {
       if (e.code == 'not_local') throw FolderNotLocalException();
+      if (e.code == 'not_writable') throw FolderNotWritableException();
       rethrow;
     }
     if (r == null) return null;
@@ -104,8 +116,17 @@ class ChannelDevice implements Device {
     settings.musicFolder = _ios ? r['bookmark']! as String : path;
     await saveSettings();
     _chosen = Directory(path);
-    _resolved = true;
+    _resolving = Future.value();
     return path;
+  }
+
+  @override
+  Future<bool> ensureAccess({bool readOthers = false}) async {
+    if (_ios) return true;
+    return await _ch.invokeMethod<bool>('ensureAccess', {
+          'readOthers': readOthers,
+        }) ??
+        false;
   }
 
   @override

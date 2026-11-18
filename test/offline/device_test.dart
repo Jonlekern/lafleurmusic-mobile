@@ -125,4 +125,53 @@ void main() {
       expect(calls, isEmpty);
     },
   );
+
+  test('pickFolder not writable maps to its exception', () async {
+    native = (c) async => throw PlatformException(code: 'not_writable');
+    await expectLater(
+      device().pickFolder(),
+      throwsA(isA<FolderNotWritableException>()),
+    );
+    expect(settings.musicFolder, isNull);
+  });
+
+  test('concurrent musicRoot calls both get the chosen folder (iOS)', () async {
+    settings.musicFolder = 'old';
+    native = (c) async {
+      if (c.method != 'openBookmark') return '${tmp.path}/def';
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      return {'path': '/private/iCloud/Music'};
+    };
+    final d = device(ios: true);
+    final r = await Future.wait([
+      d.musicRoot(),
+      d.musicRoot(),
+      d.rootReachable(),
+    ]);
+    expect((r[0] as Directory).path, '/private/iCloud/Music');
+    expect((r[1] as Directory).path, '/private/iCloud/Music');
+    expect(r[2], true);
+    expect(calls.where((c) => c.method == 'openBookmark').length, 1);
+  });
+
+  test('missing plugin falls back to default, unreachable', () async {
+    settings.musicFolder = 'old';
+    native = (c) async => c.method == 'openBookmark'
+        ? throw MissingPluginException()
+        : '${tmp.path}/def';
+    final d = device(ios: true);
+    expect((await d.musicRoot()).path, '${tmp.path}/def');
+    expect(await d.rootReachable(), false);
+  });
+
+  test('ensureAccess maps the channel answer; iOS is always true', () async {
+    native = (c) async => c.method == 'ensureAccess' ? false : null;
+    expect(await device().ensureAccess(readOthers: true), false);
+    expect(calls.last.arguments, {'readOthers': true});
+    native = (c) async => true;
+    expect(await device().ensureAccess(), true);
+    calls.clear();
+    expect(await device(ios: true).ensureAccess(readOthers: true), true);
+    expect(calls, isEmpty);
+  });
 }

@@ -2,8 +2,11 @@ package studio.lafleur.lafleurmusic
 
 import android.app.Activity
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.provider.DocumentsContract
@@ -15,6 +18,7 @@ import java.io.File
 /** Canal `studio.lafleur/device` : dossier des copies, sélecteur de dossier, place libre. */
 class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) {
     private var pending: MethodChannel.Result? = null
+    private var pendingPermission: MethodChannel.Result? = null
 
     init {
         MethodChannel(messenger, "studio.lafleur/device").setMethodCallHandler(::handle)
@@ -31,6 +35,7 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
                 else result.error("default_root", null, null)
             }
             "pickFolder" -> pickFolder(result)
+            "ensureAccess" -> ensureAccess(call.argument<Boolean>("readOthers") == true, result)
             "freeBytes" -> {
                 val path = call.argument<String>("path")
                 if (path == null) {
@@ -98,7 +103,55 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
             result.error("not_local", null, null)
             return true
         }
+        // Android 11+ refuse l'écriture de fichiers dans bien des dossiers (Download, racine SD…).
+        val probe = File(dir, ".lafleur_probe")
+        val writable = try {
+            probe.createNewFile() && probe.delete()
+        } catch (e: Exception) {
+            false
+        }
+        if (!writable) {
+            probe.delete()
+            result.error("not_writable", null, null)
+            return true
+        }
         result.success(mapOf("path" to path))
+        return true
+    }
+
+    /** Permissions de stockage : écriture (API <= 28), lecture des autres fichiers si [readOthers]. */
+    private fun ensureAccess(readOthers: Boolean, result: MethodChannel.Result) {
+        val needed = ArrayList<String>()
+        if (Build.VERSION.SDK_INT <= 28) needed.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        if (readOthers) {
+            needed.add(
+                if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
+                else Manifest.permission.READ_EXTERNAL_STORAGE,
+            )
+        }
+        val missing = if (Build.VERSION.SDK_INT >= 23) {
+            needed.filter { activity.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        } else {
+            emptyList()
+        }
+        if (missing.isEmpty()) {
+            result.success(true)
+            return
+        }
+        if (pendingPermission != null) {
+            result.error("busy", null, null)
+            return
+        }
+        pendingPermission = result
+        activity.requestPermissions(missing.toTypedArray(), REQUEST_PERMISSIONS)
+    }
+
+    /** Appelé par [MainActivity.onRequestPermissionsResult]. */
+    fun onPermissionsResult(requestCode: Int, grantResults: IntArray): Boolean {
+        if (requestCode != REQUEST_PERMISSIONS) return false
+        val result = pendingPermission ?: return true
+        pendingPermission = null
+        result.success(grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED })
         return true
     }
 
@@ -129,5 +182,6 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
 
     private companion object {
         const val REQUEST_FOLDER = 4711
+        const val REQUEST_PERMISSIONS = 4712
     }
 }
