@@ -13,10 +13,10 @@ String fixture(String name) =>
     File('test/fixtures/subsonic/$name.json').readAsStringSync();
 
 http.Response json(String body, [int code = 200]) => http.Response(
-      body,
-      code,
-      headers: {'content-type': 'application/json; charset=utf-8'},
-    );
+  body,
+  code,
+  headers: {'content-type': 'application/json; charset=utf-8'},
+);
 
 const emptyAlbumList =
     '{"subsonic-response":{"status":"ok","version":"1.16.1","albumList2":{}}}';
@@ -24,19 +24,19 @@ const emptyAlbumList =
 /// The recorded album list at offset 0, then an empty page.
 http.Response albumList(http.Request r) =>
     r.url.queryParameters['offset'] == '0'
-        ? json(fixture('getAlbumList2'))
-        : json(emptyAlbumList);
+    ? json(fixture('getAlbumList2'))
+    : json(emptyAlbumList);
 
 /// A server that never answers (home server seen from outside the house).
 MockClient hanging() => MockClient((r) => Completer<http.Response>().future);
 
 String albumPage(List<Map<String, Object?>> albums) => jsonEncode({
-      'subsonic-response': {
-        'status': 'ok',
-        'version': '1.16.1',
-        'albumList2': {'album': albums},
-      },
-    });
+  'subsonic-response': {
+    'status': 'ok',
+    'version': '1.16.1',
+    'albumList2': {'album': albums},
+  },
+});
 
 SubsonicSource make(
   http.Client client, {
@@ -44,17 +44,16 @@ SubsonicSource make(
   String password = 'pw',
   Map<String, String> headers = const {},
   Duration timeout = requestTimeout,
-}) =>
-    SubsonicSource(
-      accountId: 'acc1',
-      base: Uri.parse(base),
-      user: 'johnny',
-      password: password,
-      headers: headers,
-      client: client,
-      salt: () => 'abc',
-      timeout: timeout,
-    );
+}) => SubsonicSource(
+  accountId: 'acc1',
+  base: Uri.parse(base),
+  user: 'johnny',
+  password: password,
+  headers: headers,
+  client: client,
+  salt: () => 'abc',
+  timeout: timeout,
+);
 
 void main() {
   group('test()', () {
@@ -67,7 +66,9 @@ void main() {
         final headersSeen = <String?>[];
         final s = make(
           MockClient((r) async {
-            seen.add('${r.url.scheme}://${r.url.host}:${r.url.port}${r.url.path}');
+            seen.add(
+              '${r.url.scheme}://${r.url.host}:${r.url.port}${r.url.path}',
+            );
             headersSeen.add(r.headers['CF-Access-Client-Id']);
             if (r.url.scheme == 'http') {
               return moved('https://h:4533/rest/ping');
@@ -80,7 +81,10 @@ void main() {
         expect(s.redirectedBase, isNull);
         expect(await s.test(), TestResult.ok);
         expect(s.redirectedBase, Uri.parse('https://h:4533'));
-        expect(seen, ['http://h:4533/rest/ping.view', 'https://h:4533/rest/ping.view']);
+        expect(seen, [
+          'http://h:4533/rest/ping.view',
+          'https://h:4533/rest/ping.view',
+        ]);
         expect(headersSeen, ['id1', 'id1']);
       });
 
@@ -135,20 +139,23 @@ void main() {
         expect(await s.test(), TestResult.headerRefused);
       });
 
-      test('credentials stay out of exceptions: query kept on the hop', () async {
-        final queries = <String>[];
-        final s = make(
-          MockClient((r) async {
-            queries.add(r.url.queryParameters['u'] ?? '');
-            return r.url.scheme == 'http'
-                ? moved('https://h:4533/rest/ping')
-                : json(fixture('ping'));
-          }),
-          base: 'http://h:4533',
-        );
-        await s.test();
-        expect(queries, everyElement(isNotEmpty));
-      });
+      test(
+        'credentials stay out of exceptions: query kept on the hop',
+        () async {
+          final queries = <String>[];
+          final s = make(
+            MockClient((r) async {
+              queries.add(r.url.queryParameters['u'] ?? '');
+              return r.url.scheme == 'http'
+                  ? moved('https://h:4533/rest/ping')
+                  : json(fixture('ping'));
+            }),
+            base: 'http://h:4533',
+          );
+          await s.test();
+          expect(queries, everyElement(isNotEmpty));
+        },
+      );
     });
 
     test('ok on a successful ping', () async {
@@ -162,8 +169,13 @@ void main() {
     });
 
     test('wrongPassword on the bare error-40 body from the brief', () async {
-      final s = make(MockClient((r) async => json(
-          '{"subsonic-response":{"status":"failed","error":{"code":40}}}')));
+      final s = make(
+        MockClient(
+          (r) async => json(
+            '{"subsonic-response":{"status":"failed","error":{"code":40}}}',
+          ),
+        ),
+      );
       expect(await s.test(), TestResult.wrongPassword);
     });
 
@@ -179,8 +191,11 @@ void main() {
 
     test('headerRefused on 401/403 without Subsonic body', () async {
       for (final code in [401, 403]) {
-        final s = make(MockClient(
-            (r) async => http.Response('<html>Access denied</html>', code)));
+        final s = make(
+          MockClient(
+            (r) async => http.Response('<html>Access denied</html>', code),
+          ),
+        );
         expect(await s.test(), TestResult.headerRefused, reason: '$code');
       }
     });
@@ -191,8 +206,11 @@ void main() {
     });
 
     test('notSubsonic on an HTML 200', () async {
-      final s = make(MockClient(
-          (r) async => http.Response('<html><body>Hi</body></html>', 200)));
+      final s = make(
+        MockClient(
+          (r) async => http.Response('<html><body>Hi</body></html>', 200),
+        ),
+      );
       expect(await s.test(), TestResult.notSubsonic);
     });
 
@@ -227,19 +245,21 @@ void main() {
     });
 
     test('the password never appears in a URL', () async {
-      final s = make(MockClient((r) async => json(fixture('ping'))),
-          password: 'sekret');
+      final s = make(
+        MockClient((r) async => json(fixture('ping'))),
+        password: 'sekret',
+      );
       expect(s.streamUri('s-1').toString(), isNot(contains('sekret')));
       expect(s.coverUri('al-1', 300).toString(), isNot(contains('sekret')));
     });
 
     test('default salt is random 12 hex chars', () {
       SubsonicSource mk() => SubsonicSource(
-            accountId: 'a',
-            base: Uri.parse('https://h'),
-            user: 'u',
-            password: 'p',
-          );
+        accountId: 'a',
+        base: Uri.parse('https://h'),
+        user: 'u',
+        password: 'p',
+      );
       final a = mk().streamUri('1').queryParameters['s']!;
       final b = mk().streamUri('1').queryParameters['s']!;
       expect(a, matches(RegExp(r'^[0-9a-f]{12}$')));
@@ -255,8 +275,10 @@ void main() {
         'https://h.example/music',
         'https://h.example/music/',
       ]) {
-        final s =
-            make(MockClient((r) async => json(fixture('ping'))), base: base);
+        final s = make(
+          MockClient((r) async => json(fixture('ping'))),
+          base: base,
+        );
         final prefix = base.endsWith('/') ? base : '$base/';
         final u = s.streamUri('s-1').toString();
         expect(u, startsWith('${prefix}rest/stream.view?'), reason: base);
@@ -267,11 +289,12 @@ void main() {
     test('request on a sub-path hits <base>/rest/ping.view', () async {
       late Uri seen;
       final s = make(
-          MockClient((r) async {
-            seen = r.url;
-            return json(fixture('ping'));
-          }),
-          base: 'https://h.example/music');
+        MockClient((r) async {
+          seen = r.url;
+          return json(fixture('ping'));
+        }),
+        base: 'https://h.example/music',
+      );
       await s.test();
       expect(seen.path, '/music/rest/ping.view');
     });
@@ -321,14 +344,15 @@ void main() {
       // The app fetches covers itself, with s.headers.
       await client.get(s.coverUri('al-1', 100), headers: s.headers);
       expect(
-          seen.keys,
-          containsAll([
-            '/rest/ping.view',
-            '/rest/getAlbumList2.view',
-            '/rest/getAlbum.view',
-            '/rest/scrobble.view',
-            '/rest/getCoverArt.view',
-          ]));
+        seen.keys,
+        containsAll([
+          '/rest/ping.view',
+          '/rest/getAlbumList2.view',
+          '/rest/getAlbum.view',
+          '/rest/scrobble.view',
+          '/rest/getCoverArt.view',
+        ]),
+      );
       expect(seen.values, everyElement('id1'));
       expect(s.headers, {'CF-Access-Client-Id': 'id1'});
     });
@@ -346,15 +370,17 @@ void main() {
         final n = (1200 - off).clamp(0, 500);
         final items = [
           for (var i = 0; i < n; i++)
-            {'id': 'a${off + i}', 'name': 'N${off + i}', 'artist': 'Johnny'}
+            {'id': 'a${off + i}', 'name': 'N${off + i}', 'artist': 'Johnny'},
         ];
-        return json(jsonEncode({
-          'subsonic-response': {
-            'status': 'ok',
-            'version': '1.16.1',
-            'albumList2': {'album': items}
-          }
-        }));
+        return json(
+          jsonEncode({
+            'subsonic-response': {
+              'status': 'ok',
+              'version': '1.16.1',
+              'albumList2': {'album': items},
+            },
+          }),
+        );
       });
       final it = StreamIterator(make(client).albums(pageSize: 500));
       expect(offsets, isEmpty);
@@ -378,47 +404,56 @@ void main() {
         final off = int.parse(r.url.queryParameters['offset']!);
         offsets.add(off);
         final n = (250 - off).clamp(0, 100); // ignores size=500
-        return json(albumPage([
-          for (var i = 0; i < n; i++)
-            {'id': 'a${off + i}', 'name': 'N${off + i}', 'artist': 'J'}
-        ]));
+        return json(
+          albumPage([
+            for (var i = 0; i < n; i++)
+              {'id': 'a${off + i}', 'name': 'N${off + i}', 'artist': 'J'},
+          ]),
+        );
       });
       final pages = await make(client).albums().toList();
       expect(pages.map((p) => p.length), [100, 100, 50]);
       expect(offsets, [0, 100, 200, 250]);
     });
 
-    test('a server ignoring the offset: stops with an error, no endless loop',
-        () async {
-      var calls = 0;
-      final client = MockClient((r) async {
-        calls++;
-        return json(albumPage([
-          {'id': 'a', 'name': 'A', 'artist': 'x'},
-          {'id': 'b', 'name': 'B', 'artist': 'x'},
-        ]));
-      });
-      final pages = <List<SourceAlbum>>[];
-      Object? error;
-      try {
-        await for (final p in make(client).albums(pageSize: 2)) {
-          pages.add(p);
+    test(
+      'a server ignoring the offset: stops with an error, no endless loop',
+      () async {
+        var calls = 0;
+        final client = MockClient((r) async {
+          calls++;
+          return json(
+            albumPage([
+              {'id': 'a', 'name': 'A', 'artist': 'x'},
+              {'id': 'b', 'name': 'B', 'artist': 'x'},
+            ]),
+          );
+        });
+        final pages = <List<SourceAlbum>>[];
+        Object? error;
+        try {
+          await for (final p in make(client).albums(pageSize: 2)) {
+            pages.add(p);
+          }
+        } catch (e) {
+          error = e;
         }
-      } catch (e) {
-        error = e;
-      }
-      expect(pages, hasLength(1));
-      expect(error, isA<SubsonicException>());
-      expect(calls, 2);
-    });
+        expect(pages, hasLength(1));
+        expect(error, isA<SubsonicException>());
+        expect(calls, 2);
+      },
+    );
 
     test('maps fields from the recorded response', () async {
       final s = make(MockClient((r) async => albumList(r)));
       final pages = await s.albums().toList();
       expect(pages.length, 1);
       final a = pages.single;
-      expect(a.map((e) => e.name),
-          ['Studio Lafleur', 'Lafleur Surf', 'Summer Mix']);
+      expect(a.map((e) => e.name), [
+        'Studio Lafleur',
+        'Lafleur Surf',
+        'Summer Mix',
+      ]);
       expect(a[0].artist, 'LAFLEURSTUDIO');
       expect(a[0].coverId, 'al-1');
       expect(a[0].songCount, 10);
@@ -430,20 +465,22 @@ void main() {
       final client = MockClient((r) async {
         calls++;
         final off = int.parse(r.url.queryParameters['offset']!);
-        return json(jsonEncode({
-          'subsonic-response': {
-            'status': 'ok',
-            'version': '1.16.1',
-            'albumList2': off == 0
-                ? {
-                    'album': [
-                      {'id': 'a', 'name': 'A', 'artist': 'x'},
-                      {'id': 'b', 'name': 'B', 'artist': 'x'}
-                    ]
-                  }
-                : {}
-          }
-        }));
+        return json(
+          jsonEncode({
+            'subsonic-response': {
+              'status': 'ok',
+              'version': '1.16.1',
+              'albumList2': off == 0
+                  ? {
+                      'album': [
+                        {'id': 'a', 'name': 'A', 'artist': 'x'},
+                        {'id': 'b', 'name': 'B', 'artist': 'x'},
+                      ],
+                    }
+                  : {},
+            },
+          }),
+        );
       });
       final pages = await make(client).albums(pageSize: 2).toList();
       expect(pages.map((p) => p.length), [2]);
@@ -459,10 +496,12 @@ void main() {
   group('albumSongs()', () {
     test('reads songs, replayGain when present, null otherwise', () async {
       late Uri seen;
-      final s = make(MockClient((r) async {
-        seen = r.url;
-        return json(fixture('getAlbum'));
-      }));
+      final s = make(
+        MockClient((r) async {
+          seen = r.url;
+          return json(fixture('getAlbum'));
+        }),
+      );
       final songs = await s.albumSongs('al-1');
       expect(seen.queryParameters['id'], 'al-1');
       expect(songs.length, 2);
@@ -493,10 +532,12 @@ void main() {
   group('scrobble()', () {
     test('sends id, time in ms and submission=true', () async {
       late Uri seen;
-      final s = make(MockClient((r) async {
-        seen = r.url;
-        return json(fixture('ping'));
-      }));
+      final s = make(
+        MockClient((r) async {
+          seen = r.url;
+          return json(fixture('ping'));
+        }),
+      );
       final at = DateTime.fromMillisecondsSinceEpoch(1700000000123);
       await s.scrobble('s-1', at);
       expect(seen.path, '/rest/scrobble.view');
@@ -509,9 +550,11 @@ void main() {
   group('network errors carry no credentials', () {
     final failures = <String, Object>{
       'ClientException': http.ClientException(
-          'Connection refused',
-          Uri.parse(
-              'https://music.example.com/rest/getAlbum.view?u=johnny&t=deadbeef&s=abc&id=1')),
+        'Connection refused',
+        Uri.parse(
+          'https://music.example.com/rest/getAlbum.view?u=johnny&t=deadbeef&s=abc&id=1',
+        ),
+      ),
       'SocketException': const SocketException('Connection refused'),
       'TimeoutException': TimeoutException('slow'),
     };
@@ -535,10 +578,13 @@ void main() {
     }
 
     test('scrobble wraps network errors too', () async {
-      final s = make(MockClient((r) async =>
-          throw http.ClientException('reset', r.url)));
-      await expectLater(s.scrobble('9', DateTime(2026)),
-          throwsA(isA<SourceNetworkException>()));
+      final s = make(
+        MockClient((r) async => throw http.ClientException('reset', r.url)),
+      );
+      await expectLater(
+        s.scrobble('9', DateTime(2026)),
+        throwsA(isA<SourceNetworkException>()),
+      );
     });
   });
 
@@ -549,14 +595,18 @@ void main() {
       final s = make(hanging(), timeout: short);
       final sw = Stopwatch()..start();
       await expectLater(
-          s.albumSongs('1'), throwsA(isA<SourceNetworkException>()));
+        s.albumSongs('1'),
+        throwsA(isA<SourceNetworkException>()),
+      );
       expect(sw.elapsed, lessThan(const Duration(seconds: 5)));
     });
 
     test('the album list fails too (sync ends incomplete)', () async {
       final s = make(hanging(), timeout: short);
       await expectLater(
-          s.albums().toList(), throwsA(isA<SourceNetworkException>()));
+        s.albums().toList(),
+        throwsA(isA<SourceNetworkException>()),
+      );
     });
 
     test('Tester: unreachable within the timeout', () async {
@@ -581,10 +631,14 @@ void main() {
       expect(requestTimeout, const Duration(seconds: 15));
       expect(connectTimeout, const Duration(seconds: 8));
       expect(
-          SubsonicSource(
-                  accountId: 'a', base: Uri.parse('http://h'), user: 'u', password: 'p')
-              .timeout,
-          requestTimeout);
+        SubsonicSource(
+          accountId: 'a',
+          base: Uri.parse('http://h'),
+          user: 'u',
+          password: 'p',
+        ).timeout,
+        requestTimeout,
+      );
     });
   });
 
@@ -592,62 +646,81 @@ void main() {
     test('redirects are not followed; a 3xx is a refused header', () async {
       for (final code in [301, 302, 303, 307, 308]) {
         late bool follow;
-        final s = make(MockClient((r) async {
-          follow = r.followRedirects;
-          return http.Response('', code,
-              headers: {'location': 'https://login.example.com/'});
-        }));
+        final s = make(
+          MockClient((r) async {
+            follow = r.followRedirects;
+            return http.Response(
+              '',
+              code,
+              headers: {'location': 'https://login.example.com/'},
+            );
+          }),
+        );
         expect(await s.test(), TestResult.headerRefused, reason: '$code');
         expect(follow, isFalse);
       }
     });
 
-    test('a refused certificate is told apart from an unreachable server',
-        () async {
-      for (final e in [
-        const HandshakeException('CERTIFICATE_VERIFY_FAILED'),
-        const TlsException('bad certificate'),
-      ]) {
-        final s = make(MockClient((r) async => throw e));
-        expect(await s.test(), TestResult.certificateRejected, reason: '$e');
-      }
-    });
+    test(
+      'a refused certificate is told apart from an unreachable server',
+      () async {
+        for (final e in [
+          const HandshakeException('CERTIFICATE_VERIFY_FAILED'),
+          const TlsException('bad certificate'),
+        ]) {
+          final s = make(MockClient((r) async => throw e));
+          expect(await s.test(), TestResult.certificateRejected, reason: '$e');
+        }
+      },
+    );
   });
 
   group('lenient JSON (numbers where strings are expected)', () {
     test('albums and songs with numeric ids, cover ids and suffix', () async {
-      final s = make(MockClient((r) async {
-        if (r.url.path.endsWith('getAlbumList2.view')) {
-          return json(r.url.queryParameters['offset'] == '0'
-              ? albumPage([
-                  {'id': 7, 'name': 2024, 'artist': 'J', 'coverArt': 42, 'songCount': '3'}
-                ])
-              : emptyAlbumList);
-        }
-        return json(jsonEncode({
-          'subsonic-response': {
-            'status': 'ok',
-            'album': {
-              'id': 7,
-              'name': 'A',
-              'song': [
-                {
-                  'id': 99,
-                  'title': 1999,
-                  'coverArt': 42,
-                  'suffix': 3,
-                  'track': '4',
-                  'duration': '61.5',
-                  'size': 1000,
-                  'replayGain': {'trackGain': '-6.5', 'albumGain': -7},
-                  'playCount': '2',
+      final s = make(
+        MockClient((r) async {
+          if (r.url.path.endsWith('getAlbumList2.view')) {
+            return json(
+              r.url.queryParameters['offset'] == '0'
+                  ? albumPage([
+                      {
+                        'id': 7,
+                        'name': 2024,
+                        'artist': 'J',
+                        'coverArt': 42,
+                        'songCount': '3',
+                      },
+                    ])
+                  : emptyAlbumList,
+            );
+          }
+          return json(
+            jsonEncode({
+              'subsonic-response': {
+                'status': 'ok',
+                'album': {
+                  'id': 7,
+                  'name': 'A',
+                  'song': [
+                    {
+                      'id': 99,
+                      'title': 1999,
+                      'coverArt': 42,
+                      'suffix': 3,
+                      'track': '4',
+                      'duration': '61.5',
+                      'size': 1000,
+                      'replayGain': {'trackGain': '-6.5', 'albumGain': -7},
+                      'playCount': '2',
+                    },
+                    'not a song',
+                  ],
                 },
-                'not a song',
-              ],
-            },
-          },
-        }));
-      }));
+              },
+            }),
+          );
+        }),
+      );
       final albums = (await s.albums().toList()).expand((p) => p).toList();
       expect(albums.single.id, '7');
       expect(albums.single.name, '2024');
@@ -674,8 +747,10 @@ void main() {
   });
 
   test('accountId is exposed', () {
-    expect(make(MockClient((r) async => json(fixture('ping')))).accountId,
-        'acc1');
+    expect(
+      make(MockClient((r) async => json(fixture('ping')))).accountId,
+      'acc1',
+    );
   });
 }
 

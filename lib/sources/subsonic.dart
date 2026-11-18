@@ -28,9 +28,9 @@ class SubsonicSource implements MusicSource, HttpSource {
     http.Client? client,
     String Function()? salt,
     this.timeout = requestTimeout,
-  })  : _headers = Map.unmodifiable(headers),
-        _client = client ?? newServerClient(),
-        _salt = salt ?? _randomSalt;
+  }) : _headers = Map.unmodifiable(headers),
+       _client = client ?? newServerClient(),
+       _salt = salt ?? _randomSalt;
 
   /// A request that hasn't fully answered after this fails (a [SourceNetworkException]).
   final Duration timeout;
@@ -94,7 +94,9 @@ class SubsonicSource implements MusicSource, HttpSource {
   }
 
   Future<Map<String, dynamic>> _call(
-      String method, Map<String, String> params) async {
+    String method,
+    Map<String, String> params,
+  ) async {
     final http.Response res;
     try {
       res = await _client
@@ -106,7 +108,9 @@ class SubsonicSource implements MusicSource, HttpSource {
     }
     final r = _parse(utf8.decode(res.bodyBytes, allowMalformed: true));
     if (r == null) {
-      throw SubsonicException('HTTP ${res.statusCode}: not a Subsonic response');
+      throw SubsonicException(
+        'HTTP ${res.statusCode}: not a Subsonic response',
+      );
     }
     if (r['status'] != 'ok') {
       final e = r['error'];
@@ -125,7 +129,8 @@ class SubsonicSource implements MusicSource, HttpSource {
   Uri? get redirectedBase => _redirectedBase;
   Uri? _redirectedBase;
 
-  static int _portOf(Uri u) => u.hasPort ? u.port : (u.scheme == 'https' ? 443 : 80);
+  static int _portOf(Uri u) =>
+      u.hasPort ? u.port : (u.scheme == 'https' ? 443 : 80);
 
   /// A hop we accept: same host, http or https, never https -> http, and the
   /// port unchanged (or the default https port when upgrading).
@@ -183,7 +188,8 @@ class SubsonicSource implements MusicSource, HttpSource {
         );
       }
     } on TlsException {
-      return TestResult.certificateRejected; // HandshakeException, CertificateException
+      return TestResult
+          .certificateRejected; // HandshakeException, CertificateException
     } on SocketException {
       return TestResult.unreachable;
     } on http.ClientException {
@@ -217,8 +223,9 @@ class SubsonicSource implements MusicSource, HttpSource {
         'size': '$pageSize',
         'offset': '$offset',
       });
-      final raw =
-          r['albumList2'] is Map ? (r['albumList2'] as Map)['album'] : null;
+      final raw = r['albumList2'] is Map
+          ? (r['albumList2'] as Map)['album']
+          : null;
       final list = raw is List ? raw : const [];
       final page = [
         for (final a in list.whereType<Map>())

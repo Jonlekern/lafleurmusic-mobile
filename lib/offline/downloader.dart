@@ -35,6 +35,9 @@ class KeepResult {
   final int count, bytes, neededBytes;
 }
 
+/// Suffixe de nos fichiers en cours : on n'efface jamais les `.part` des autres.
+const _partSuffix = '.lafleur.part';
+
 /// Une réponse que le serveur n'a pas servie comme fichier (4xx, ou erreur Subsonic en JSON/XML).
 class _NotAFile implements Exception {}
 
@@ -49,8 +52,6 @@ class Downloader extends ChangeNotifier {
     http.Client Function()? client,
     TagFileIO? tags,
     TagReader? reader,
-    this.saveRoot,
-    this.retryDelay = const Duration(seconds: 3),
   }) : _client = client ?? newServerClient,
        _tags = tags ?? TagLibIO(),
        _reader = reader ?? TagLibReader();
@@ -63,14 +64,10 @@ class Downloader extends ChangeNotifier {
   final TagFileIO _tags;
   final TagReader _reader;
 
-  /// Enregistre le dossier cible de [moveRoot] (réglage + signet iOS).
-  final Future<void> Function(Directory to)? saveRoot;
-
-  /// Attente avant de réessayer un morceau qui a échoué.
-  final Duration retryDelay;
-
   Future<void>? _loop;
   bool _paused = false;
+  bool _wanted = false; // un start() a eu lieu depuis le début du tour
+  bool _moving = false; // moveRoot en cours : la boucle ne tourne pas
   bool _accessOk = false;
   bool _accessDenied = false;
   final _reserved =
@@ -101,20 +98,31 @@ class Downloader extends ChangeNotifier {
       for (final t in tracks)
         if (parseRemoteKey(t.path) != null) t,
     ];
-    final fresh = <Track>[];
-    for (final t in _albumOrder(remote)) {
-      final old = await db.offlineOf(t.path);
-      if (old?.state != OfflineState.done.name) fresh.add(t);
+    final batch = _albumOrder(remote);
+    final fresh = <Track>[]; // ni terminés ni déjà en file
+    final toQueue = <Track>[];
+    for (final t in batch) {
+      final state = (await db.offlineOf(t.path))?.state;
+      if (state == OfflineState.done.name) continue;
+      toQueue.add(t);
+      if (state != OfflineState.queued.name) fresh.add(t);
     }
     final need = fresh.fold<int>(0, (s, t) => s + _sizeOf(t));
+    // la file d'attente déjà promise compte aussi dans la limite
+    var backlog = 0;
+    for (final r in (await db.watchOffline().first).values) {
+      if (r.state != OfflineState.queued.name) continue;
+      final t = await db.trackByPath(r.trackPath);
+      backlog += t == null ? _unknownSize : _sizeOf(t);
+    }
     final limit = (await settings()).storageLimitBytes;
     final root = await device.musicRoot();
     final free = await device.freeBytes(root.path) - _freeMargin;
-    final over = await db.offlineBytes() + need - limit;
+    final over = await db.offlineBytes() + backlog + need - limit;
     if (over > 0 || need > free) {
       return KeepResult.tooBig(need);
     }
-    await db.queueOffline([for (final t in fresh) t.path], reason);
+    await db.queueOffline([for (final t in toQueue) t.path], reason);
     _accessDenied = false;
     start();
     return KeepResult.queued(fresh.length, need);
@@ -135,11 +143,19 @@ class Downloader extends ChangeNotifier {
   }
 
   void start() {
-    if (_loop != null) return;
+    _wanted = true;
     _paused = false;
+    if (_loop != null || _moving) return;
+    _launch();
+  }
+
+  void _launch() {
+    _wanted = false;
     late final Future<void> f;
     f = _run().whenComplete(() {
       if (identical(_loop, f)) _loop = null;
+      // un start() arrivé pendant que la boucle s'arrêtait ne doit pas se perdre
+      if (_wanted && !_paused && !_moving && _loop == null) _launch();
     });
     _loop = f;
   }
@@ -148,11 +164,12 @@ class Downloader extends ChangeNotifier {
   void pause() {
     _paused = true;
     _active?.cancel();
+    notifyListeners();
   }
 
   Future<void> _run() async {
     try {
-      while (!_paused) {
+      while (!_paused && !_moving) {
         final row = await db.nextQueued();
         if (row == null) break;
         if (!_accessOk) {
@@ -163,8 +180,7 @@ class Downloader extends ChangeNotifier {
           }
           _accessOk = true;
         }
-        final failed = !await _one(row);
-        if (failed && !_paused) await Future<void>.delayed(retryDelay);
+        if (!await _one(row)) break;
       }
     } finally {
       _reserved.clear();
@@ -172,7 +188,8 @@ class Downloader extends ChangeNotifier {
     }
   }
 
-  /// Vrai si le morceau est rangé ou abandonné proprement (pause), faux si échec.
+  /// Faux si la boucle doit s'arrêter (réseau coupé : rien n'est compté, le prochain
+  /// start() reprend). Un refus du serveur compte un échec et passe au morceau suivant.
   Future<bool> _one(OfflineRow row) async {
     final active = _Active(row.trackPath, _client());
     _active = active;
@@ -182,10 +199,12 @@ class Downloader extends ChangeNotifier {
     try {
       await _download(row, active); // null : abandonné (pause), reste en file
       return true;
-    } catch (_) {
+    } catch (e) {
       if (active.cancelled) return true; // pause ou oubli : pas un échec
+      if (_isNetwork(e)) return false;
       await db.markOfflineFailed(row.trackPath);
-      return false;
+      await db.sendOfflineToBack(row.trackPath);
+      return true;
     } finally {
       active.client.close();
       _active = null;
@@ -193,6 +212,12 @@ class Downloader extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  static bool _isNetwork(Object e) =>
+      e is SocketException ||
+      e is TimeoutException ||
+      e is http.ClientException ||
+      e is TlsException;
 
   /// Télécharge le morceau ; renvoie le chemin relatif, null si abandonné.
   Future<String?> _download(OfflineRow row, _Active active) async {
@@ -227,7 +252,7 @@ class Downloader extends ChangeNotifier {
 
     final rel = _chooseName(root, t, ext);
     final file = File(p.join(root.path, rel));
-    final part = File('${file.path}.part');
+    final part = File('${file.path}$_partSuffix');
     await part.parent.create(recursive: true);
     final sink = part.openWrite();
     var got = 0;
@@ -246,8 +271,9 @@ class Downloader extends ChangeNotifier {
         return null;
       }
       final len = res.contentLength;
-      if (got == 0 || (len != null && len != got)) {
-        throw StateError('truncated');
+      if (got == 0) throw StateError('empty body');
+      if (len != null && len != got) {
+        throw http.ClientException('truncated'); // coupure : comme le réseau
       }
       await part.rename(file.path);
     } catch (_) {
@@ -258,16 +284,32 @@ class Downloader extends ChangeNotifier {
       rethrow;
     }
 
-    await _fillTags(file.path, t, source, active);
-    try {
-      await device.announce(file.path);
-    } catch (_) {} // la médiathèque du système n'est pas vitale
+    // fait dès le rangement : une coupure ensuite ne perd pas la copie
     if (await db.offlineOf(row.trackPath) == null) {
       await _drop(file); // oublié pendant le téléchargement
       return null;
     }
     await db.markOfflineDone(row.trackPath, rel, await file.length());
+    await _fillTags(file.path, t, source, active);
+    try {
+      await device.announce(file.path);
+    } catch (_) {} // la médiathèque du système n'est pas vitale
+    try {
+      // les tags changent la taille du fichier
+      if (await db.offlineOf(row.trackPath) != null) {
+        await db.markOfflineDone(row.trackPath, rel, await file.length());
+      }
+    } catch (_) {}
     return rel;
+  }
+
+  static bool _isAudioType(String type) {
+    final t = type.split(';').first.trim();
+    return t.isEmpty ||
+        t.startsWith('audio/') ||
+        t == 'application/octet-stream' ||
+        t == 'binary/octet-stream' ||
+        t == 'application/ogg';
   }
 
   Future<http.StreamedResponse> _get(
@@ -280,11 +322,8 @@ class Downloader extends ChangeNotifier {
     final res = await active.client.send(req).timeout(requestTimeout);
     final type = (res.headers['content-type'] ?? '').toLowerCase();
     // Subsonic répond « erreur » par un 200 avec un corps JSON ou XML
-    final bad =
-        res.statusCode >= 400 ||
-        type.contains('json') ||
-        type.startsWith('text/xml') ||
-        type.startsWith('application/xml');
+    // ou une page HTML (connexion d'un proxy, Cloudflare Access) : seul de l'audio passe
+    final bad = res.statusCode >= 400 || !_isAudioType(type);
     if (!bad) return res;
     await res.stream.drain<void>().timeout(requestTimeout);
     if (fallback) throw StateError('server refused');
@@ -305,7 +344,7 @@ class Downloader extends ChangeNotifier {
       (c) =>
           _reserved.contains(c.toLowerCase()) ||
           File(p.join(root.path, c)).existsSync() ||
-          File('${p.join(root.path, c)}.part').existsSync(),
+          File('${p.join(root.path, c)}$_partSuffix').existsSync(),
     );
     _reserved.add(rel.toLowerCase());
     return rel;
@@ -371,12 +410,19 @@ class Downloader extends ChangeNotifier {
 
   /// Au lancement : efface les `.part` laissés par une coupure, remet la file en route.
   Future<void> resumeAtLaunch() async {
-    final root = await device.musicRoot();
-    if (await root.exists()) {
-      await for (final e in root.list(recursive: true, followLinks: false)) {
-        if (e is File && e.path.endsWith('.part')) await _drop(e);
+    try {
+      if (_loop == null) {
+        final root = await device.musicRoot();
+        if (await root.exists()) {
+          await for (final e in root.list(
+            recursive: true,
+            followLinks: false,
+          )) {
+            if (e is File && e.path.endsWith(_partSuffix)) await _drop(e);
+          }
+        }
       }
-    }
+    } catch (_) {} // un dossier illisible n'empêche pas la reprise
     start();
   }
 
@@ -403,7 +449,7 @@ class Downloader extends ChangeNotifier {
     for (final rel in rels) {
       final file = _inside(root, rel);
       if (file == null) continue; // hors de la racine : on n'y touche pas
-      await _drop(File('${file.path}.part'));
+      await _drop(File('${file.path}$_partSuffix'));
       await _drop(file);
       _pruneEmpty(root, file.parent);
     }
@@ -431,12 +477,33 @@ class Downloader extends ChangeNotifier {
     }
   }
 
-  /// Déplace les copies terminées vers [to] : même chemin relatif, taille vérifiée,
-  /// puis les originaux sont effacés. Une erreur au milieu retire ce qui est déjà copié.
-  Future<KeepResult> moveRoot(Directory to) async {
-    pause();
-    await whenIdle();
-    final from = await device.musicRoot();
+  /// Déplace les copies terminées de [from] vers [to] : même chemin relatif (un autre nom
+  /// si le fichier existe déjà : ceux de l'utilisateur ne sont jamais écrasés), taille
+  /// vérifiée, puis [commit] (qui adopte le dossier : `device.commitFolder`), puis les
+  /// originaux sont effacés. Une erreur retire ce qui a été copié, l'ancien dossier reste.
+  /// La file est arrêtée pendant la copie et toujours relancée à la fin.
+  Future<KeepResult> moveRoot({
+    required Directory from,
+    required Directory to,
+    Future<void> Function()? commit,
+  }) async {
+    _moving = true;
+    _active?.cancel();
+    try {
+      await whenIdle();
+      return await _move(from, to, commit);
+    } finally {
+      _moving = false;
+      _reserved.clear();
+      start();
+    }
+  }
+
+  Future<KeepResult> _move(
+    Directory from,
+    Directory to,
+    Future<void> Function()? commit,
+  ) async {
     final a = p.normalize(from.path), b = p.normalize(to.path);
     if (a == b) return const KeepResult.queued(0, 0);
     if (p.isWithin(a, b) || p.isWithin(b, a)) return const KeepResult.failed();
@@ -455,38 +522,50 @@ class Downloader extends ChangeNotifier {
       return const KeepResult.failed();
     }
 
-    final copied = <File>[];
+    final created = <File>[]; // seulement ce que cette copie a créé
+    final newRel = <String, String>{}; // trackPath -> chemin relatif dans [to]
+    final taken = <String>{};
     var bytes = 0;
     try {
       for (final r in rows) {
         final src = _inside(from, r.filePath!);
-        final dst = _inside(to, r.filePath!);
-        if (src == null || dst == null || !await src.exists()) continue;
+        if (src == null || !await src.exists()) continue;
+        final rel = uniquePath(
+          r.filePath!,
+          (c) =>
+              taken.contains(c.toLowerCase()) ||
+              File(p.join(to.path, c)).existsSync(),
+        );
+        final dst = _inside(to, rel);
+        if (dst == null) continue;
+        taken.add(rel.toLowerCase());
         await dst.parent.create(recursive: true);
-        copied.add(dst);
+        created.add(dst);
         await src.copy(dst.path);
         if (await dst.length() != await src.length()) {
           throw const FileSystemException('size differs');
         }
+        newRel[r.trackPath] = rel;
         bytes += await dst.length();
       }
-      await saveRoot?.call(to);
+      await commit?.call();
     } catch (_) {
-      for (final f in copied) {
+      for (final f in created) {
         await _drop(f);
         _pruneEmpty(to, f.parent);
       }
       return const KeepResult.failed();
     }
     for (final r in rows) {
+      final rel = newRel[r.trackPath];
+      if (rel == null) continue;
+      await db.markOfflineDone(r.trackPath, rel, r.size);
       final src = _inside(from, r.filePath!);
       if (src == null) continue;
       await _drop(src);
       _pruneEmpty(from, src.parent);
     }
-    _reserved.clear();
-    start();
-    return KeepResult.queued(copied.length, bytes);
+    return KeepResult.queued(newRel.length, bytes);
   }
 }
 

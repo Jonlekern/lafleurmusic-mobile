@@ -111,19 +111,24 @@ void main() {
   });
 
   group('MediaResolver: slow accounts and closing', () {
-    test('an account that takes too long → the raw key, without waiting forever', () async {
-      final stuck = MediaResolver(
-        (id) => Completer<MusicSource>().future, // keychain or database stuck
-        sourceTimeout: const Duration(milliseconds: 50),
-      );
-      final m = await stuck.media('subsonic://acc1/s9');
-      expect(m.uri, 'subsonic://acc1/s9');
-      expect(m.httpHeaders, isNull);
-    });
+    test(
+      'an account that takes too long → the raw key, without waiting forever',
+      () async {
+        final stuck = MediaResolver(
+          (id) => Completer<MusicSource>().future, // keychain or database stuck
+          sourceTimeout: const Duration(milliseconds: 50),
+        );
+        final m = await stuck.media('subsonic://acc1/s9');
+        expect(m.uri, 'subsonic://acc1/s9');
+        expect(m.httpHeaders, isNull);
+      },
+    );
 
     test('default wait for an account: 10 s', () {
-      expect(MediaResolver((_) async => source('a')).sourceTimeout,
-          const Duration(seconds: 10));
+      expect(
+        MediaResolver((_) async => source('a')).sourceTimeout,
+        const Duration(seconds: 10),
+      );
     });
 
     test('invalidate closes the old source (its connections)', () async {
@@ -141,26 +146,32 @@ void main() {
       expect((again as _ClosingSource).closed, isFalse);
     });
 
-    test('invalidate of a failed account: nothing to close, no error', () async {
-      final r = MediaResolver((id) async => throw StateError('gone'));
-      await expectLater(r.source('acc1'), throwsStateError);
-      r.invalidate('acc1');
-      await Future<void>.delayed(Duration.zero);
-    });
+    test(
+      'invalidate of a failed account: nothing to close, no error',
+      () async {
+        final r = MediaResolver((id) async => throw StateError('gone'));
+        await expectLater(r.source('acc1'), throwsStateError);
+        r.invalidate('acc1');
+        await Future<void>.delayed(Duration.zero);
+      },
+    );
   });
 
   group('remoteCover', () {
-    test('a server that never answers → network error within the timeout', () async {
-      final s = source(
-        'acc1',
-        client: MockClient((_) => Completer<http.Response>().future),
-      );
-      await expectLater(
-        remoteCover(s, 'al-1', 64, timeout: const Duration(milliseconds: 50)),
-        throwsA(isA<SourceNetworkException>()),
-      );
-      expect(requestTimeout, const Duration(seconds: 15));
-    });
+    test(
+      'a server that never answers → network error within the timeout',
+      () async {
+        final s = source(
+          'acc1',
+          client: MockClient((_) => Completer<http.Response>().future),
+        );
+        await expectLater(
+          remoteCover(s, 'al-1', 64, timeout: const Duration(milliseconds: 50)),
+          throwsA(isA<SourceNetworkException>()),
+        );
+        expect(requestTimeout, const Duration(seconds: 15));
+      },
+    );
 
     test('… and Covers keeps that failure for a minute (back-off)', () async {
       final dir = Directory.systemTemp.createTempSync('covers');
@@ -192,7 +203,6 @@ void main() {
       expect(await covers.get('subsonic://acc1/s9', 64), isNull);
       expect(fetches, 2);
     });
-
 
     test('GET coverUri with the account headers', () async {
       late http.Request seen;

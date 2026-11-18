@@ -37,7 +37,8 @@ class _Source implements MusicSource {
 
 class _Device implements Device {
   _Device(this.root);
-  final Directory root;
+  Directory root;
+  PickedFolder? committed;
   int free = 100 * 1024 * _mb;
   bool access = true;
   int ensureCalls = 0;
@@ -57,13 +58,22 @@ class _Device implements Device {
   @override
   Future<bool> rootReachable() async => true;
   @override
-  Future<String?> pickFolder() async => null;
+  Future<PickedFolder?> pickFolder() async => null;
+  @override
+  Future<void> commitFolder(PickedFolder c) async {
+    committed = c;
+    root = Directory(c.path);
+  }
 }
 
 class _Reader implements TagReader {
   TrackTags? result;
+  Future<void> Function()? onRead;
   @override
-  Future<TrackTags?> read(String path) async => result;
+  Future<TrackTags?> read(String path) async {
+    await onRead?.call();
+    return result;
+  }
 }
 
 class _IO implements TagFileIO {
@@ -133,7 +143,6 @@ void main() {
     }),
     tags: io,
     reader: reader,
-    retryDelay: Duration.zero,
   );
 
   Future<void> add(Track t) => db.upsertTrack(t);
@@ -177,7 +186,10 @@ void main() {
       3,
       4,
     ]);
-    expect(File('${root.path}/${row.filePath}.part').existsSync(), isFalse);
+    expect(
+      File('${root.path}/${row.filePath}.lafleur.part').existsSync(),
+      isFalse,
+    );
     expect(device.announced, ['${root.path}/Art/Alb/01 Song 1.mp3']);
     expect(device.ensureCalls, 1);
   });
@@ -256,16 +268,59 @@ void main() {
     expect(io.writes, isEmpty);
   });
 
-  test('cut mid-body: no final file, then 3 failures mark it failed', () async {
-    handler = (r) async => http.StreamedResponse(
-      () async* {
-        yield [1, 2];
-        throw const SocketException('cut');
-      }(),
-      200,
-      contentLength: 4,
-      headers: {'content-type': 'audio/mpeg'},
-    );
+  test(
+    'network cut mid-body: loop stops, nothing counted, no partial',
+    () async {
+      handler = (r) async => http.StreamedResponse(
+        () async* {
+          yield [1, 2];
+          throw const SocketException('cut');
+        }(),
+        200,
+        contentLength: 4,
+        headers: {'content-type': 'audio/mpeg'},
+      );
+      final d = make();
+      await add(_t('1'));
+      await add(_t('2', no: 2));
+      await d.keep([_t('1'), _t('2', no: 2)]);
+      await d.whenIdle();
+      for (final id in ['1', '2']) {
+        final row = (await db.offlineOf('subsonic://acc/$id'))!;
+        expect((row.state, row.failures), ('queued', 0));
+      }
+      expect(seen, hasLength(1), reason: 'the loop stopped at the first drop');
+      expect(root.listSync(recursive: true).whereType<File>(), isEmpty);
+      // back online: the next start() resumes
+      handler = (r) async => _ok([1, 2, 3, 4]);
+      d.start();
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+    },
+  );
+
+  test('server refusal counts, row goes behind, 3rd marks it failed', () async {
+    handler = (r) async => r.url.queryParameters['id'] == '1'
+        ? _ok([], code: 500)
+        : _ok([1, 2, 3, 4]);
+    final d = make();
+    await add(_t('1'));
+    await add(_t('2', no: 2));
+    await d.keep([_t('1'), _t('2', no: 2)]);
+    await d.whenIdle();
+    final ids = [
+      for (final r in seen)
+        if (r.url.path.endsWith('download')) r.url.queryParameters['id'],
+    ];
+    expect(ids, ['1', '2', '1', '1'], reason: '2 is not stuck behind 1');
+    final one = (await db.offlineOf('subsonic://acc/1'))!;
+    expect((one.state, one.failures), ('failed', 3));
+    expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+  });
+
+  test('a 200 HTML page (proxy login) is refused, never kept', () async {
+    handler = (r) async =>
+        _ok('<html>login</html>'.codeUnits, type: 'text/html');
     final d = make();
     await add(_t('1'));
     await d.keep([_t('1')]);
@@ -273,10 +328,65 @@ void main() {
     final row = (await db.offlineOf('subsonic://acc/1'))!;
     expect((row.state, row.failures), ('failed', 3));
     expect(
-      root.listSync(recursive: true).whereType<File>(),
+      root.existsSync() ? root.listSync(recursive: true).whereType<File>() : [],
       isEmpty,
-      reason: 'no partial file left',
     );
+  });
+
+  test('octet-stream and missing content type are accepted', () async {
+    handler = (r) async => _ok([1, 2, 3, 4], type: 'application/octet-stream');
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+  });
+
+  test('pause then start at once does not stall', () async {
+    final gate = Completer<void>();
+    handler = (r) async {
+      await gate.future;
+      return _ok([1, 2, 3, 4]);
+    };
+    final d = make();
+    await add(_t('1'));
+    await add(_t('2', no: 2));
+    await d.keep([_t('1'), _t('2', no: 2)]);
+    while (d.current == null) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    d.pause();
+    d.start();
+    gate.complete();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+    expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+  });
+
+  test('the row is done before tags are read', () async {
+    String? seenState;
+    reader.onRead = () async =>
+        seenState = (await db.offlineOf('subsonic://acc/1'))?.state;
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    expect(seenState, 'done');
+  });
+
+  test('queued backlog counts toward the limit', () async {
+    device.access = false; // rows stay queued
+    settings.storageLimitBytes = 100 * _mb;
+    final d = make();
+    await add(_t('1', size: 60 * _mb));
+    await add(_t('2', size: 60 * _mb, no: 2));
+    expect((await d.keep([_t('1', size: 60 * _mb)])).ok, isTrue);
+    await d.whenIdle();
+    final r = await d.keep([_t('2', size: 60 * _mb, no: 2)]);
+    expect((r.ok, r.neededBytes), (false, 60 * _mb));
+    // the same track again is not counted twice
+    expect((await d.keep([_t('1', size: 60 * _mb)])).ok, isTrue);
   });
 
   test('a failure moves on to the other tracks, order kept', () async {
@@ -304,14 +414,17 @@ void main() {
   });
 
   test('resumeAtLaunch wipes .part files and resumes queued rows', () async {
-    final stale = File('${root.path}/Art/Alb/01 Song 1.mp3.part')
+    final stale = File('${root.path}/Art/Alb/01 Song 1.mp3.lafleur.part')
       ..createSync(recursive: true)
       ..writeAsStringSync('xx');
+    final foreign = File('${root.path}/Other/movie.mp4.part')
+      ..createSync(recursive: true);
     await add(_t('1'));
     await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
     final d = make();
     await d.resumeAtLaunch();
     expect(stale.existsSync(), isFalse);
+    expect(foreign.existsSync(), isTrue, reason: 'only our own .part files');
     await d.whenIdle();
     expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
   });
@@ -466,76 +579,125 @@ void main() {
   });
 
   group('moveRoot', () {
+    Future<Downloader> withDone(List<String> ids) async {
+      final d = make();
+      for (final id in ids) {
+        await add(_t(id, no: int.parse(id)));
+      }
+      await d.keep([for (final id in ids) _t(id, no: int.parse(id))]);
+      await d.whenIdle();
+      return d;
+    }
+
     test(
-      'copies done files to the same relative path, then deletes originals',
+      'switching flow: old -> move -> commit -> new files, rows renamed',
       () async {
-        final d = make();
-        await add(_t('1'));
-        await d.keep([_t('1')]);
-        await d.whenIdle();
+        final d = await withDone(['1']);
+        final old = device.root;
         final to = Directory('${tmp.path}/sd');
-        Directory? saved;
-        final m = Downloader(
-          db: db,
-          resolver: MediaResolver((_) async => _Source()),
-          device: device,
-          settings: () async => settings,
-          client: () => _Client((r) async => _ok([1])),
-          tags: io,
-          reader: reader,
-          saveRoot: (x) async => saved = x,
+        final c = PickedFolder(to.path);
+        final r = await d.moveRoot(
+          from: old,
+          to: to,
+          commit: () => device.commitFolder(c),
         );
-        final r = await m.moveRoot(to);
         expect((r.ok, r.count, r.bytes), (true, 1, 4));
-        expect(saved?.path, to.path);
+        expect(device.committed, same(c));
         expect(File('${to.path}/Art/Alb/01 Song 1.mp3').readAsBytesSync(), [
           1,
           2,
           3,
           4,
         ]);
+        expect(File('${old.path}/Art/Alb/01 Song 1.mp3').existsSync(), isFalse);
         expect(
-          File('${root.path}/Art/Alb/01 Song 1.mp3').existsSync(),
-          isFalse,
+          (await db.offlineOf('subsonic://acc/1'))!.filePath,
+          'Art/Alb/01 Song 1.mp3',
         );
       },
     );
 
-    test('not enough room on the target: tooBig, nothing copied', () async {
-      final d = make();
-      await add(_t('1'));
-      await d.keep([_t('1')]);
-      await d.whenIdle();
-      device.free = 100 * _mb; // under the margin
+    test('collision: the user file is kept, ours gets a free name', () async {
+      final d = await withDone(['1']);
       final to = Directory('${tmp.path}/sd');
-      final r = await d.moveRoot(to);
-      expect((r.ok, r.neededBytes), (false, 4));
-      expect(File('${root.path}/Art/Alb/01 Song 1.mp3').existsSync(), isTrue);
-      expect(to.listSync(), isEmpty);
+      final mine = File('${to.path}/Art/Alb/01 Song 1.mp3')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('user');
+      final r = await d.moveRoot(from: device.root, to: to);
+      expect(r.ok, isTrue);
+      expect(mine.readAsStringSync(), 'user');
+      final row = (await db.offlineOf('subsonic://acc/1'))!;
+      expect(row.filePath, 'Art/Alb/01 Song 1 (2).mp3');
+      expect(File('${to.path}/${row.filePath}').readAsBytesSync(), [
+        1,
+        2,
+        3,
+        4,
+      ]);
+    });
+
+    test('error midway: only our copies removed, user file kept', () async {
+      final d = await withDone(['1', '2']);
+      final to = Directory('${tmp.path}/sd');
+      final mine = File('${to.path}/Art/Alb/01 Song 1.mp3')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('user');
+      final r = await d.moveRoot(
+        from: device.root,
+        to: to,
+        commit: () async => throw const FileSystemException('refused'),
+      );
+      expect(r.ok, isFalse);
+      expect(
+        to.listSync(recursive: true).whereType<File>().map((f) => f.path),
+        [mine.path],
+      );
+      expect(mine.readAsStringSync(), 'user');
+      expect(
+        device.root.listSync(recursive: true).whereType<File>(),
+        hasLength(2),
+      );
     });
 
     test(
-      'error midway: copied files removed from target, old folder kept',
+      'not enough room on the target: tooBig, nothing copied, queue resumes',
       () async {
-        final d = make();
-        await add(_t('1'));
-        await add(_t('2', no: 2));
-        await d.keep([_t('1'), _t('2', no: 2)]);
-        await d.whenIdle();
+        final d = await withDone(['1']);
+        device.free = 100 * _mb; // under the margin
         final to = Directory('${tmp.path}/sd');
-        final m = Downloader(
-          db: db,
-          resolver: MediaResolver((_) async => _Source()),
-          device: device,
-          settings: () async => settings,
-          tags: io,
-          reader: reader,
-          saveRoot: (x) async => throw const FileSystemException('refused'),
+        final r = await d.moveRoot(from: device.root, to: to);
+        expect((r.ok, r.neededBytes), (false, 4));
+        expect(File('${root.path}/Art/Alb/01 Song 1.mp3').existsSync(), isTrue);
+        expect(to.listSync(), isEmpty);
+        device.free = 100 * 1024 * _mb;
+        await add(_t('5', no: 5));
+        await d.keep([_t('5', no: 5)]);
+        await d.whenIdle();
+        expect((await db.offlineOf('subsonic://acc/5'))!.state, 'done');
+      },
+    );
+
+    test(
+      'keep during the move waits, then downloads into the new root',
+      () async {
+        final d = await withDone(['1']);
+        final to = Directory('${tmp.path}/sd');
+        final move = d.moveRoot(
+          from: device.root,
+          to: to,
+          commit: () async {
+            await Future<void>.delayed(const Duration(milliseconds: 30));
+            await device.commitFolder(PickedFolder(to.path));
+          },
         );
-        final r = await m.moveRoot(to);
-        expect(r.ok, isFalse);
-        expect(to.listSync(recursive: true).whereType<File>(), isEmpty);
-        expect(root.listSync(recursive: true).whereType<File>(), hasLength(2));
+        await add(_t('7', no: 7));
+        await d.keep([_t('7', no: 7)]);
+        await move;
+        await d.whenIdle();
+        final row = (await db.offlineOf('subsonic://acc/7'))!;
+        expect(row.state, 'done');
+        expect(File('${to.path}/${row.filePath}').existsSync(), isTrue);
+        expect(File('${root.path}/${row.filePath}').existsSync(), isFalse);
       },
     );
   });

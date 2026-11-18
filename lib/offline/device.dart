@@ -9,10 +9,13 @@ abstract class Device {
   /// Le dossier choisi s'il est accessible, sinon le dossier par défaut (créé au besoin).
   Future<Directory> musicRoot();
 
-  /// Sélecteur de dossier du système. Renvoie le nouveau chemin, ou null si annulé.
-  /// Lève [FolderNotLocalException] si le dossier n'est pas sur le téléphone (Android),
-  /// [FolderNotWritableException] si l'appli ne peut pas y écrire.
-  Future<String?> pickFolder();
+  /// Sélecteur de dossier du système. Renvoie un candidat (sans changer de dossier),
+  /// ou null si annulé. Lève [FolderNotLocalException] si le dossier n'est pas sur le
+  /// téléphone (Android), [FolderNotWritableException] si l'appli ne peut pas y écrire.
+  Future<PickedFolder?> pickFolder();
+
+  /// Adopte le candidat : [musicRoot] renvoie ce dossier, le choix est enregistré.
+  Future<void> commitFolder(PickedFolder c);
 
   /// Faux si le dossier choisi ne répond plus (carte SD retirée, signet périmé) :
   /// [musicRoot] retombe alors sur le dossier par défaut.
@@ -26,6 +29,13 @@ abstract class Device {
 
   /// Android : prévient la médiathèque du système d'un nouveau fichier. iOS : rien.
   Future<void> announce(String path);
+}
+
+/// Un dossier choisi mais pas encore adopté (iOS : [bookmark] garde l'accès).
+class PickedFolder {
+  const PickedFolder(this.path, [this.bookmark]);
+  final String path;
+  final String? bookmark;
 }
 
 /// Le dossier choisi n'a pas de vrai chemin de fichiers (Android : cloud, etc.).
@@ -102,7 +112,7 @@ class ChannelDevice implements Device {
   }
 
   @override
-  Future<String?> pickFolder() async {
+  Future<PickedFolder?> pickFolder() async {
     final Map<String, Object?>? r;
     try {
       r = await _ch.invokeMapMethod<String, Object?>('pickFolder');
@@ -112,12 +122,18 @@ class ChannelDevice implements Device {
       rethrow;
     }
     if (r == null) return null;
-    final path = r['path']! as String;
-    settings.musicFolder = _ios ? r['bookmark']! as String : path;
+    return PickedFolder(
+      r['path']! as String,
+      _ios ? r['bookmark']! as String : null,
+    );
+  }
+
+  @override
+  Future<void> commitFolder(PickedFolder c) async {
+    settings.musicFolder = c.bookmark ?? c.path;
     await saveSettings();
-    _chosen = Directory(path);
+    _chosen = Directory(c.path);
     _resolving = Future.value();
-    return path;
   }
 
   @override

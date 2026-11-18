@@ -63,7 +63,11 @@ void main() {
   test('pickFolder stores the path (Android)', () async {
     native = (c) async => {'path': '/storage/1234-ABCD/Music'};
     final d = device();
-    expect(await d.pickFolder(), '/storage/1234-ABCD/Music');
+    final c = (await d.pickFolder())!;
+    expect(c.path, '/storage/1234-ABCD/Music');
+    expect(settings.musicFolder, isNull, reason: 'picking does not switch');
+    expect(saves, 0);
+    await d.commitFolder(c);
     expect(settings.musicFolder, '/storage/1234-ABCD/Music');
     expect(saves, 1);
     expect((await d.musicRoot()).path, '/storage/1234-ABCD/Music');
@@ -72,7 +76,10 @@ void main() {
   test('pickFolder stores the bookmark (iOS)', () async {
     native = (c) async => {'path': '/private/iCloud/Music', 'bookmark': 'Ym0='};
     final d = device(ios: true);
-    expect(await d.pickFolder(), '/private/iCloud/Music');
+    final c = (await d.pickFolder())!;
+    expect(c.path, '/private/iCloud/Music');
+    expect(settings.musicFolder, isNull);
+    await d.commitFolder(c);
     expect(settings.musicFolder, 'Ym0=');
   });
 

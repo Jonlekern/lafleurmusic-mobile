@@ -62,7 +62,10 @@ class Covers {
       Directory(p.join(cacheDir.path, 'server', accountId));
 
   File _remoteFile(String accountId, String id, int size) => File(
-    p.join(_accountDir(accountId).path, '${sha1.convert(utf8.encode(id))}-$size.jpg'),
+    p.join(
+      _accountDir(accountId).path,
+      '${sha1.convert(utf8.encode(id))}-$size.jpg',
+    ),
   );
 
   /// Compte retiré : ses pochettes quittent le disque et la mémoire.
@@ -131,7 +134,9 @@ class Covers {
     final cover = keyOf == null ? trackPath : await keyOf(trackPath);
     if (cover == null) return null; // pas de pochette sur le serveur
     final rest = trackPath.substring('subsonic://'.length);
-    final account = rest.contains('/') ? rest.substring(0, rest.indexOf('/')) : rest;
+    final account = rest.contains('/')
+        ? rest.substring(0, rest.indexOf('/'))
+        : rest;
     final file = _remoteFile(
       account,
       keyOf == null ? cover : 'cover:$cover',

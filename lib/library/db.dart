@@ -182,6 +182,14 @@ class LibraryDb extends _$LibraryDb {
     updates: {offline},
   );
 
+  /// Après un refus du serveur : le morceau passe derrière les autres de la file.
+  Future<void> sendOfflineToBack(String trackPath) => customUpdate(
+    'UPDATE offline SET added_at = '
+    '(SELECT MAX(added_at) FROM offline) + 1 WHERE track_path = ?',
+    variables: [Variable(trackPath)],
+    updates: {offline},
+  );
+
   Future<void> removeOffline(List<String> trackPaths) => transaction(() async {
     for (var i = 0; i < trackPaths.length; i += 500) {
       final chunk = trackPaths.skip(i).take(500).toList();

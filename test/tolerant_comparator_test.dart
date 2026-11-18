@@ -44,7 +44,6 @@ void main() {
     return error;
   }
 
-
   test('tolerance: 1 % on CI, 0 % locally', () {
     expect(goldenToleranceFor({'CI': 'true'}), 0.01);
     expect(goldenToleranceFor({}), 0);

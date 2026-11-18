@@ -88,18 +88,23 @@ void main() {
       await tapAndSettle(tester, find.text('Tester'));
     }
 
-    testWidgets('iPhone, serveur de la maison injoignable : rappel du réseau local', (
-      tester,
-    ) async {
-      await testOn(tester, TargetPlatform.iOS);
-      expect(find.text('Serveur injoignable\n$hint'), findsOneWidget);
-      debugDefaultTargetPlatformOverride = null;
-    });
+    testWidgets(
+      'iPhone, serveur de la maison injoignable : rappel du réseau local',
+      (tester) async {
+        await testOn(tester, TargetPlatform.iOS);
+        expect(find.text('Serveur injoignable\n$hint'), findsOneWidget);
+        debugDefaultTargetPlatformOverride = null;
+      },
+    );
 
     testWidgets('iPhone, serveur sur Internet injoignable : pas de rappel', (
       tester,
     ) async {
-      await testOn(tester, TargetPlatform.iOS, address: 'https://music.example.com');
+      await testOn(
+        tester,
+        TargetPlatform.iOS,
+        address: 'https://music.example.com',
+      );
       expect(find.text('Serveur injoignable'), findsOneWidget);
       expect(find.textContaining('réseau local'), findsNothing);
       debugDefaultTargetPlatformOverride = null;

@@ -234,22 +234,25 @@ void main() {
     expect(f.player.lastTracks!.single.title, 'Heatwave');
   });
 
-  test('Android, iOS : toujours le téléphone ; ordinateur : colonnes dès 900 px', () {
-    for (final p in [TargetPlatform.android, TargetPlatform.iOS]) {
-      expect(AdaptiveHome.isPhone(const Size(390, 844), p), isTrue);
-      expect(AdaptiveHome.isPhone(const Size(1440, 900), p), isTrue);
-      expect(AdaptiveHome.isPhone(const Size(844, 390), p), isTrue);
-    }
-    for (final p in [
-      TargetPlatform.macOS,
-      TargetPlatform.windows,
-      TargetPlatform.linux,
-    ]) {
-      expect(AdaptiveHome.isPhone(const Size(899, 600), p), isTrue);
-      expect(AdaptiveHome.isPhone(const Size(900, 600), p), isFalse);
-      expect(AdaptiveHome.isPhone(const Size(1440, 900), p), isFalse);
-    }
-  });
+  test(
+    'Android, iOS : toujours le téléphone ; ordinateur : colonnes dès 900 px',
+    () {
+      for (final p in [TargetPlatform.android, TargetPlatform.iOS]) {
+        expect(AdaptiveHome.isPhone(const Size(390, 844), p), isTrue);
+        expect(AdaptiveHome.isPhone(const Size(1440, 900), p), isTrue);
+        expect(AdaptiveHome.isPhone(const Size(844, 390), p), isTrue);
+      }
+      for (final p in [
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+        TargetPlatform.linux,
+      ]) {
+        expect(AdaptiveHome.isPhone(const Size(899, 600), p), isTrue);
+        expect(AdaptiveHome.isPhone(const Size(900, 600), p), isFalse);
+        expect(AdaptiveHome.isPhone(const Size(1440, 900), p), isFalse);
+      }
+    },
+  );
 
   Future<void> pumpWide(WidgetTester tester, TargetPlatform platform) async {
     debugDefaultTargetPlatformOverride = platform;

@@ -61,8 +61,8 @@ class SourceSong {
 /// Its text never carries the request URL: the query holds the credentials.
 class SourceNetworkException implements Exception {
   SourceNetworkException(Object cause)
-      : kind = cause.runtimeType.toString(),
-        message = _redact(_describe(cause));
+    : kind = cause.runtimeType.toString(),
+      message = _redact(_describe(cause));
 
   /// Type of the original error, e.g. `SocketException`, `ClientException`.
   final String kind;
@@ -80,8 +80,9 @@ class SourceNetworkException implements Exception {
     return m.isEmpty ? 'network error' : m;
   }
 
-  static String _redact(String s) =>
-      s.replaceAll(RegExp(r'\w+://\S*'), '<url>').replaceAll(RegExp(r'\?\S*'), '');
+  static String _redact(String s) => s
+      .replaceAll(RegExp(r'\w+://\S*'), '<url>')
+      .replaceAll(RegExp(r'\?\S*'), '');
 
   @override
   String toString() => 'SourceNetworkException($kind): $message';
