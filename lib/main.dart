@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' show MpvAudioKit;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -27,6 +28,10 @@ import 'ui/phone/phone_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // plan 1 : téléphone debout seulement (le Cover Flow couché viendra plus tard)
+  if (isMobilePlatform(defaultTargetPlatform)) {
+    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  }
   // --dart-define=LAFLEUR_DEMO=true : bibliothèque inventée des maquettes, sans serveur ni son (debug seulement)
   if (kDebugMode && const bool.fromEnvironment('LAFLEUR_DEMO')) {
     runApp(await demoApp());
@@ -58,12 +63,17 @@ Future<LafleurApp> buildLafleurApp({
   // morceaux du serveur : flux et pochettes avec les en-têtes du compte (une source par compte)
   final accounts = Accounts(db, secrets);
   final resolver = MediaResolver(accounts.source);
-  // tester, enregistrer, synchroniser : les mêmes comptes et le même resolver que le lecteur
-  final accountService = AccountService(accounts, db: db, resolver: resolver);
   final covers = Covers(
     cacheDir: Directory(p.join(support.path, 'covers')),
     remote: remoteCovers(resolver, db.trackByPath),
     remoteKey: remoteCoverKey(db.trackByPath), // une pochette par album
+  );
+  // tester, enregistrer, synchroniser : les mêmes comptes et le même resolver que le lecteur
+  final accountService = AccountService(
+    accounts,
+    db: db,
+    resolver: resolver,
+    forgetCovers: covers.forgetAccount, // compte retiré : ses pochettes aussi
   );
   final player = LafleurPlayer(resolver: resolver)
     // écran verrouillé : la pochette du serveur en octets, jamais une URL
@@ -177,7 +187,7 @@ class _LafleurAppState extends State<LafleurApp> {
       title: 'LAFLEURMUSIC',
       debugShowCheckedModeBanner: false,
       theme: lafleurTheme(),
-      home: const AdaptiveHome(), // < 900 px : téléphone ; sinon les colonnes du Mac
+      home: const AdaptiveHome(), // Android, iOS : téléphone ; sinon les colonnes du Mac
     ),
   );
 }

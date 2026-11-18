@@ -1,0 +1,2 @@
+/* iOS asks before the app reaches a server on the home network. */
+"NSLocalNetworkUsageDescription" = "LAFLEURMUSIC connects to your music server on your home network.";

@@ -7,15 +7,19 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
-        android:label="lafleurmusic"
+        android:label="LAFLEURMUSIC"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
         android:usesCleartextTraffic="true">
         <!-- usesCleartextTraffic: a home Navidrome server is often plain http://. -->
+        <!-- allowBackup="false": passwords live in the Keystore, which a restore can't bring back;
+             a restored database would list accounts whose secrets are gone. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:screenOrientation="portrait"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"

@@ -15,13 +15,20 @@ import 'home_screen.dart';
 import 'mini_player.dart';
 import 'now_screen.dart';
 
-/// Moins de 900 px de large : le téléphone ; sinon la vue en colonnes du Mac.
+/// Android ou iOS.
+bool isMobilePlatform(TargetPlatform p) =>
+    p == TargetPlatform.android || p == TargetPlatform.iOS;
+
+/// Téléphone (Android, iOS) : toujours la vue téléphone ; sur ordinateur, la vue en colonnes du Mac.
 class AdaptiveHome extends StatelessWidget {
   const AdaptiveHome({super.key, this.debugStart, this.debugScreens});
   final String? debugStart; // voir [PhoneShell.debugStart]
   final List<Widget> Function()? debugScreens; // voir [PhoneShell.debugScreens]
 
-  static bool isPhone(Size size) => size.width < 900;
+  /// Android et iOS : toujours le téléphone (plan 1, téléphones seulement, quelle que soit la largeur).
+  /// Mac, Windows, Linux : les colonnes, sauf fenêtre étroite (< 900 px).
+  static bool isPhone(Size size, [TargetPlatform? platform]) =>
+      isMobilePlatform(platform ?? defaultTargetPlatform) || size.width < 900;
 
   @override
   Widget build(BuildContext context) => isPhone(MediaQuery.sizeOf(context))

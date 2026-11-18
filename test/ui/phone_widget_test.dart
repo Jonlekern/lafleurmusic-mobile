@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
+import 'package:flutter/foundation.dart';
 import 'package:lafleurmusic/ui/equalizer_panel.dart';
+import 'package:lafleurmusic/ui/library_screen.dart';
 import 'package:lafleurmusic/ui/phone/album_screen.dart';
 import 'package:lafleurmusic/ui/phone/home_screen.dart';
 import 'package:lafleurmusic/ui/phone/mini_player.dart';
@@ -232,10 +234,42 @@ void main() {
     expect(f.player.lastTracks!.single.title, 'Heatwave');
   });
 
-  test('moins de 900 px : téléphone ; sinon les colonnes du Mac', () {
-    expect(AdaptiveHome.isPhone(const Size(390, 844)), isTrue);
-    expect(AdaptiveHome.isPhone(const Size(899, 600)), isTrue);
-    expect(AdaptiveHome.isPhone(const Size(900, 600)), isFalse);
-    expect(AdaptiveHome.isPhone(const Size(1440, 900)), isFalse);
+  test('Android, iOS : toujours le téléphone ; ordinateur : colonnes dès 900 px', () {
+    for (final p in [TargetPlatform.android, TargetPlatform.iOS]) {
+      expect(AdaptiveHome.isPhone(const Size(390, 844), p), isTrue);
+      expect(AdaptiveHome.isPhone(const Size(1440, 900), p), isTrue);
+      expect(AdaptiveHome.isPhone(const Size(844, 390), p), isTrue);
+    }
+    for (final p in [
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+      TargetPlatform.linux,
+    ]) {
+      expect(AdaptiveHome.isPhone(const Size(899, 600), p), isTrue);
+      expect(AdaptiveHome.isPhone(const Size(900, 600), p), isFalse);
+      expect(AdaptiveHome.isPhone(const Size(1440, 900), p), isFalse);
+    }
+  });
+
+  Future<void> pumpWide(WidgetTester tester, TargetPlatform platform) async {
+    debugDefaultTargetPlatformOverride = platform;
+    await pumpPhone(tester, home: const AdaptiveHome());
+    tester.view.physicalSize = const Size(1440, 900);
+    await settle(tester);
+  }
+
+  testWidgets('iPhone à 1440 px : toujours le téléphone', (tester) async {
+    await pumpWide(tester, TargetPlatform.iOS);
+    expect(find.byType(PhoneShell), findsOneWidget);
+    expect(find.byType(LibraryScreen), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('Mac à 1440 px : les colonnes', (tester) async {
+    await pumpWide(tester, TargetPlatform.macOS);
+    expect(find.byType(LibraryScreen), findsOneWidget);
+    expect(find.byType(PhoneShell), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    debugDefaultTargetPlatformOverride = null;
   });
 }

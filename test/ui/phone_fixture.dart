@@ -52,6 +52,7 @@ Future<void> settle(WidgetTester tester) async {
 Future<PhoneFixture> pumpPhone(
   WidgetTester tester, {
   bool images = false,
+  Widget home = const PhoneShell(),
 }) async {
   phoneSize(tester);
   final dir = Directory.systemTemp.createTempSync('phone');
@@ -103,7 +104,7 @@ Future<PhoneFixture> pumpPhone(
       settings: AppSettings(),
       saveSettings: () {},
       accounts: accounts,
-      child: MaterialApp(theme: lafleurTheme(), home: const PhoneShell()),
+      child: MaterialApp(theme: lafleurTheme(), home: home),
     ),
   );
   await settle(tester);
