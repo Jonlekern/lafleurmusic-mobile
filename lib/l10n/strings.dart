@@ -225,7 +225,7 @@ class Strings {
   String get toReorder => _t("pour l'ordre", 'to reorder');
   String accountState(AccountState st) => switch (st) {
     AccountState.connected => _t('● connecté', '● connected'),
-    AccountState.absent => _t('● absent', '● offline'),
+    AccountState.absent => _t('● absent', '● unavailable'),
     AccountState.syncing => _t('synchronisation…', 'syncing…'),
     AccountState.checking => '…',
   };

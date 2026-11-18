@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' show DatabaseConnection;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +38,19 @@ class ProbeSource implements MusicSource {
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+/// Coffre lent : les lectures des en-têtes attendent [release] une fois [armed].
+class SlowSecretStore extends FakeSecretStore {
+  bool armed = false;
+  final _gate = Completer<void>();
+  void release() => _gate.complete();
+
+  @override
+  Future<String?> read(String key) async {
+    if (armed && key.endsWith('.headers')) await _gate.future;
+    return super.read(key);
+  }
 }
 
 /// Ce que le formulaire a demandé : brouillons testés, synchros lancées, sources construites.
@@ -99,6 +114,7 @@ Future<AccountsFixture> pumpAccounts(
   Widget Function()? home,
   Map<String, TestResult> Function(List<Account>)? results,
   MediaResolver? resolver,
+  FakeSecretStore? secretStore,
   bool fr = true,
 }) async {
   phoneSize(tester);
@@ -112,7 +128,7 @@ Future<AccountsFixture> pumpAccounts(
     await tester.pumpWidget(const SizedBox());
     await tester.runAsync(db.close);
   });
-  final secrets = FakeSecretStore();
+  final secrets = secretStore ?? FakeSecretStore();
   final accounts = Accounts(db, secrets);
   late final AccountsFixture f;
   final service = AccountService(

@@ -304,6 +304,39 @@ void main() {
     );
 
     testWidgets(
+      'Enregistrer avant que les en-têtes soient lus : en-têtes gardés',
+      (tester) async {
+        final slow = SlowSecretStore();
+        final f = await pumpAccounts(
+          tester,
+          home: () => const AccountsScreen(),
+          secretStore: slow,
+        );
+        final jelly = (await f.list(tester))[1];
+        final before = slow.data['account.${jelly.id}.headers'];
+        slow.armed = true;
+        await tapAndSettle(tester, find.text('Jellyfin de Max').first);
+        await tester.pumpAndSettle();
+        expect(find.byType(AccountFormScreen), findsOneWidget);
+        // tout de suite, en-têtes pas encore lus : rien ne part
+        await tapAndSettle(tester, find.text('Enregistrer'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AccountFormScreen), findsOneWidget);
+        expect(slow.data['account.${jelly.id}.headers'], before);
+        expect(f.synced, isEmpty);
+        // lus : enregistrer garde les mêmes en-têtes
+        slow.release();
+        await settle(tester);
+        await tapAndSettle(tester, find.text('Enregistrer'));
+        await tester.pumpAndSettle();
+        await settle(tester);
+        expect(find.byType(AccountsScreen), findsOneWidget);
+        expect(slow.data['account.${jelly.id}.headers'], before);
+        expect(f.synced, [jelly.id]);
+      },
+    );
+
+    testWidgets(
       '« Supprimer le compte » demande confirmation, ne touche pas au serveur',
       (tester) async {
         final f = await pumpAccounts(

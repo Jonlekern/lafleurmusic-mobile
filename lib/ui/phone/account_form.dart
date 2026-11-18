@@ -65,6 +65,12 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   bool _ok = false;
 
   bool _loaded = false;
+  // modification : en-têtes du coffre pas encore lus (Tester / Enregistrer attendent)
+  late bool _headersPending = widget.editing != null;
+  // lecture ratée : Enregistrer garde ceux du coffre au lieu de les effacer
+  bool _headersUnread = false;
+
+  bool get _locked => _busy || _headersPending;
 
   @override
   void didChangeDependencies() {
@@ -79,11 +85,17 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
 
   Future<void> _loadHeaders(String id) async {
     final accounts = AppScope.of(context).accounts;
-    if (accounts == null) return;
-    final h = await accounts.headers(id);
+    Map<String, String>? h;
+    try {
+      h = await accounts?.headers(id);
+    } catch (_) {
+      h = null;
+    }
     if (!mounted) return;
     setState(() {
-      for (final e in h.entries) {
+      _headersPending = false;
+      _headersUnread = h == null;
+      for (final e in (h ?? const <String, String>{}).entries) {
         _headers.add(_HeaderPair(e.key, e.value));
       }
     });
@@ -124,6 +136,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   }
 
   Future<void> _test() async {
+    if (_locked) return; // deux touchers rapides : un seul test
     final service = AppScope.of(context).accountService;
     final s = AppScope.of(context).strings;
     final d = _draft;
@@ -133,38 +146,50 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
       _message = s.testing;
       _ok = false;
     });
-    final r = await service.testDraft(d, id: widget.editing?.id);
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _message = s.testResult(r);
-      _ok = r == TestResult.ok;
-    });
+    TestResult r = TestResult.unreachable;
+    try {
+      r = await service.testDraft(d, id: widget.editing?.id);
+    } catch (_) {
+      // testDraft ne lance rien ; par prudence : « injoignable »
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _message = s.testResult(r);
+          _ok = r == TestResult.ok;
+        });
+      }
+    }
   }
 
   Future<void> _save() async {
+    if (_locked) return; // deux touchers rapides : un seul compte
     final service = AppScope.of(context).accountService;
     final s = AppScope.of(context).strings;
     final d = _draft;
     if (service == null || !_check(d)) return;
     setState(() => _busy = true);
+    var saved = false;
     try {
-      await service.save(d, editing: widget.editing);
+      await service.save(
+        d,
+        editing: widget.editing,
+        keepHeaders: _headersUnread,
+      );
+      saved = true;
     } catch (_) {
       // jamais les valeurs du formulaire dans le message
       if (mounted) {
         setState(() {
-          _busy = false;
           _message = s.saveFailed;
           _ok = false;
         });
       }
-      return;
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (!mounted) return;
-    setState(() => _busy = false);
     // premier lancement : l'Accueil remplace ce formulaire tout seul
-    if (!widget.first) Navigator.of(context).maybePop();
+    if (saved && mounted && !widget.first) Navigator.of(context).maybePop();
   }
 
   Future<void> _delete() async {
@@ -313,12 +338,15 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              PillButton(label: s.testAction, onPressed: _busy ? null : _test),
+              PillButton(
+                label: s.testAction,
+                onPressed: _locked ? null : _test,
+              ),
               const SizedBox(width: 8),
               PillButton(
                 label: s.save,
                 primary: true,
-                onPressed: _busy ? null : _save,
+                onPressed: _locked ? null : _save,
               ),
             ],
           ),
@@ -412,7 +440,7 @@ class _Input extends StatelessWidget {
       obscureText: obscure,
       obscuringCharacter: '•',
       autocorrect: false,
-      enableSuggestions: !obscure,
+      enableSuggestions: !obscure && !small, // ni mot de passe ni en-tête
       keyboardType: keyboard,
       cursorColor: LafleurColors.pink,
       style: TextStyle(color: LafleurColors.text, fontSize: size),

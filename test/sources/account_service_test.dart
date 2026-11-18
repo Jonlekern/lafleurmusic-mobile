@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/sync.dart';
+import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
+import 'package:lafleurmusic/sources/source.dart';
 
 import 'fake_secret_store.dart';
 
@@ -62,4 +67,154 @@ void main() {
     expect(await accounts.headers(a.id), {'X-A': '1'});
     expect(await accounts.headers('nope'), isEmpty);
   });
+
+  group('sync, edits and removal', () {
+    late LibraryDb db;
+    late Accounts accounts;
+    late Account a;
+    setUp(() async {
+      db = LibraryDb(NativeDatabase.memory());
+      accounts = Accounts(db, FakeSecretStore());
+      a = await accounts.add(
+        type: AccountType.subsonic,
+        name: 'N',
+        base: Uri.parse('http://h'),
+        user: 'u',
+        password: 'pw',
+      );
+    });
+    tearDown(() => db.close());
+
+    Future<List<String>> trackAccounts() async => [
+      for (final t in await db.watchAllTracks().first) t.accountId,
+    ];
+
+    test(
+      'removing during a sync leaves no track and no result behind',
+      () async {
+        final src = GatedSource(a.id, albumCount: 3);
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (_) async => src,
+        );
+        final running = service.sync(a.id);
+        await src.reached(1); // album 1 stored, album 2 asked
+        final removing = service.remove(a.id);
+        src.release(); // the server answers album 2 after the removal began
+        await removing;
+        await running;
+        expect(await trackAccounts(), isNot(contains(a.id)));
+        expect(service.stateOf(a.id), isNull);
+        expect(service.offline, isFalse);
+      },
+    );
+
+    test('remove invalidates the player source', () async {
+      var built = 0;
+      final resolver = MediaResolver((id) async {
+        built++;
+        return GatedSource(id, albumCount: 0);
+      });
+      final service = AccountService(accounts, db: db, resolver: resolver);
+      await resolver.source(a.id);
+      await service.remove(a.id);
+      await resolver.source(a.id).catchError((_) => GatedSource('x'));
+      expect(built, 2);
+    });
+
+    test(
+      'an edit during a sync runs one more sync with the new settings',
+      () async {
+        final runs = <Completer<SyncResult>>[];
+        final built = <String>[];
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (id) async {
+            built.add((await accounts.watch().first).single.base.toString());
+            return GatedSource(id, answer: TestResult.unreachable);
+          },
+          sync: (_) {
+            final c = Completer<SyncResult>();
+            runs.add(c);
+            return c.future;
+          },
+        );
+        final first = service.sync(a.id);
+        await pumpEventQueue();
+        expect(runs, hasLength(1));
+        await service.save(
+          const AccountDraft(address: 'http://new', user: 'u'),
+          editing: a,
+        );
+        // the old run fails (stale): its "unreachable" must not stick
+        runs[0].complete(
+          const SyncResult(added: 0, updated: 0, removed: 0, complete: false),
+        );
+        await pumpEventQueue();
+        expect(runs, hasLength(2), reason: 'one more run, queued');
+        runs[1].complete(
+          const SyncResult(added: 0, updated: 0, removed: 0, complete: true),
+        );
+        await first;
+        await pumpEventQueue();
+        expect(built.last, 'http://new');
+        expect(service.stateOf(a.id), AccountState.connected);
+        expect(service.offline, isFalse);
+      },
+    );
+  });
+}
+
+/// Source whose album songs wait for [release] from album 2 on; [reached] waits for album n to be asked.
+class GatedSource implements MusicSource {
+  GatedSource(
+    this.accountId, {
+    this.albumCount = 2,
+    this.answer = TestResult.ok,
+  });
+  @override
+  final String accountId;
+  final int albumCount;
+  final TestResult answer;
+  final _gate = Completer<void>();
+  final _asked = StreamController<int>.broadcast();
+  int asked = 0;
+
+  void release() => _gate.complete();
+  Future<void> reached(int n) async {
+    if (asked > n) return;
+    await _asked.stream.firstWhere((i) => i > n);
+  }
+
+  @override
+  Future<TestResult> test() async => answer;
+
+  @override
+  Stream<List<SourceAlbum>> albums({int pageSize = 500}) async* {
+    yield [
+      for (var i = 1; i <= albumCount; i++)
+        SourceAlbum(id: 'al$i', name: 'Album $i', artist: 'A'),
+    ];
+  }
+
+  @override
+  Future<List<SourceSong>> albumSongs(String albumId) async {
+    asked++;
+    _asked.add(asked);
+    if (asked > 1) await _gate.future;
+    return [
+      SourceSong(
+        id: 's$albumId',
+        title: 'T',
+        artist: 'A',
+        album: 'Album $albumId',
+        albumArtist: 'A',
+      ),
+    ];
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

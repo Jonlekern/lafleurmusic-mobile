@@ -119,20 +119,36 @@ class _PhoneShellState extends State<PhoneShell> {
 
 /// Premier écran : l'Accueil ; sur un téléphone sans aucun compte, « Ajouter un compte » (premier lancement),
 /// remplacé par l'Accueil dès que le compte est enregistré.
-class _Start extends StatelessWidget {
+class _Start extends StatefulWidget {
   const _Start();
 
+  @override
+  State<_Start> createState() => _StartState();
+}
+
+class _StartState extends State<_Start> {
   static bool get _mobile =>
       defaultTargetPlatform == TargetPlatform.iOS ||
       defaultTargetPlatform == TargetPlatform.android;
 
+  Stream<List<Account>>? _accounts; // abonné une fois, pas à chaque image
+  bool _ready = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_ready) return;
+    _ready = true;
+    // Mac en fenêtre étroite : bibliothèque locale, pas de compte obligatoire
+    if (_mobile) _accounts = AppScope.of(context).accounts?.watch();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final accounts = AppScope.of(context).accounts;
-    // Mac en fenêtre étroite : bibliothèque locale, pas de compte obligatoire
-    if (accounts == null || !_mobile) return const HomeScreen();
+    final stream = _accounts;
+    if (stream == null) return const HomeScreen();
     return StreamBuilder<List<Account>>(
-      stream: accounts.watch(),
+      stream: stream,
       builder: (_, snap) {
         final list = snap.data;
         if (list == null) return const ColoredBox(color: LafleurColors.bg);

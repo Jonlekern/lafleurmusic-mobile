@@ -81,6 +81,21 @@ class AccountService extends ChangeNotifier {
   final _results = <String, TestResult>{};
   final _checking = <String>{};
   final _syncing = <String, Future<void>>{};
+  // settings changed while a sync ran: one more run once it ends
+  final _rerun = <String>{};
+  // bumped on every edit or removal: an older test or sync must not record its result
+  final _gen = <String, int>{};
+  final _removed = <String>{};
+  final _cancel = <String, _CancelFlag>{};
+
+  int _genOf(String id) => _gen[id] ?? 0;
+  void _bump(String id) => _gen[id] = _genOf(id) + 1;
+
+  /// Records [r] unless the account was edited or removed since [gen].
+  void _record(String id, int gen, TestResult r) {
+    if (_removed.contains(id) || _genOf(id) != gen) return;
+    _results[id] = r;
+  }
 
   AccountState? stateOf(String id) {
     if (_syncing.containsKey(id)) return AccountState.syncing;
@@ -130,14 +145,20 @@ class AccountService extends ChangeNotifier {
         testTimeout,
         onTimeout: () => TestResult.unreachable,
       );
-    } on Exception {
-      return TestResult.unreachable;
+    } catch (_) {
+      return TestResult
+          .unreachable; // any failure: the server didn't answer usefully
     }
   }
 
   /// "Enregistrer": adds (or updates [editing]), then syncs in the background.
-  /// An empty password on an edit keeps the stored one.
-  Future<Account> save(AccountDraft d, {Account? editing}) async {
+  /// An empty password on an edit keeps the stored one; [keepHeaders] keeps the stored headers
+  /// (the form never loaded them).
+  Future<Account> save(
+    AccountDraft d, {
+    Account? editing,
+    bool keepHeaders = false,
+  }) async {
     final base = d.base!;
     final Account a;
     if (editing == null) {
@@ -161,17 +182,26 @@ class AccountService extends ChangeNotifier {
       await accounts.update(
         a,
         password: d.password.isEmpty ? null : d.password,
-        headers: d.headers,
+        headers: keepHeaders ? null : d.headers,
       );
       resolver?.invalidate(a.id); // new address, password or headers
+      _bump(a.id);
       _results.remove(a.id);
+      notifyListeners();
     }
-    unawaited(sync(a.id));
+    unawaited(sync(a.id, fresh: true));
     return a;
   }
 
   /// Removes the account and its tracks from this phone (nothing on the server).
+  /// A running sync is stopped (between albums) and awaited first, so it can't store tracks afterwards.
   Future<void> remove(String id) async {
+    _removed.add(id);
+    _bump(id);
+    _rerun.remove(id);
+    _cancel[id]?.cancelled = true;
+    final running = _syncing[id];
+    if (running != null) await running.catchError((Object _) {});
     await accounts.remove(id);
     resolver?.invalidate(id);
     _results.remove(id);
@@ -187,6 +217,7 @@ class AccountService extends ChangeNotifier {
 
   Future<void> _check(String id) async {
     notifyListeners();
+    final gen = _genOf(id);
     TestResult r;
     try {
       r = await _timed(await _sourceOf(id));
@@ -194,28 +225,47 @@ class AccountService extends ChangeNotifier {
       r = TestResult.unreachable; // unsupported type, missing password…
     }
     _checking.remove(id);
-    _results[id] = r;
+    _record(id, gen, r);
     notifyListeners();
   }
 
   /// Copies the server library to the phone; an interrupted sync asks the server why.
-  Future<void> sync(String id) =>
-      _syncing[id] ??= _runSync(id).whenComplete(() {
-        _syncing.remove(id);
-        notifyListeners();
-      });
+  /// [fresh]: the settings just changed; if a sync is running, one more follows it.
+  Future<void> sync(String id, {bool fresh = false}) {
+    if (_removed.contains(id)) return Future.value();
+    final running = _syncing[id];
+    if (running != null) {
+      if (fresh) _rerun.add(id);
+      return running;
+    }
+    return _syncing[id] = _syncLoop(id).whenComplete(() {
+      _syncing.remove(id);
+      _cancel.remove(id);
+      notifyListeners();
+    });
+  }
 
-  Future<void> _runSync(String id) async {
+  Future<void> _syncLoop(String id) async {
     notifyListeners();
+    do {
+      _rerun.remove(id);
+      await _syncOnce(id);
+    } while (_rerun.contains(id) && !_removed.contains(id));
+  }
+
+  Future<void> _syncOnce(String id) async {
+    final gen = _genOf(id);
+    final flag = _cancel[id] = _CancelFlag();
     TestResult r;
     try {
-      final s = await _sourceOf(id);
+      final s = _CancellableSource(await _sourceOf(id), flag);
       final done = await _sync(s);
+      if (flag.cancelled) return;
       r = done.complete ? TestResult.ok : await _timed(s);
     } catch (_) {
       r = TestResult.unreachable;
     }
-    _results[id] = r;
+    _record(id, gen, r);
   }
 
   /// Launch and pull-to-refresh.
@@ -223,4 +273,58 @@ class AccountService extends ChangeNotifier {
     final list = await accounts.watch().first;
     await Future.wait([for (final a in list) sync(a.id)]);
   }
+}
+
+class _CancelFlag {
+  bool cancelled = false;
+}
+
+/// Stops a sync between albums once its account is removed: songs answered after that are dropped.
+class _CancellableSource implements MusicSource {
+  _CancellableSource(this._inner, this._flag);
+  final MusicSource _inner;
+  final _CancelFlag _flag;
+
+  void _check() {
+    if (_flag.cancelled) throw const _Cancelled();
+  }
+
+  @override
+  String get accountId => _inner.accountId;
+
+  @override
+  Future<TestResult> test() => _inner.test();
+
+  @override
+  Stream<List<SourceAlbum>> albums({int pageSize = 500}) async* {
+    await for (final page in _inner.albums(pageSize: pageSize)) {
+      _check();
+      yield page;
+    }
+  }
+
+  @override
+  Future<List<SourceSong>> albumSongs(String albumId) async {
+    _check();
+    final songs = await _inner.albumSongs(albumId);
+    _check();
+    return songs;
+  }
+
+  @override
+  Uri streamUri(String songId) => _inner.streamUri(songId);
+
+  @override
+  Uri coverUri(String coverId, int size) => _inner.coverUri(coverId, size);
+
+  @override
+  Map<String, String> get headers => _inner.headers;
+
+  @override
+  Future<void> scrobble(String songId, DateTime at) =>
+      _inner.scrobble(songId, at);
+}
+
+class _Cancelled implements Exception {
+  const _Cancelled();
 }
