@@ -1,0 +1,133 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:ui';
+
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:mpv_audio_kit/mpv_audio_kit.dart' show MpvAudioKit;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+import 'app_scope.dart';
+import 'l10n/strings.dart';
+import 'library/covers.dart';
+import 'library/db.dart';
+import 'library/play_counter.dart';
+import 'player/equalizer.dart';
+import 'player/loudness.dart';
+import 'player/player.dart';
+import 'settings.dart';
+import 'theme/lafleur_theme.dart';
+import 'ui/library_screen.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  MpvAudioKit.ensureInitialized();
+  // LAFLEURMUSIC_SUPPORT_DIR : dossier de bibliothèque à part, pour essayer une copie sans toucher à la vraie
+  final override = Platform.environment['LAFLEURMUSIC_SUPPORT_DIR'];
+  final support = override != null && override.isNotEmpty
+      ? Directory(override)
+      : await getApplicationSupportDirectory();
+  // réglages (égaliseur) : rechargés, appliqués tout de suite, enregistrés à chaque changement
+  final settingsFile = File(p.join(support.path, 'settings.json'));
+  final settings = await AppSettings.load(settingsFile);
+  final player = LafleurPlayer();
+  await player.setEqualizer(settings.equalizer);
+  await player.setCrossfade(
+    settings.crossfade ? settings.crossfadeSeconds : null,
+  );
+  final equalizer = ValueNotifier<Equalizer>(settings.equalizer);
+  final applyEq = Latest();
+  equalizer.addListener(() {
+    applyEq.run(() => player.setEqualizer(equalizer.value));
+    settings.equalizer = equalizer.value;
+    settings.save(settingsFile);
+  });
+  // vue Artistes (grille ou liste) : retenue
+  final artistGrid = ValueNotifier<bool>(settings.artistGrid);
+  artistGrid.addListener(() {
+    settings.artistGrid = artistGrid.value;
+    settings.save(settingsFile);
+  });
+  final db = LibraryDb(
+    NativeDatabase.createInBackground(
+      File(p.join(support.path, 'library.sqlite')),
+    ),
+  );
+  // Volume égal : mesures gardées dans la base, allumé si on l'avait laissé allumé
+  final loudness = LoudnessService(db, player)..enabled = settings.equalVolume;
+  player.gainOf =
+      loudness.gainOf; // le 2e lecteur du fondu démarre au bon niveau
+  runApp(
+    LafleurApp(
+      db: db,
+      loudness: loudness,
+      covers: Covers(cacheDir: Directory(p.join(support.path, 'covers'))),
+      player: player,
+      equalizer: equalizer,
+      artistGrid: artistGrid,
+      settings: settings,
+      saveSettings: () => settings.save(settingsFile),
+      strings: Strings.of(PlatformDispatcher.instance.locale),
+    ),
+  );
+}
+
+class LafleurApp extends StatefulWidget {
+  const LafleurApp({
+    super.key,
+    required this.db,
+    required this.covers,
+    required this.player,
+    required this.strings,
+    required this.equalizer,
+    required this.artistGrid,
+    required this.settings,
+    required this.saveSettings,
+    required this.loudness,
+  });
+  final LoudnessService loudness;
+  final AppSettings settings;
+  final VoidCallback saveSettings;
+  final ValueNotifier<bool> artistGrid;
+  final LibraryDb db;
+  final Covers covers;
+  final LafleurPlayer player;
+  final Strings strings;
+  final ValueNotifier<Equalizer> equalizer;
+
+  @override
+  State<LafleurApp> createState() => _LafleurAppState();
+}
+
+class _LafleurAppState extends State<LafleurApp> {
+  late final PlayCounter _plays = PlayCounter(
+    widget.player.state,
+    widget.db,
+  ); // Top 100
+
+  @override
+  void dispose() {
+    _plays.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AppScope(
+    db: widget.db,
+    player: widget.player,
+    covers: widget.covers,
+    strings: widget.strings,
+    equalizer: widget.equalizer,
+    artistGrid: widget.artistGrid,
+    settings: widget.settings,
+    saveSettings: widget.saveSettings,
+    loudness: widget.loudness,
+    child: MaterialApp(
+      title: 'LAFLEURMUSIC',
+      debugShowCheckedModeBanner: false,
+      theme: lafleurTheme(),
+      home: const LibraryScreen(),
+    ),
+  );
+}
