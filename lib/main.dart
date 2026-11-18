@@ -38,6 +38,15 @@ Future<void> main() async {
   final support = override != null && override.isNotEmpty
       ? Directory(override)
       : await getApplicationSupportDirectory();
+  runApp(await buildLafleurApp(support: support, secrets: SecureSecretStore()));
+}
+
+/// L'appli entière (base, comptes, lecteur…) rangée dans [support], secrets dans [secrets].
+/// L'essai de bout en bout (integration_test/app_test.dart) la monte avec un dossier et un coffre à lui.
+Future<LafleurApp> buildLafleurApp({
+  required Directory support,
+  required SecretStore secrets,
+}) async {
   // réglages (égaliseur) : rechargés, appliqués tout de suite, enregistrés à chaque changement
   final settingsFile = File(p.join(support.path, 'settings.json'));
   final settings = await AppSettings.load(settingsFile);
@@ -47,7 +56,7 @@ Future<void> main() async {
     ),
   );
   // morceaux du serveur : flux et pochettes avec les en-têtes du compte (une source par compte)
-  final accounts = Accounts(db, SecureSecretStore());
+  final accounts = Accounts(db, secrets);
   final resolver = MediaResolver(accounts.source);
   // tester, enregistrer, synchroniser : les mêmes comptes et le même resolver que le lecteur
   final accountService = AccountService(accounts, db: db, resolver: resolver);
@@ -80,21 +89,19 @@ Future<void> main() async {
   final loudness = LoudnessService(db, player)..enabled = settings.equalVolume;
   player.gainOf =
       loudness.gainOf; // le 2e lecteur du fondu démarre au bon niveau
-  runApp(
-    LafleurApp(
-      db: db,
-      loudness: loudness,
-      covers: covers,
-      resolver: resolver,
-      accounts: accounts,
-      accountService: accountService,
-      player: player,
-      equalizer: equalizer,
-      artistGrid: artistGrid,
-      settings: settings,
-      saveSettings: () => settings.save(settingsFile),
-      strings: Strings.of(PlatformDispatcher.instance.locale),
-    ),
+  return LafleurApp(
+    db: db,
+    loudness: loudness,
+    covers: covers,
+    resolver: resolver,
+    accounts: accounts,
+    accountService: accountService,
+    player: player,
+    equalizer: equalizer,
+    artistGrid: artistGrid,
+    settings: settings,
+    saveSettings: () => settings.save(settingsFile),
+    strings: Strings.of(PlatformDispatcher.instance.locale),
   );
 }
 

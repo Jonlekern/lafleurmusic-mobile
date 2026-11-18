@@ -88,4 +88,33 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: flutter test integration_test/sound_proof_test.dart
+          # sound proof, then the end-to-end run against a fake Subsonic server (task 10)
+          script: |
+            flutter test integration_test/sound_proof_test.dart
+            flutter test integration_test/app_test.dart
+
+  # Contract with a real Navidrome (plan 1, task 10): a throw-away server whose
+  # music folder is test/fixtures/, its admin created through the API, then
+  # our Subsonic client is run against it.
+  navidrome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NAVIDROME_URL: http://localhost:4533
+      NAVIDROME_USER: ci-admin
+      NAVIDROME_PASSWORD: ci-throwaway-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Navidrome on test/fixtures
+        run: tool/navidrome-ci.sh
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter test test/sources/navidrome_contract_test.dart
+      - name: Navidrome log
+        if: failure()
+        run: docker logs navidrome-ci
