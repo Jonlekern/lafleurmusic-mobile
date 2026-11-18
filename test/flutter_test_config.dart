@@ -1,10 +1,10 @@
 // Runs before every test file under test/ (flutter_test convention).
 //
-// Goldens: the reference images are made on the dev Mac, but CI runs on a
-// GitHub macos-15 runner whose text and image rasterisation differs very
-// slightly (0.08 % to 0.64 % of pixels on the first CI run). A diff up to
-// [goldenTolerance] is accepted; anything above still fails and writes the
-// usual failure images under failures/.
+// Goldens: the reference images are made on the dev Mac and compared strictly
+// there. CI (CI=true) runs on a GitHub macos-15 runner whose text and image
+// rasterisation differs very slightly (up to 0.83 % of pixels seen): there a
+// diff up to [ciGoldenTolerance] is accepted and printed; anything above still
+// fails and writes the usual failure images under failures/.
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';

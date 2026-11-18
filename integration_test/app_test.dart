@@ -43,26 +43,46 @@ Future<void> pumpUntil(
   }
 }
 
-/// Scrolls the screen's list until [finder] is built and on screen (lists build lazily, and the
-/// real keyboard of the phone takes half the screen).
+/// Scrolls the screen's list until [finder] is built and on screen: lists build lazily, a small
+/// phone (the 320×640 Android emulator) shows only the top of the form, and the real keyboard
+/// takes half the screen. Down first, then up (the keyboard may have pushed it above).
 Future<void> reveal(WidgetTester tester, Finder finder) async {
-  await tester.pump();
-  await tester.scrollUntilVisible(
-    finder,
-    150,
-    scrollable: find
-        .descendant(
-          of: find.byType(ListView),
-          matching: find.byType(Scrollable),
-        )
-        .first,
-  );
-  await tester.pump(const Duration(milliseconds: 300));
+  final list = find
+      .descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  for (var attempt = 0; attempt < 4; attempt++) {
+    await tester.pump();
+    for (final delta in const [150.0, -150.0]) {
+      if (finder.evaluate().isNotEmpty) break;
+      try {
+        await tester.scrollUntilVisible(
+          finder,
+          delta,
+          scrollable: list,
+          maxScrolls: 60,
+        );
+      } on StateError {
+        // not in this direction
+      }
+    }
+    if (finder.evaluate().isNotEmpty) {
+      await tester.ensureVisible(finder);
+      await tester.pump(const Duration(milliseconds: 300));
+      if (finder.hitTestable().evaluate().isNotEmpty) return;
+    }
+  }
+  throw TestFailure('Could not bring on screen: $finder');
 }
 
+/// Taps a button: the keyboard goes away first, so the whole screen is free on a small phone.
 Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pump(const Duration(milliseconds: 500));
   await reveal(tester, finder);
-  await tester.tap(finder);
+  await tester.tap(finder.hitTestable().first);
   await tester.pump();
 }
 
@@ -70,6 +90,8 @@ Future<void> typeInto(WidgetTester tester, String key, String text) async {
   final field = find.byKey(ValueKey(key));
   await reveal(tester, field);
   await tester.enterText(field, text);
+  await tester.pump(const Duration(milliseconds: 300)); // keyboard up: the list may move
+  await reveal(tester, field);
   await tester.pump();
 }
 

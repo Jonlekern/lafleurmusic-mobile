@@ -155,6 +155,8 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          # a real phone size (the default device is 320×640 at 160 dpi)
+          profile: pixel_6
           ram-size: 2048M
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true

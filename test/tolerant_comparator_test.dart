@@ -1,4 +1,5 @@
-// The golden comparator of flutter_test_config.dart: 0.5 % of pixels differ → pass, 0.9 % and 2 % → fail.
+// The golden comparator of flutter_test_config.dart: on CI (CI=true) up to 1 % of pixels may differ;
+// locally nothing may.
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -24,16 +25,12 @@ void main() {
   setUp(() {
     dir = Directory.systemTemp.createTempSync('golden-tolerance');
     File('${dir.path}/g.png').writeAsBytesSync(png(0));
-    comparator = TolerantFileComparator(Uri.file('${dir.path}/x_test.dart'));
+    comparator = TolerantFileComparator(
+      Uri.file('${dir.path}/x_test.dart'),
+      tolerance: goldenToleranceFor({'CI': 'true'}),
+    );
   });
   tearDown(() => dir.deleteSync(recursive: true));
-
-  testWidgets('0.5 % of pixels differ: accepted', (tester) async {
-    final ok = await tester.runAsync(
-      () => comparator.compare(png(50), Uri.parse('g.png')),
-    );
-    expect(ok, isTrue);
-  });
 
   Future<Object?> failure(WidgetTester tester, int changed) async {
     Object? error;
@@ -47,13 +44,48 @@ void main() {
     return error;
   }
 
-  testWidgets('0.9 % of pixels differ: fails (just above 0.8 %)', (
-    tester,
-  ) async {
-    expect(await failure(tester, 90), isA<FlutterError>());
+
+  test('tolerance: 1 % on CI, 0 % locally', () {
+    expect(goldenToleranceFor({'CI': 'true'}), 0.01);
+    expect(goldenToleranceFor({}), 0);
+    expect(goldenToleranceFor({'CI': 'false'}), 0);
   });
 
-  testWidgets('2 % of pixels differ: fails with failure images', (
+  testWidgets('locally: a single differing pixel fails', (tester) async {
+    comparator = TolerantFileComparator(
+      Uri.file('${dir.path}/x_test.dart'),
+      tolerance: goldenToleranceFor({}),
+    );
+    expect(await failure(tester, 1), isA<FlutterError>());
+    final same = await tester.runAsync(
+      () => comparator.compare(png(0), Uri.parse('g.png')),
+    );
+    expect(same, isTrue);
+  });
+
+  testWidgets('CI: 0.9 % of pixels differ: accepted (phone-6 drifted 0.83 %)', (
+    tester,
+  ) async {
+    final ok = await tester.runAsync(
+      () => comparator.compare(png(90), Uri.parse('g.png')),
+    );
+    expect(ok, isTrue);
+  });
+
+  testWidgets('CI: 0.5 % of pixels differ: accepted', (tester) async {
+    final ok = await tester.runAsync(
+      () => comparator.compare(png(50), Uri.parse('g.png')),
+    );
+    expect(ok, isTrue);
+  });
+
+  testWidgets('CI: 1.1 % of pixels differ: fails (just above 1 %)', (
+    tester,
+  ) async {
+    expect(await failure(tester, 110), isA<FlutterError>());
+  });
+
+  testWidgets('CI: 2 % of pixels differ: fails with failure images', (
     tester,
   ) async {
     expect(await failure(tester, 200), isA<FlutterError>());
