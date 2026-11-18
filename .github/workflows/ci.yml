@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: 3.47.7
+
+jobs:
+  test:
+    # macOS: the golden images were generated on macOS, and an exact pixel
+    # comparison would fail on Linux because of text rasterisation differences.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter test
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      # Signed with the debug key for now.
+      - run: flutter build apk --release
+      - name: Rename the APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk LAFLEURMUSIC-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LAFLEURMUSIC-android.apk
+          path: LAFLEURMUSIC-android.apk
+          if-no-files-found: error
