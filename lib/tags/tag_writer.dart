@@ -16,12 +16,13 @@ class TagEdit {
     this.artist,
     this.album,
     this.trackNo,
+    this.disc,
     this.cover,
     this.pictures,
   });
   final String path;
   final String? title, artist, album;
-  final int? trackNo;
+  final int? trackNo, disc;
   final Uint8List? cover; // nouvelle pochette (vide = retirer)
   final List<Picture>?
   pictures; // toutes les images d'avant, telles quelles (annulation)
@@ -70,6 +71,12 @@ class TagLibIO implements TagFileIO {
       if (e.artist != null) f.artist = e.artist!;
       if (e.album != null) f.album = e.album!;
       if (e.trackNo != null) f.track = e.trackNo!;
+      if (e.disc != null) {
+        // setProperties remplace tout : on repart des propriétés existantes
+        final props = f.properties;
+        props['DISCNUMBER'] = ['${e.disc}'];
+        f.setProperties(props);
+      }
       if (e.pictures != null) {
         if (!f.setPictures(e.pictures!)) return false;
       } else if (e.cover != null && !f.setCover(data: e.cover)) {

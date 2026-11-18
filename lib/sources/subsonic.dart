@@ -284,6 +284,9 @@ class SubsonicSource implements MusicSource, HttpSource {
   Uri streamUri(String songId) => _uri('stream', {'id': songId});
 
   @override
+  Uri downloadUri(String songId) => _uri('download', {'id': songId});
+
+  @override
   Uri coverUri(String coverId, int size) =>
       _uri('getCoverArt', {'id': coverId, 'size': '$size'});
 

@@ -350,6 +350,9 @@ class _CancellableSource implements MusicSource {
   Uri streamUri(String songId) => _inner.streamUri(songId);
 
   @override
+  Uri downloadUri(String songId) => _inner.downloadUri(songId);
+
+  @override
   Uri coverUri(String coverId, int size) => _inner.coverUri(coverId, size);
 
   @override

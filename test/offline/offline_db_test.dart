@@ -81,6 +81,16 @@ void main() {
     await first;
   });
 
+  test('a batch is downloaded in the order given, not by path', () async {
+    await db.queueOffline(['z', 'b', 'a'], OfflineReason.user);
+    final order = <String>[];
+    for (var r = await db.nextQueued(); r != null; r = await db.nextQueued()) {
+      order.add(r.trackPath);
+      await db.markOfflineDone(r.trackPath, 'f', 1);
+    }
+    expect(order, ['z', 'b', 'a']);
+  });
+
   test('pending scrobbles are per account and deletable', () async {
     await db.addPending('x', '1', DateTime.fromMillisecondsSinceEpoch(5));
     await db.addPending('x', '2', DateTime.fromMillisecondsSinceEpoch(6));

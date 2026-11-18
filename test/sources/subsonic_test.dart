@@ -288,6 +288,15 @@ void main() {
       expect(st.queryParameters['id'], 's-1');
       expect(st.queryParameters['u'], 'johnny');
     });
+
+    test('downloadUri asks for the original file with auth params', () {
+      final s = make(MockClient((r) async => json(fixture('ping'))));
+      final d = s.downloadUri('s-1');
+      expect(d.path, '/rest/download.view');
+      expect(d.queryParameters['id'], 's-1');
+      expect(d.queryParameters['u'], 'johnny');
+      expect(d.queryParameters['t'], isNotEmpty);
+    });
   });
 
   group('headers', () {

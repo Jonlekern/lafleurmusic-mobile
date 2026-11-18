@@ -108,6 +108,9 @@ abstract interface class MusicSource {
 
   /// Full authenticated URL (account headers are separate: [headers]).
   Uri streamUri(String songId);
+
+  /// The original file (offline copies); same auth as [streamUri].
+  Uri downloadUri(String songId);
   Uri coverUri(String coverId, int size);
   Map<String, String> get headers;
   Future<void> scrobble(String songId, DateTime at);

@@ -122,13 +122,13 @@ class LibraryDb extends _$LibraryDb {
   Future<void> queueOffline(List<String> trackPaths, OfflineReason reason) =>
       transaction(() async {
         final now = DateTime.now().millisecondsSinceEpoch;
-        for (final p in trackPaths) {
+        for (final (i, p) in trackPaths.indexed) {
           final old = await offlineOf(p);
           if (old == null) {
             await into(offline).insert(
               OfflineCompanion.insert(
                 trackPath: p,
-                addedAt: now,
+                addedAt: now + i, // l'ordre donné = l'ordre de téléchargement
                 reason: reason.name,
                 state: OfflineState.queued.name,
               ),
