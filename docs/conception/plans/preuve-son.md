@@ -15,10 +15,10 @@ L'essai : `integration_test/sound_proof_test.dart`.
 | (c) sans l'en-tête : erreur, pas de plantage | **OUI** | le serveur répond 403, mpv signale une erreur de fin de fichier, puis le même lecteur rejoue aussitôt |
 | (d) session multimédia publiée | **OUI** | le système affiche : titre « Ocean_Drive », artiste, album, pochette présente, état « lecture » (lu dans `MPNowPlayingInfoCenter`) |
 | (e) fréquence de sortie | **notée** | le fichier est à 44,1 kHz, la sortie aussi à 44,1 kHz (16 bits, stéréo) : pas de sortie forcée à 48 kHz comme sur le Mac |
-| musique qui continue en arrière-plan | **OUI** | `UIBackgroundModes` = `audio` ; l'appli mise en arrière-plan (Réglages ouverts) joue encore après 65 s |
+| musique qui continue en arrière-plan | **OUI, observé à la main, en debug** | `UIBackgroundModes` = `audio` ; l'appli mise en arrière-plan (Réglages ouverts) jouait encore après 65 s. Ce n'est pas un essai enregistré, et une appli en debug n'est pas forcément mise en pause par iOS comme une vraie : à confirmer avec l'écran verrouillé |
 | écran verrouillé : pochette et boutons | **à regarder** | la machine ne peut pas verrouiller le simulateur sans l'accord de Johnny ; ce que le système doit afficher est déjà vérifié en (d) |
 
-Décision iPhone : **on garde mpv.**
+Décision iPhone, **provisoire : on garde mpv, sous réserve de l'écran verrouillé (regardé par Johnny) et de l'essai Android sur GitHub.**
 
 ## Android (émulateur API 34 sur GitHub)
 

@@ -5,6 +5,7 @@
 //
 // Avec --dart-define=HOLD_SECONDS=90, le dernier essai laisse la musique tourner en boucle : le temps de
 // verrouiller l'écran et de regarder la pochette et les boutons (étape 3 de la tâche).
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -79,16 +80,41 @@ void main() {
     );
   });
 
-  /// Ouvre [media] et attend que mpv dise « prêt », puis que la lecture dépasse 1 s (5 s au plus).
+  /// Ouvre [media] et exige, en 5 s **en tout**, que ce morceau-là dépasse 1 s de lecture.
+  /// Le signal « prêt » de mpv ne suffit pas seul : on veut aussi voir la position repartir
+  /// de zéro (nouveau fichier, pas la position restée du morceau d'avant) puis passer 1 s,
+  /// et le bon morceau en cours dans la liste de mpv.
   Future<void> playsPastOneSecond(WidgetTester tester, Media media) async {
     await tester.runAsync(() async {
-      final ready = mpv.stream.seekCompleted.first;
-      await mpv.open(media);
-      await ready.timeout(const Duration(seconds: 5));
-      await mpv.stream.position
-          .firstWhere((d) => d > const Duration(seconds: 1))
-          .timeout(const Duration(seconds: 5));
+      var armed = false;
+      final restarted = Completer<void>();
+      final pastOne = Completer<void>();
+      final sub = mpv.stream.position.listen((d) {
+        // valeur rejouée à l'abonnement : celle du morceau d'avant
+        if (!armed) return;
+        if (d < const Duration(milliseconds: 500)) {
+          if (!restarted.isCompleted) restarted.complete();
+        } else if (restarted.isCompleted &&
+            d > const Duration(seconds: 1) &&
+            !pastOne.isCompleted) {
+          pastOne.complete();
+        }
+      });
+      try {
+        await Future<void>.delayed(Duration.zero);
+        armed = true;
+        final ready = mpv.stream.seekCompleted.first;
+        await () async {
+          await mpv.open(media);
+          await ready;
+          await pastOne.future;
+        }().timeout(const Duration(seconds: 5));
+      } finally {
+        await sub.cancel();
+      }
     });
+    final list = mpv.state.playlist;
+    expect(list.items[list.index].uri, media.uri);
     expect(mpv.state.playing, isTrue);
   }
 
@@ -126,6 +152,8 @@ void main() {
     tester,
   ) async {
     await mpv.setLoop(Loop.file);
+    // même si une vérification échoue, la boucle ne doit pas rester pour la suite
+    addTearDown(() => mpv.setLoop(Loop.off));
     await playsPastOneSecond(tester, Media(localPath));
     expect(mpv.state.mediaSession, isNotNull);
 
@@ -171,7 +199,6 @@ void main() {
       );
       expect(mpv.state.playing, isTrue);
     }
-    await mpv.setLoop(Loop.off);
     await mpv.pause();
   });
 }
