@@ -18,11 +18,32 @@ http.Response json(String body, [int code = 200]) => http.Response(
       headers: {'content-type': 'application/json; charset=utf-8'},
     );
 
+const emptyAlbumList =
+    '{"subsonic-response":{"status":"ok","version":"1.16.1","albumList2":{}}}';
+
+/// The recorded album list at offset 0, then an empty page.
+http.Response albumList(http.Request r) =>
+    r.url.queryParameters['offset'] == '0'
+        ? json(fixture('getAlbumList2'))
+        : json(emptyAlbumList);
+
+/// A server that never answers (home server seen from outside the house).
+MockClient hanging() => MockClient((r) => Completer<http.Response>().future);
+
+String albumPage(List<Map<String, Object?>> albums) => jsonEncode({
+      'subsonic-response': {
+        'status': 'ok',
+        'version': '1.16.1',
+        'albumList2': {'album': albums},
+      },
+    });
+
 SubsonicSource make(
   http.Client client, {
   String base = 'https://music.example.com',
   String password = 'pw',
   Map<String, String> headers = const {},
+  Duration timeout = requestTimeout,
 }) =>
     SubsonicSource(
       accountId: 'acc1',
@@ -32,6 +53,7 @@ SubsonicSource make(
       headers: headers,
       client: client,
       salt: () => 'abc',
+      timeout: timeout,
     );
 
 void main() {
@@ -180,9 +202,7 @@ void main() {
       final seen = <String, String?>{};
       final client = MockClient((r) async {
         seen[r.url.path] = r.headers['CF-Access-Client-Id'];
-        if (r.url.path.endsWith('getAlbumList2.view')) {
-          return json(fixture('getAlbumList2'));
-        }
+        if (r.url.path.endsWith('getAlbumList2.view')) return albumList(r);
         if (r.url.path.endsWith('getAlbum.view')) {
           return json(fixture('getAlbum'));
         }
@@ -244,12 +264,54 @@ void main() {
       expect(offsets, [0, 500]);
       expect(await it.moveNext(), isTrue);
       expect(it.current.length, 200);
-      expect(await it.moveNext(), isFalse);
       expect(offsets, [0, 500, 1000]);
+      // only an empty page ends the list (a server may cap pages below 500)
+      expect(await it.moveNext(), isFalse);
+      expect(offsets, [0, 500, 1000, 1200]);
+    });
+
+    test('a server capping pages at 100 still lists every album', () async {
+      final offsets = <int>[];
+      final client = MockClient((r) async {
+        final off = int.parse(r.url.queryParameters['offset']!);
+        offsets.add(off);
+        final n = (250 - off).clamp(0, 100); // ignores size=500
+        return json(albumPage([
+          for (var i = 0; i < n; i++)
+            {'id': 'a${off + i}', 'name': 'N${off + i}', 'artist': 'J'}
+        ]));
+      });
+      final pages = await make(client).albums().toList();
+      expect(pages.map((p) => p.length), [100, 100, 50]);
+      expect(offsets, [0, 100, 200, 250]);
+    });
+
+    test('a server ignoring the offset: stops with an error, no endless loop',
+        () async {
+      var calls = 0;
+      final client = MockClient((r) async {
+        calls++;
+        return json(albumPage([
+          {'id': 'a', 'name': 'A', 'artist': 'x'},
+          {'id': 'b', 'name': 'B', 'artist': 'x'},
+        ]));
+      });
+      final pages = <List<SourceAlbum>>[];
+      Object? error;
+      try {
+        await for (final p in make(client).albums(pageSize: 2)) {
+          pages.add(p);
+        }
+      } catch (e) {
+        error = e;
+      }
+      expect(pages, hasLength(1));
+      expect(error, isA<SubsonicException>());
+      expect(calls, 2);
     });
 
     test('maps fields from the recorded response', () async {
-      final s = make(MockClient((r) async => json(fixture('getAlbumList2'))));
+      final s = make(MockClient((r) async => albumList(r)));
       final pages = await s.albums().toList();
       expect(pages.length, 1);
       final a = pages.single;
@@ -378,8 +440,149 @@ void main() {
     });
   });
 
+  group('timeouts (home server seen from outside the house)', () {
+    const short = Duration(milliseconds: 50);
+
+    test('a request that never answers fails as a network error', () async {
+      final s = make(hanging(), timeout: short);
+      final sw = Stopwatch()..start();
+      await expectLater(
+          s.albumSongs('1'), throwsA(isA<SourceNetworkException>()));
+      expect(sw.elapsed, lessThan(const Duration(seconds: 5)));
+    });
+
+    test('the album list fails too (sync ends incomplete)', () async {
+      final s = make(hanging(), timeout: short);
+      await expectLater(
+          s.albums().toList(), throwsA(isA<SourceNetworkException>()));
+    });
+
+    test('Tester: unreachable within the timeout', () async {
+      final s = make(hanging(), timeout: short);
+      expect(await s.test(), TestResult.unreachable);
+    });
+
+    test('the timeout text carries no credentials', () async {
+      final s = make(hanging(), timeout: short);
+      try {
+        await s.scrobble('1', DateTime(2026));
+        fail('no error');
+      } on SourceNetworkException catch (e) {
+        expect(e.kind, 'TimeoutException');
+        for (final secret in ['t=', 's=', 'u=', 'johnny', 'http']) {
+          expect('$e', isNot(contains(secret)));
+        }
+      }
+    });
+
+    test('defaults: 15 s per request, 8 s to connect', () {
+      expect(requestTimeout, const Duration(seconds: 15));
+      expect(connectTimeout, const Duration(seconds: 8));
+      expect(
+          SubsonicSource(
+                  accountId: 'a', base: Uri.parse('http://h'), user: 'u', password: 'p')
+              .timeout,
+          requestTimeout);
+    });
+  });
+
+  group('Tester: redirects and certificates', () {
+    test('redirects are not followed; a 3xx is a refused header', () async {
+      for (final code in [301, 302, 303, 307, 308]) {
+        late bool follow;
+        final s = make(MockClient((r) async {
+          follow = r.followRedirects;
+          return http.Response('', code,
+              headers: {'location': 'https://login.example.com/'});
+        }));
+        expect(await s.test(), TestResult.headerRefused, reason: '$code');
+        expect(follow, isFalse);
+      }
+    });
+
+    test('a refused certificate is told apart from an unreachable server',
+        () async {
+      for (final e in [
+        const HandshakeException('CERTIFICATE_VERIFY_FAILED'),
+        const TlsException('bad certificate'),
+      ]) {
+        final s = make(MockClient((r) async => throw e));
+        expect(await s.test(), TestResult.certificateRejected, reason: '$e');
+      }
+    });
+  });
+
+  group('lenient JSON (numbers where strings are expected)', () {
+    test('albums and songs with numeric ids, cover ids and suffix', () async {
+      final s = make(MockClient((r) async {
+        if (r.url.path.endsWith('getAlbumList2.view')) {
+          return json(r.url.queryParameters['offset'] == '0'
+              ? albumPage([
+                  {'id': 7, 'name': 2024, 'artist': 'J', 'coverArt': 42, 'songCount': '3'}
+                ])
+              : emptyAlbumList);
+        }
+        return json(jsonEncode({
+          'subsonic-response': {
+            'status': 'ok',
+            'album': {
+              'id': 7,
+              'name': 'A',
+              'song': [
+                {
+                  'id': 99,
+                  'title': 1999,
+                  'coverArt': 42,
+                  'suffix': 3,
+                  'track': '4',
+                  'duration': '61.5',
+                  'size': 1000,
+                  'replayGain': {'trackGain': '-6.5', 'albumGain': -7},
+                  'playCount': '2',
+                },
+                'not a song',
+              ],
+            },
+          },
+        }));
+      }));
+      final albums = (await s.albums().toList()).expand((p) => p).toList();
+      expect(albums.single.id, '7');
+      expect(albums.single.name, '2024');
+      expect(albums.single.coverId, '42');
+      expect(albums.single.songCount, 3);
+      final song = (await s.albumSongs('7')).single;
+      expect(song.id, '99');
+      expect(song.title, '1999');
+      expect(song.coverId, '42');
+      expect(song.suffix, '3');
+      expect(song.track, 4);
+      expect(song.durationMs, 61500);
+      expect(song.replayGainTrack, -6.5);
+      expect(song.replayGainAlbum, -7.0);
+      expect(song.playCount, 2);
+    });
+  });
+
+  test('close() closes the HTTP client', () {
+    var closed = false;
+    final s = make(_ClosingClient(() => closed = true));
+    s.close();
+    expect(closed, isTrue);
+  });
+
   test('accountId is exposed', () {
     expect(make(MockClient((r) async => json(fixture('ping')))).accountId,
         'acc1');
   });
+}
+
+class _ClosingClient extends http.BaseClient {
+  _ClosingClient(this.onClose);
+  final void Function() onClose;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      throw UnimplementedError();
+  @override
+  void close() => onClose();
 }

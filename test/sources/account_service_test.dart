@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
 import 'package:lafleurmusic/sources/source.dart';
+import 'package:lafleurmusic/sources/subsonic.dart';
 
 import 'fake_secret_store.dart';
 
@@ -43,6 +46,30 @@ void main() {
         DraftProblem.missing,
       );
       expect(d('m.example', pw: '').problem(needsPassword: false), isNull);
+    });
+
+    test('home-network addresses (iOS local network permission)', () {
+      for (final h in [
+        '192.168.1.20:4533',
+        'http://10.0.0.5',
+        'http://172.16.0.1',
+        'http://172.31.255.1',
+        'http://169.254.3.4',
+        'http://nas.local:4533',
+        'http://[fe80::1]:4533',
+        'http://[fd12::1]',
+      ]) {
+        expect(d(h).isLocalNetwork, isTrue, reason: h);
+      }
+      for (final h in [
+        'https://music.example.com',
+        'http://172.32.0.1',
+        'http://8.8.8.8',
+        'http://[2001:db8::1]',
+        '',
+      ]) {
+        expect(d(h).isLocalNetwork, isFalse, reason: h);
+      }
     });
 
     test('empty name falls back to the host', () {
@@ -109,6 +136,45 @@ void main() {
         expect(service.offline, isFalse);
       },
     );
+
+    test('a server that never answers: sync ends incomplete, "Hors ligne", remove not stuck', () async {
+      // home Navidrome seen from outside the house: 192.168.x.x hangs
+      final hanging = MockClient((_) => Completer<http.Response>().future);
+      final service = AccountService(
+        accounts,
+        db: db,
+        sourceOf: (id) async => SubsonicSource(
+          accountId: id,
+          base: Uri.parse('http://192.168.1.20:4533'),
+          user: 'u',
+          password: 'pw',
+          client: hanging,
+          timeout: const Duration(milliseconds: 50),
+        ),
+      );
+      final sw = Stopwatch()..start();
+      await service.syncAll(); // pull-to-refresh awaits this
+      expect(sw.elapsed, lessThan(const Duration(seconds: 5)));
+      expect(service.syncing, isFalse);
+      expect(service.stateOf(a.id), AccountState.absent);
+      expect(service.offline, isTrue);
+      final running = service.sync(a.id);
+      await service.remove(a.id).timeout(const Duration(seconds: 5));
+      await running;
+      expect(await accounts.watch().first, isEmpty);
+    });
+
+    test('remove forgets the account\'s cached covers', () async {
+      final forgotten = <String>[];
+      final service = AccountService(
+        accounts,
+        db: db,
+        sourceOf: (id) async => GatedSource(id, albumCount: 0),
+        forgetCovers: (id) async => forgotten.add(id),
+      );
+      await service.remove(a.id);
+      expect(forgotten, [a.id]);
+    });
 
     test('remove invalidates the player source', () async {
       var built = 0;

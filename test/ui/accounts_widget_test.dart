@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
@@ -45,6 +46,7 @@ void main() {
       TestResult.wrongPassword: 'Mauvais nom ou mot de passe',
       TestResult.headerRefused: 'En-tête refusé par le proxy',
       TestResult.notSubsonic: "Ce n'est pas un serveur Subsonic",
+      TestResult.certificateRejected: 'Certificat refusé (https)',
     };
     for (final MapEntry(key: result, value: text) in messages.entries) {
       testWidgets('« Tester » → $text', (tester) async {
@@ -66,6 +68,51 @@ void main() {
         expect(await f.list(tester), isEmpty);
       });
     }
+
+    const hint =
+        "Vérifie aussi que l'accès au réseau local est autorisé dans Réglages → LAFLEURMUSIC.";
+
+    Future<void> testOn(
+      WidgetTester tester,
+      TargetPlatform platform, {
+      String address = 'http://192.168.1.20:4533',
+    }) async {
+      debugDefaultTargetPlatformOverride = platform;
+      final f = await pumpAccounts(
+        tester,
+        seed: const [],
+        home: () => const AccountFormScreen(),
+      );
+      f.draftResult = TestResult.unreachable;
+      await fillForm(tester, address: address);
+      await tapAndSettle(tester, find.text('Tester'));
+    }
+
+    testWidgets('iPhone, serveur de la maison injoignable : rappel du réseau local', (
+      tester,
+    ) async {
+      await testOn(tester, TargetPlatform.iOS);
+      expect(find.text('Serveur injoignable\n$hint'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('iPhone, serveur sur Internet injoignable : pas de rappel', (
+      tester,
+    ) async {
+      await testOn(tester, TargetPlatform.iOS, address: 'https://music.example.com');
+      expect(find.text('Serveur injoignable'), findsOneWidget);
+      expect(find.textContaining('réseau local'), findsNothing);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('Android : pas de rappel (pas de permission réseau local)', (
+      tester,
+    ) async {
+      await testOn(tester, TargetPlatform.android);
+      expect(find.text('Serveur injoignable'), findsOneWidget);
+      expect(find.textContaining('réseau local'), findsNothing);
+      debugDefaultTargetPlatformOverride = null;
+    });
 
     testWidgets('le mot de passe est masqué', (tester) async {
       await pumpAccounts(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -20,16 +21,23 @@ const _scheme = 'subsonic://';
 /// Turns a library path into what mpv opens: the file itself, or the server
 /// stream with the account headers. Never logs the stream URL (it carries the token).
 class MediaResolver {
-  MediaResolver(this._sourceOf, {DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+  MediaResolver(
+    this._sourceOf, {
+    DateTime Function()? clock,
+    this.sourceTimeout = const Duration(seconds: 10),
+  }) : _clock = clock ?? DateTime.now;
 
   /// Plays local files only (no account known).
   MediaResolver.localOnly()
     : _sourceOf = ((id) async => throw StateError('No account $id')),
-      _clock = DateTime.now;
+      _clock = DateTime.now,
+      sourceTimeout = const Duration(seconds: 10);
 
   /// A failed account (password missing, database error…) is not asked again before this.
   static const retryAfter = Duration(minutes: 1);
+
+  /// [media] doesn't wait longer than this for an account (a stuck keychain or database).
+  final Duration sourceTimeout;
 
   final Future<MusicSource> Function(String accountId) _sourceOf;
   final DateTime Function() _clock;
@@ -56,9 +64,15 @@ class MediaResolver {
     });
   }
 
+  /// Forgets the account's source and closes its connections.
   void invalidate(String accountId) {
-    _sources.remove(accountId);
+    final old = _sources.remove(accountId);
     _failedAt.remove(accountId);
+    old?.then<void>((s) {
+      try {
+        s.close();
+      } catch (_) {} // closing never matters more than forgetting
+    }, onError: (Object _) {});
   }
 
   Future<Media> media(String path) async {
@@ -66,9 +80,9 @@ class MediaResolver {
     if (key == null) return Media(path);
     final MusicSource s;
     try {
-      s = await source(key.$1);
+      s = await source(key.$1).timeout(sourceTimeout);
     } on Object {
-      // account gone or unusable: mpv fails on the raw key and the track is skipped like an unreadable file
+      // account gone, unusable or too slow: mpv fails on the raw key and the track is skipped like an unreadable file
       return Media(path);
     }
     return Media(
@@ -84,12 +98,15 @@ Future<Uint8List?> remoteCover(
   String coverId,
   int size, {
   http.Client? client,
+  Duration timeout = requestTimeout,
 }) async {
   final c = client ?? (s is HttpSource ? (s as HttpSource).httpClient : null);
   final own = c == null;
-  final cl = c ?? http.Client();
+  final cl = c ?? newServerClient();
   try {
-    final res = await cl.get(s.coverUri(coverId, size), headers: s.headers);
+    final res = await cl
+        .get(s.coverUri(coverId, size), headers: s.headers)
+        .timeout(timeout);
     final type = (res.headers['content-type'] ?? '').toLowerCase();
     // Subsonic answers "not found" with a 200 and a JSON/XML error (an SVG cover is image/svg+xml: kept)
     if (res.statusCode != 200 ||

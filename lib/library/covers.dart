@@ -57,6 +57,24 @@ class Covers {
     p.join(cacheDir.path, '${sha1.convert(utf8.encode(trackPath))}-$size.jpg'),
   );
 
+  /// Pochettes d'un compte du serveur : rangées à part, effacées avec le compte.
+  Directory _accountDir(String accountId) =>
+      Directory(p.join(cacheDir.path, 'server', accountId));
+
+  File _remoteFile(String accountId, String id, int size) => File(
+    p.join(_accountDir(accountId).path, '${sha1.convert(utf8.encode(id))}-$size.jpg'),
+  );
+
+  /// Compte retiré : ses pochettes quittent le disque et la mémoire.
+  Future<void> forgetAccount(String accountId) async {
+    if (accountId.isEmpty || accountId.contains(RegExp(r'[/\\.]'))) return;
+    final prefix = '|subsonic://$accountId/';
+    _memo.removeWhere((k, _) => k.contains(prefix));
+    _failedAt.removeWhere((k, _) => k.contains(prefix));
+    final d = _accountDir(accountId);
+    if (await d.exists()) await d.delete(recursive: true);
+  }
+
   // Résultats en mémoire, « pas de pochette » compris : l'interface redemande la même image à chaque image.
   final _memo = <String, Future<File?>>{};
 
@@ -112,7 +130,13 @@ class Covers {
     final keyOf = remoteKey;
     final cover = keyOf == null ? trackPath : await keyOf(trackPath);
     if (cover == null) return null; // pas de pochette sur le serveur
-    final file = _cacheFile(keyOf == null ? cover : 'cover:$cover', size);
+    final rest = trackPath.substring('subsonic://'.length);
+    final account = rest.contains('/') ? rest.substring(0, rest.indexOf('/')) : rest;
+    final file = _remoteFile(
+      account,
+      keyOf == null ? cover : 'cover:$cover',
+      size,
+    );
     final id = file.path; // la taille est dans le nom
     final running = _downloads[id];
     if (running != null) return running;
@@ -144,7 +168,7 @@ class Covers {
       );
     });
     if (jpg == null) return null;
-    await cacheDir.create(recursive: true);
+    await cached.parent.create(recursive: true);
     await cached.writeAsBytes(jpg);
     return cached;
   }

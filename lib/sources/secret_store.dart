@@ -9,7 +9,13 @@ abstract interface class SecretStore {
 /// Keychain (iOS) / Keystore (Android) via flutter_secure_storage.
 class SecureSecretStore implements SecretStore {
   SecureSecretStore([FlutterSecureStorage? storage])
-      : _s = storage ?? const FlutterSecureStorage();
+      : _s = storage ?? const FlutterSecureStorage(iOptions: iosOptions);
+
+  /// Readable once the phone has been unlocked after starting: playback goes on
+  /// (next track, scrobble, cover) while the screen is locked.
+  static const iosOptions = IOSOptions(
+    accessibility: KeychainAccessibility.first_unlock,
+  );
   final FlutterSecureStorage _s;
 
   @override

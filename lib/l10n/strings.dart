@@ -274,7 +274,17 @@ class Strings {
       "Ce n'est pas un serveur Subsonic",
       'This is not a Subsonic server',
     ),
+    TestResult.certificateRejected => _t(
+      'Certificat refusé (https)',
+      'Certificate rejected (https)',
+    ),
   };
+
+  /// iPhone, serveur de la maison injoignable : l'accès au réseau local a peut-être été refusé.
+  String get localNetworkHint => _t(
+    "Vérifie aussi que l'accès au réseau local est autorisé dans Réglages → LAFLEURMUSIC.",
+    'Also check that local network access is allowed in Settings → LAFLEURMUSIC.',
+  );
   String draftProblem(DraftProblem p) => switch (p) {
     DraftProblem.missing => _t(
       "Il manque l'adresse, l'utilisateur ou le mot de passe.",

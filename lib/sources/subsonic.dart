@@ -27,9 +27,13 @@ class SubsonicSource implements MusicSource, HttpSource {
     Map<String, String> headers = const {},
     http.Client? client,
     String Function()? salt,
+    this.timeout = requestTimeout,
   })  : _headers = Map.unmodifiable(headers),
-        _client = client ?? http.Client(),
+        _client = client ?? newServerClient(),
         _salt = salt ?? _randomSalt;
+
+  /// A request that hasn't fully answered after this fails (a [SourceNetworkException]).
+  final Duration timeout;
 
   @override
   final String accountId;
@@ -93,7 +97,9 @@ class SubsonicSource implements MusicSource, HttpSource {
       String method, Map<String, String> params) async {
     final http.Response res;
     try {
-      res = await _client.get(_uri(method, params), headers: _headers);
+      res = await _client
+          .get(_uri(method, params), headers: _headers)
+          .timeout(timeout);
     } on Exception catch (e) {
       // never rethrow as is: ClientException.toString prints the URL, token included
       throw SourceNetworkException(e);
@@ -106,7 +112,7 @@ class SubsonicSource implements MusicSource, HttpSource {
       final e = r['error'];
       throw SubsonicException(
         e is Map ? '${e['message'] ?? 'error'}' : 'request failed',
-        code: e is Map ? (e['code'] as num?)?.toInt() : null,
+        code: e is Map ? _int(e['code']) : null,
       );
     }
     return r;
@@ -116,15 +122,25 @@ class SubsonicSource implements MusicSource, HttpSource {
   Future<TestResult> test() async {
     final http.Response res;
     try {
-      res = await _client.get(_uri('ping'), headers: _headers);
+      // redirects not followed: a proxy sending to its login page is a refused header
+      final req = http.Request('GET', _uri('ping'))
+        ..followRedirects = false
+        ..headers.addAll(_headers);
+      res = await _client
+          .send(req)
+          .then(http.Response.fromStream)
+          .timeout(timeout);
+    } on TlsException {
+      return TestResult.certificateRejected; // HandshakeException, CertificateException
     } on SocketException {
       return TestResult.unreachable;
     } on http.ClientException {
       return TestResult.unreachable;
     } on TimeoutException {
       return TestResult.unreachable;
-    } on HandshakeException {
-      return TestResult.unreachable;
+    }
+    if (res.statusCode >= 300 && res.statusCode < 400) {
+      return TestResult.headerRefused;
     }
     final r = _parse(utf8.decode(res.bodyBytes, allowMalformed: true));
     if (r == null) {
@@ -134,7 +150,7 @@ class SubsonicSource implements MusicSource, HttpSource {
       return TestResult.notSubsonic;
     }
     if (r['status'] == 'ok') return TestResult.ok;
-    final code = r['error'] is Map ? (r['error'] as Map)['code'] : null;
+    final code = r['error'] is Map ? _int((r['error'] as Map)['code']) : null;
     if (code == 40 || code == 41) return TestResult.wrongPassword;
     return TestResult.notSubsonic;
   }
@@ -142,41 +158,47 @@ class SubsonicSource implements MusicSource, HttpSource {
   @override
   Stream<List<SourceAlbum>> albums({int pageSize = 500}) async* {
     var offset = 0;
+    final seen = <String>{};
     while (true) {
       final r = await _call('getAlbumList2', {
         'type': 'alphabeticalByName',
         'size': '$pageSize',
         'offset': '$offset',
       });
-      final list = (r['albumList2'] is Map
-              ? (r['albumList2'] as Map)['album']
-              : null) as List? ??
-          const [];
+      final raw =
+          r['albumList2'] is Map ? (r['albumList2'] as Map)['album'] : null;
+      final list = raw is List ? raw : const [];
       final page = [
-        for (final a in list.cast<Map>())
+        for (final a in list.whereType<Map>())
           SourceAlbum(
             id: '${a['id']}',
             name: '${a['name'] ?? a['title'] ?? ''}',
             artist: '${a['artist'] ?? ''}',
-            coverId: a['coverArt'] as String?,
-            songCount: (a['songCount'] as num?)?.toInt() ?? 0,
+            coverId: _str(a['coverArt']),
+            songCount: _int(a['songCount']) ?? 0,
           ),
       ];
-      if (page.isNotEmpty) yield page;
-      if (list.length < pageSize) return;
-      offset += pageSize;
+      // only an empty page ends the list: a server may cap the page below pageSize
+      if (page.isEmpty) return;
+      // a server ignoring the offset sends the same albums again: stop, sync incomplete
+      if (page.any((a) => seen.contains(a.id))) {
+        throw SubsonicException('album list repeats itself at offset $offset');
+      }
+      seen.addAll(page.map((a) => a.id));
+      yield page;
+      offset += list.length;
     }
   }
 
   @override
   Future<List<SourceSong>> albumSongs(String albumId) async {
     final r = await _call('getAlbum', {'id': albumId});
-    final album = r['album'] as Map? ?? const {};
-    final songs = album['song'] as List? ?? const [];
+    final album = r['album'] is Map ? r['album'] as Map : const {};
+    final songs = album['song'] is List ? album['song'] as List : const [];
     return [
-      for (final s in songs.cast<Map>())
+      for (final s in songs.whereType<Map>())
         () {
-          final rg = s['replayGain'] as Map?;
+          final rg = s['replayGain'] is Map ? s['replayGain'] as Map : null;
           return SourceSong(
             id: '${s['id']}',
             title: '${s['title'] ?? ''}',
@@ -184,19 +206,27 @@ class SubsonicSource implements MusicSource, HttpSource {
             album: '${s['album'] ?? album['name'] ?? ''}',
             albumArtist: '${s['albumArtist'] ?? album['artist'] ?? ''}',
             genre: '${s['genre'] ?? ''}',
-            track: (s['track'] as num?)?.toInt(),
-            disc: (s['discNumber'] as num?)?.toInt(),
-            durationMs: (((s['duration'] as num?) ?? 0) * 1000).round(),
-            size: (s['size'] as num?)?.toInt() ?? 0,
-            coverId: s['coverArt'] as String?,
-            suffix: s['suffix'] as String?,
-            replayGainTrack: (rg?['trackGain'] as num?)?.toDouble(),
-            replayGainAlbum: (rg?['albumGain'] as num?)?.toDouble(),
-            playCount: (s['playCount'] as num?)?.toInt() ?? 0,
+            track: _int(s['track']),
+            disc: _int(s['discNumber']),
+            durationMs: ((_num(s['duration']) ?? 0) * 1000).round(),
+            size: _int(s['size']) ?? 0,
+            coverId: _str(s['coverArt']),
+            suffix: _str(s['suffix']),
+            replayGainTrack: _num(rg?['trackGain'])?.toDouble(),
+            replayGainAlbum: _num(rg?['albumGain'])?.toDouble(),
+            playCount: _int(s['playCount']) ?? 0,
           );
         }(),
     ];
   }
+
+  // Servers differ on JSON types (a cover id as a number, a size as a string): read leniently.
+  static String? _str(Object? v) => v?.toString();
+  static num? _num(Object? v) => v is num ? v : num.tryParse('${v ?? ''}');
+  static int? _int(Object? v) => _num(v)?.toInt();
+
+  @override
+  void close() => _client.close();
 
   @override
   Uri streamUri(String songId) => _uri('stream', {'id': songId});

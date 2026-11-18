@@ -2,6 +2,18 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
+
+/// A home server reached from outside the house never answers: its address
+/// (192.168.x.x) hangs instead of failing. Connecting gives up after this.
+const connectTimeout = Duration(seconds: 8);
+
+/// A whole request (connection, headers and body) gives up after this.
+const requestTimeout = Duration(seconds: 15);
+
+/// HTTP client for a music server: gives up connecting after [connectTimeout].
+http.Client newServerClient() =>
+    IOClient(HttpClient()..connectionTimeout = connectTimeout);
 
 /// A music source (Subsonic today) as seen by sync and playback.
 class SourceAlbum {
@@ -75,7 +87,16 @@ class SourceNetworkException implements Exception {
   String toString() => 'SourceNetworkException($kind): $message';
 }
 
-enum TestResult { ok, unreachable, wrongPassword, headerRefused, notSubsonic }
+enum TestResult {
+  ok,
+  unreachable,
+  wrongPassword,
+  headerRefused,
+  notSubsonic,
+
+  /// https: the server's certificate was refused (self-signed, expired, wrong name).
+  certificateRejected,
+}
 
 abstract interface class MusicSource {
   String get accountId;
@@ -90,6 +111,9 @@ abstract interface class MusicSource {
   Uri coverUri(String coverId, int size);
   Map<String, String> get headers;
   Future<void> scrobble(String songId, DateTime at);
+
+  /// Releases the connections (the source is not used afterwards).
+  void close();
 }
 
 /// A source reached over HTTP: its client also fetches the covers (same connection pool, mockable in tests).

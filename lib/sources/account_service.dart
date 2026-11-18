@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import '../library/db.dart';
 import '../library/sync.dart';
@@ -35,6 +34,30 @@ class AccountDraft {
     return u;
   }
 
+  /// The server is on the home network (private IPv4, link-local, `.local`, IPv6 ULA):
+  /// iOS asks permission before the app can reach it.
+  bool get isLocalNetwork {
+    final h = (base?.host ?? '').toLowerCase();
+    if (h.isEmpty) return false;
+    if (h.endsWith('.local') || h == 'localhost') return true;
+    final v4 = RegExp(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)$').firstMatch(h);
+    if (v4 != null) {
+      final a = int.parse(v4[1]!), b = int.parse(v4[2]!);
+      return a == 10 ||
+          a == 127 ||
+          (a == 172 && b >= 16 && b <= 31) ||
+          (a == 192 && b == 168) ||
+          (a == 169 && b == 254);
+    }
+    if (h.contains(':')) {
+      return h.startsWith('fe80') ||
+          h.startsWith('fc') ||
+          h.startsWith('fd') ||
+          h == '::1';
+    }
+    return false;
+  }
+
   /// The name typed, or the server's host.
   String get displayName =>
       name.trim().isNotEmpty ? name.trim() : (base?.host ?? '');
@@ -66,6 +89,7 @@ class AccountService extends ChangeNotifier {
     this._draftSource,
     Future<MusicSource> Function(String id)? sourceOf,
     Future<SyncResult> Function(MusicSource source)? sync,
+    this.forgetCovers,
   }) : _sourceOf = sourceOf ?? resolver?.source ?? accounts.source,
        _sync = sync ?? LibrarySync(db).run;
 
@@ -74,6 +98,9 @@ class AccountService extends ChangeNotifier {
   final MusicSource Function(AccountDraft, String)? _draftSource;
   final Future<MusicSource> Function(String id) _sourceOf;
   final Future<SyncResult> Function(MusicSource) _sync;
+
+  /// Erases the account's cached covers (main: [Covers.forgetAccount]).
+  final Future<void> Function(String accountId)? forgetCovers;
 
   /// A server that doesn't answer within this is "unreachable".
   static const testTimeout = Duration(seconds: 10);
@@ -122,7 +149,7 @@ class AccountService extends ChangeNotifier {
     }
     final custom = _draftSource;
     if (custom != null) return _timed(custom(d, password));
-    final client = http.Client();
+    final client = newServerClient();
     try {
       return await _timed(
         SubsonicSource(
@@ -204,6 +231,9 @@ class AccountService extends ChangeNotifier {
     if (running != null) await running.catchError((Object _) {});
     await accounts.remove(id);
     resolver?.invalidate(id);
+    try {
+      await forgetCovers?.call(id);
+    } catch (_) {} // a leftover cover file is harmless
     _results.remove(id);
     _checking.remove(id);
     notifyListeners();
@@ -323,6 +353,9 @@ class _CancellableSource implements MusicSource {
   @override
   Future<void> scrobble(String songId, DateTime at) =>
       _inner.scrobble(songId, at);
+
+  @override
+  void close() {} // the inner source is shared (resolver): not ours to close
 }
 
 class _Cancelled implements Exception {

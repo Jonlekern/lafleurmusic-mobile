@@ -121,7 +121,7 @@ void main() {
       expect(embeddedCalls, 0); // jamais TagLib sur une clé de serveur
       final f = both.first!;
       expect(f.existsSync(), isTrue);
-      expect(f.parent.path, '${dir.path}/cache');
+      expect(f.parent.path, '${dir.path}/cache/server/acc1'); // rangée avec son compte
       expect(img.decodeJpg(f.readAsBytesSync())!.width, 300);
       expect(red(f), greaterThan(200));
       // relancement de l'appli : servi par le disque, sans réseau
@@ -184,6 +184,25 @@ void main() {
       // pas de pochette sur le serveur : rien téléchargé
       expect(await album.get('subsonic://acc1/x', 300), isNull);
       expect(fetches, 1);
+    });
+
+    test('compte retiré : ses pochettes quittent le disque, pas celles des autres', () async {
+      final c = Covers(
+        cacheDir: Directory('${dir.path}/cache'),
+        remoteKey: (path) async => '${path.split('/')[2]}/al-1',
+        remote: (_, _) async => png(250),
+      );
+      final gone = (await c.get('subsonic://acc1/s1', 64))!;
+      final kept = (await c.get('subsonic://acc2/s1', 64))!;
+      await c.forgetAccount('acc1');
+      expect(gone.existsSync(), isFalse);
+      expect(kept.existsSync(), isTrue);
+      // plus en mémoire non plus : redemandée, elle est retéléchargée
+      expect((await c.get('subsonic://acc1/s1', 64))!.existsSync(), isTrue);
+      // un identifiant bizarre ne sort jamais du cache
+      await c.forgetAccount('..');
+      await c.forgetAccount('');
+      expect(kept.existsSync(), isTrue);
     });
 
     test('sans fonction remote : pas de pochette', () async {

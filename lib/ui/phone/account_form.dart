@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
@@ -156,6 +157,12 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
         setState(() {
           _busy = false;
           _message = s.testResult(r);
+          // iPhone : un serveur de la maison injoignable vient souvent d'un accès au réseau local refusé
+          if (r == TestResult.unreachable &&
+              defaultTargetPlatform == TargetPlatform.iOS &&
+              d.isLocalNetwork) {
+            _message = '${s.testResult(r)}\n${s.localNetworkHint}';
+          }
           _ok = r == TestResult.ok;
         });
       }
