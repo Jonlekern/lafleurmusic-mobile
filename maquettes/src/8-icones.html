@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1300px;height:760px;background:#2b2b2b;font-family:Inter;color:#F2F2F2;display:flex;gap:40px;padding:50px 40px}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;gap:18px}
+.cap{color:#ddd;font-size:15px;font-weight:700}.cap span{color:#F26EF2}
+.home{width:270px;height:400px;border-radius:36px;padding:34px 26px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px 0;align-content:start;justify-items:center}
+.home.day{background:linear-gradient(160deg,#cfe3f5,#f6d7ec)}.home.night{background:linear-gradient(160deg,#141a2c,#2a1630)}
+.app{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;font-weight:700}
+.day .app{color:#111}.night .app{color:#eee}
+.ic{width:62px;height:62px;border-radius:15px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ic img{width:44px}
+.ic.dark{background:#1a1a1a}.ic.light{background:#fff}.ic.light img,.big.light img{filter:brightness(0)}
+.ic.tint{background:#2d2d33}.ic.tint img{filter:grayscale(1) brightness(2.2) sepia(1) hue-rotate(250deg) saturate(2)}
+.ic.mono{background:#e8def8;border-radius:50%}.ic.mono img{filter:grayscale(1) brightness(.35) sepia(1) hue-rotate(220deg) saturate(3)}
+.ic.other{background:rgba(255,255,255,.45)}.night .ic.other{background:rgba(255,255,255,.12)}
+.big{width:170px;height:170px;border-radius:40px;display:flex;align-items:center;justify-content:center}.big img{width:120px}
+.big.light{background:#fff}.big.dark{background:#1a1a1a}
+.note{font-size:13px;color:#bbb;text-align:center;line-height:1.5;max-width:280px}
+</style></head><body>
+<div class="col"><div class="cap"><span>Jour</span> fond blanc, fleur noire</div>
+<div class="big light"><img src="fleur.png"></div>
+<div class="home day">
+<div class="app"><div class="ic other"></div>Photos</div><div class="app"><div class="ic light"><img src="fleur.png"></div>LAFLEUR</div><div class="app"><div class="ic other"></div>Météo</div>
+<div class="app"><div class="ic other"></div>Plans</div><div class="app"><div class="ic other"></div>Notes</div><div class="app"><div class="ic other"></div>Fichiers</div>
+</div><div class="note">iPhone et Android en mode clair.</div></div>
+
+<div class="col"><div class="cap"><span>Nuit</span> fond noir, fleur rose</div>
+<div class="big dark"><img src="fleur.png"></div>
+<div class="home night">
+<div class="app"><div class="ic other"></div>Photos</div><div class="app"><div class="ic dark"><img src="fleur.png"></div>LAFLEUR</div><div class="app"><div class="ic other"></div>Météo</div>
+<div class="app"><div class="ic other"></div>Plans</div><div class="app"><div class="ic other"></div>Notes</div><div class="app"><div class="ic other"></div>Fichiers</div>
+</div><div class="note">Change tout seul avec le réglage clair / sombre du téléphone.</div></div>
+
+<div class="col"><div class="cap"><span>Bonus</span> icônes teintées</div>
+<div style="display:flex;gap:30px;margin-top:40px">
+<div class="app" style="color:#ddd"><div class="ic tint" style="width:90px;height:90px;border-radius:22px"><img src="fleur.png" style="width:64px"></div>iPhone « teinté »</div>
+<div class="app" style="color:#ddd"><div class="ic mono" style="width:90px;height:90px"><img src="fleur.png" style="width:60px"></div>Android « à thème »</div>
+</div>
+<div class="note" style="margin-top:30px">Quand on choisit des icônes d'une seule couleur dans les réglages du téléphone, la fleur prend cette couleur au lieu du rose.</div></div>
+</body></html>

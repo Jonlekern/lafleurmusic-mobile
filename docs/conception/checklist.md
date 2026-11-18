@@ -63,6 +63,9 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Maquette du mode clair validée (`maquettes/5-mode-clair.png`, 18.11.2026)
 - ✅ Automatique : suit le réglage clair / sombre du téléphone
 
+## Icône
+- ✅ Jour : fond blanc, fleur noire · Nuit : fond noir, fleur rose (`maquettes/8-icones.png`)
+
 ## Jamais sur téléphone
 - ✅ Skins Winamp (pas besoin, dit Johnny)
 
