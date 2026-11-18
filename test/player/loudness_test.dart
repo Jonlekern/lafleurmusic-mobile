@@ -74,6 +74,45 @@ void main() {
     expect(player.trackGain, -10);
   });
 
+  Track server(String song, double? rg) => Track(
+    path: 'subsonic://acc1/$song',
+    accountId: 'acc1',
+    remoteId: song,
+    title: song,
+    artist: '',
+    album: 'A',
+    durationMs: 1000,
+    hasCover: false,
+    replayGain: rg,
+    size: 1,
+  );
+
+  test('morceau du serveur : ReplayGain du serveur, jamais sondé', () async {
+    svc.enabled = true;
+    player.show(PlayerState(track: server('s1', -6.5)));
+    await idle();
+    expect(measured, isEmpty);
+    expect(player.trackGain, -6.5);
+    player.show(PlayerState(track: server('s2', null)));
+    await idle();
+    expect(player.trackGain, 0); // pas de ReplayGain : pas de correction
+    player.show(PlayerState(track: server('s3', 20)));
+    await idle();
+    expect(player.trackGain, 12); // borné
+    expect(measured, isEmpty);
+    expect(await svc.gainOf(server('s1', -6.5)), -6.5);
+    svc.enabled = false;
+    expect(await svc.gainOf(server('s1', -6.5)), 0);
+  });
+
+  test('file d’attente : les morceaux du serveur ne sont pas sondés', () async {
+    svc.enabled = true;
+    player.queue = PlayQueue([t('/a'), server('s1', -3), t('/b')], index: 0);
+    player.show(PlayerState(track: t('/a')));
+    await idle();
+    expect(measured, ['/a', '/b']);
+  });
+
   test('gainOf : gain connu d’un morceau (pour le fondu)', () async {
     svc.enabled = true;
     await db.setLoudness('/b', -24, 1);

@@ -10,6 +10,12 @@ import 'player.dart';
 double gainFor(double? lufs) =>
     lufs == null ? 0 : (-18 - lufs).clamp(-12.0, 12.0).toDouble();
 
+/// Morceau du serveur : pas de mesure (il faudrait tout télécharger), le ReplayGain du serveur
+/// sert de gain (même cible, −18 LUFS), borné à ±12 dB ; sans ReplayGain, pas de correction.
+bool _remote(Track t) => t.path.startsWith('subsonic://');
+double _serverGain(Track t) =>
+    (t.replayGain ?? 0).clamp(-12.0, 12.0).toDouble();
+
 /// Volume égal : mesure chaque morceau une fois (en fond, un à la fois, le morceau en cours d'abord,
 /// puis les 5 suivants de la file), garde la mesure en base et règle le gain au début de chaque morceau.
 class LoudnessService {
@@ -57,7 +63,11 @@ class LoudnessService {
   }
 
   Future<void> _apply(Track t) async {
-    if (await db.hasLoudness(t.path, t.mtime)) {
+    if (_remote(t) && !await db.hasLoudness(t.path, t.mtime)) {
+      if (_enabled && _current?.path == t.path) {
+        await player.setTrackGain(_serverGain(t));
+      }
+    } else if (await db.hasLoudness(t.path, t.mtime)) {
       if (_enabled && _current?.path == t.path) {
         await player.setTrackGain(
           gainFor(await db.loudnessOf(t.path, t.mtime)),
@@ -75,6 +85,7 @@ class LoudnessService {
     final q = player.queue;
     if (q != null) {
       for (final t in q.order.skip(q.position + 1).take(lookahead)) {
+        if (_remote(t)) continue; // jamais sondé : ReplayGain du serveur
         if (!_todo.any((x) => x.path == t.path)) _todo.add(t);
       }
     }
@@ -97,8 +108,13 @@ class LoudnessService {
   }
 
   /// Gain à donner à [t] avant qu'il joue (fondu enchaîné) ; 0 s'il n'est pas mesuré ou si l'option est éteinte.
-  Future<double> gainOf(Track t) async =>
-      _enabled ? gainFor(await db.loudnessOf(t.path, t.mtime)) : 0;
+  Future<double> gainOf(Track t) async {
+    if (!_enabled) return 0;
+    if (_remote(t) && !await db.hasLoudness(t.path, t.mtime)) {
+      return _serverGain(t);
+    }
+    return gainFor(await db.loudnessOf(t.path, t.mtime));
+  }
 
   void dispose() {
     _state?.cancel();
