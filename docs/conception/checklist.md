@@ -38,11 +38,11 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Vrais fichiers dans un dossier visible : Fichiers → Sur mon iPhone → LAFLEURMUSIC ; Android : Musique/LAFLEURMUSIC
 - ✅ Rangés Artiste/Album, avec tags et pochette ; fichier original si le serveur le permet
 - ✅ Les fichiers posés à la main dans ce dossier apparaissent dans l'appli
-- ✅ Dossier au choix (iCloud Drive compris) ; le déplacer emporte les copies
+- ⬜ Dossier au choix (iCloud Drive compris) ; le déplacer emporte les copies : moteur fait, écran à venir
 - ✅ Les mettre sur le NAS : c'est à l'utilisateur (appli Fichiers) ; l'appli n'écrit jamais sur le NAS
 - ✅ Top 100 gardé tout seul
 - ✅ Les écoutes faites dehors sont envoyées au serveur au retour
-- ✅ Limite de place : 10 Go au départ, réglable (choix de Claude, à vérifier) ; la file refuse ce qui dépasse la limite ou la place libre
+- ⬜ Limite de place : 10 Go au départ, réglable (choix de Claude, à vérifier) : moteur fait (la file refuse ce qui dépasse la limite ou la place libre), écran à venir
 - ✅ Plan 2 essayé de bout en bout (faux serveur coupé puis rétabli) : copie dans le dossier, lecture sans serveur, morceau non gardé grisé, écoute envoyée au retour
 - ⬜ Écran « Sur mon iPhone » (limite, dossier, Top 100) : après la maquette validée par Johnny
 

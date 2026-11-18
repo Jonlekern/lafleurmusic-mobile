@@ -4,7 +4,7 @@ An iPod-style music player for Android and iPhone, in the LAFLEURSTUDIO style.
 It plays the music from your own server and keeps a copy of your favourites on the phone.
 The phone sibling of [LAFLEURMUSIC for desktop](https://github.com/Jonlekern/lafleurmusic-desktop).
 
-**Status:** early work in progress (0.1.0), phones held upright. Plans 1 (listen to your server) and 2 (offline) are done.
+**Status:** early work in progress (0.1.0), phones held upright. Plan 1 (listen to your server) is done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
 
 What works now:
 
@@ -14,12 +14,13 @@ What works now:
   (Cloudflare Access and the like), crossfade, equalizer, equal volume (ReplayGain from the server),
   lock-screen controls and play counts sent back to the server.
 - **Accounts:** add, edit, reorder and remove; the phone tells when a server is out of reach.
-- **Offline:** keep songs, albums or playlists on the phone ("Keep on my iPhone / phone") as real
+- **Offline:** keep songs or albums on the phone ("Keep on my iPhone / phone") as real
   files, filed as Artist/Album with tags and cover. They play from the copy when the server is out of
   reach; what isn't on the phone is greyed out. A download queue resumes after an interruption and
-  respects a space limit you can change.
+  respects a space limit (10 GB for now).
 - **Your folder:** the copies go to Files → On My iPhone → LAFLEURMUSIC (iPhone) or Music/LAFLEURMUSIC
-  (Android), or to a folder you choose, iCloud Drive included. Moving the folder moves the copies.
+  (Android). Choosing another folder (iCloud Drive included) and moving the copies there is built into the
+  engine; its screen is coming.
 - **Top 100 at home:** your most played songs are kept on the phone by themselves, only on Wi-Fi with
   your server answering.
 - **Listens made offline** are queued and sent to the server, with their original date, when it is back.
