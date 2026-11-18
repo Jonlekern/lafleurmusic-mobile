@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Aucun visuel hors maquettes validées sans nouvelle maquette validée par Johnny. **Pas encore de maquette pour : la section « Playlists du serveur » de l'Accueil et l'écran d'une playlist → tâche 5, étape 1 = maquette, puis on attend le oui de Johnny.** La tablette reprend la disposition de l'appli Mac (déjà validée sur Mac) avec les écrans Comptes / Sur mon iPhone du téléphone.
+- Aucun visuel hors maquettes validées sans nouvelle maquette validée par Johnny. La section « Playlists du serveur » et l'écran d'une playlist suivent `maquettes/7-playlists.png` (écrans 10-11, **validée par Johnny le 18.11.2026**). La tablette reprend la disposition de l'appli Mac (déjà validée sur Mac) avec les écrans Comptes / Sur mon iPhone du téléphone.
 - Couleurs et police : fond `#0D0D0D`, barres `#1C1C1C`, rose `#F26EF2`, Inter (le mode clair est le plan 7).
 - Android 7+ (SDK 24), iOS 15+. La tablette (iPad, Android ≥ 900 px de large) est ajoutée dans ce plan ; le téléphone reste debout sauf la bibliothèque, qui se couche en Cover Flow.
 - Textes FR / EN dans `lib/l10n/strings.dart` ; « iPhone » sur iOS, « téléphone » sur Android.
@@ -83,13 +83,13 @@
 
 ### Task 5: Playlists du serveur
 
-**Files:** Modify `lib/sources/source.dart`, `lib/sources/subsonic.dart`, `lib/library/sync.dart`, `lib/offline/downloader.dart`, `lib/ui/phone/home_screen.dart` · Create `lib/ui/phone/playlist_screen.dart`, `lib/offline/m3u.dart`, `maquettes/7-playlists.png` + `maquettes/src/7-playlists.html` · Test `test/sources/subsonic_test.dart`, `test/library/sync_test.dart`, `test/offline/m3u_test.dart`, widget + goldens
+**Files:** Modify `lib/sources/source.dart`, `lib/sources/subsonic.dart`, `lib/library/sync.dart`, `lib/offline/downloader.dart`, `lib/ui/phone/home_screen.dart` · Create `lib/ui/phone/playlist_screen.dart`, `lib/offline/m3u.dart` · Test `test/sources/subsonic_test.dart`, `test/library/sync_test.dart`, `test/offline/m3u_test.dart`, widget + goldens
 
 **Interfaces:**
 - Produces : `MusicSource.playlists()` → `List<SourcePlaylist{id, name, songIds}>` (Subsonic `getPlaylists` puis `getPlaylist`) ; la synchro remplit `Playlists`/`PlaylistItems` (remplacées à chaque synchro complète, gardées si la synchro échoue).
 - Produces : Accueil, sous ALBUMS : section « PLAYLISTS DU SERVEUR » (nom du compte en petit en mode Tout/Perso) ; écran Playlist (comme l'écran Album : Lecture, Aléatoire, ⬇, liste dans l'ordre, doublons gardés, absents grisés) ; « Garder » une playlist = `keep` de ses morceaux + écriture de `<dossier>/Playlists/<safeName(nom)>.m3u8` (`#EXTM3U`, chemins relatifs au fichier, seulement les morceaux gardés), réécrit quand une copie arrive ou part ; retiré quand plus aucun morceau n'est gardé ; jamais de fichier m3u8 hors de `Playlists/`.
 
-- [ ] Step 1: **maquette** de la section de l'Accueil et de l'écran Playlist (style des maquettes 1-2) ; **stop : la montrer à Johnny et attendre son oui**.
+- [x] Step 1: maquette `maquettes/7-playlists.png` faite et validée par Johnny (18.11.2026) : mosaïque de 4 pochettes, nom du compte en petit (Tout / Perso), ⬇ rose si gardée ; écran Playlist = écran Album avec « PLAYLIST · <compte> », sous-titre « artiste · album » par morceau.
 - [ ] Step 2: tests client (`getPlaylists`, `getPlaylist`, en-têtes), synchro (remplacement, échec garde l'ancienne), m3u8 (ordre, doublons, chemins relatifs, caractères spéciaux), point 4 de Review Focus.
 - [ ] Step 3: échec, implémentation, verts ; goldens ; captures. Commit `feat: server playlists, keepable with an m3u8 file`.
 

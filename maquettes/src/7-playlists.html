@@ -1,0 +1,86 @@
+<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:900px;height:1000px;background:#2b2b2b;font-family:Inter;color:#F2F2F2;display:flex;gap:36px;padding:40px 36px;overflow:hidden}
+.col{display:flex;flex-direction:column;align-items:center;gap:14px}
+.cap{color:#ddd;font-size:15px;font-weight:700}.cap span{color:#F26EF2}
+.ph{width:390px;height:844px;background:#0D0D0D;border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.sb{height:44px;display:flex;justify-content:space-between;align-items:center;padding:6px 28px 0;font-size:14px;font-weight:700;flex:none}
+.top{height:50px;display:flex;align-items:center;justify-content:center;position:relative;flex:none;background:#1C1C1C;border-bottom:1px solid #000}
+.top img{height:15px}.top.bk img{height:11px;margin-left:40px}.top .l{position:absolute;left:14px;color:#F26EF2;font-size:15px;font-weight:700}.top .r{position:absolute;right:16px;color:#bbb;font-size:18px}
+.body{flex:1;overflow:hidden;padding:14px 16px;position:relative}
+.sec{font-size:11px;font-weight:700;color:#999;letter-spacing:1px;margin:14px 4px 8px}
+.it{font-size:16px;font-weight:700;padding:11px 12px;border-radius:8px;display:flex;align-items:center;gap:12px}.it .c{margin-left:auto;color:#666}
+.it.on{background:#F26EF2;color:#111}.it.on .c{color:#111}
+.sq{width:30px;height:30px;border-radius:4px;flex:none}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid #444;border-radius:16px;padding:6px 12px;font-size:13px;font-weight:700}
+.chip.p{border-color:#F26EF2;color:#F26EF2}
+.search{background:#1C1C1C;border-radius:10px;color:#888;font-size:14px;padding:10px 14px;margin-top:10px}
+.mini{height:64px;background:#1C1C1C;border-top:1px solid #000;display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+.mini .t{font-size:14px;font-weight:700}.mini .a{font-size:12px;color:#999;margin-top:2px}.mini .b{margin-left:auto;font-size:20px;display:flex;gap:18px}
+.prog{height:3px;background:#333;flex:none}.prog i{display:block;height:3px;width:38%;background:#F26EF2}
+.home{height:30px;flex:none;display:flex;justify-content:center;align-items:center}.home i{width:134px;height:5px;border-radius:3px;background:#fff}
+h1{font-size:28px;font-weight:700;margin-top:12px}.lbl{color:#999;font-size:11px;letter-spacing:.9px;font-weight:700}
+.pill{display:inline-block;border-radius:22px;padding:10px 18px;font-weight:700;font-size:14px;border:1px solid #444;margin-right:8px}.pill.p{background:#F26EF2;color:#111;border-color:#F26EF2}
+.tr{display:flex;align-items:center;gap:12px;padding:11px 8px;font-size:15px;font-weight:700;border-bottom:1px solid #1e1e1e;position:relative}
+.tr .n{width:20px;color:#bbb}.tr .s{color:#999;font-size:12px;font-weight:400;margin-top:2px}.tr .d{margin-left:auto;color:#bbb;font-weight:400;font-size:13px}
+.tr.cur{background:#F26EF2;color:#111;border-radius:8px}.tr.cur .n,.tr.cur .s,.tr.cur .d{color:#111}
+.tr.off{color:#555}.tr.off .s,.tr.off .d,.tr.off .n{color:#444}
+.dl{color:#F26EF2;font-size:13px}
+.swipe{position:absolute;right:0;top:0;bottom:0;width:110px;background:#F26EF2;color:#111;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:0 8px 8px 0}
+.cover{width:300px;height:300px;margin:6px auto 0;border-radius:8px;background:#EDE8DE;position:relative;overflow:hidden}
+.ctl{display:flex;justify-content:space-between;align-items:center;padding:0 30px;font-size:26px;margin-top:18px}.ctl .pp{width:64px;height:64px;border-radius:32px;background:#F26EF2;color:#111;display:flex;align-items:center;justify-content:center}
+.bar2{height:4px;background:#333;border-radius:2px;margin-top:16px}.bar2 i{display:block;height:4px;width:38%;background:#F26EF2;border-radius:2px}
+.times{display:flex;justify-content:space-between;color:#999;font-size:12px;margin-top:6px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0}.row .t{font-size:14px;font-weight:700}.row .a{color:#999;font-size:12px;margin-top:2px}.row .x{color:#777;font-size:15px;margin-left:auto}.grip{color:#666;font-size:13px;width:12px}
+.tabs{display:flex;gap:8px;margin-top:16px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#232323;border-top:1px solid #3a3a3a;border-radius:18px 18px 0 0;padding:10px 12px 22px;box-shadow:0 -12px 40px rgba(0,0,0,.6);font-size:16px}
+.sheet .g{width:40px;height:5px;border-radius:3px;background:#555;margin:0 auto 10px}
+.sheet div.o{padding:12px 12px;border-radius:8px}.sheet .hl{background:#F26EF2;color:#111;font-weight:700}.sheet hr{border:0;border-top:1px solid #3a3a3a;margin:5px 4px}.sheet .red{color:#ff6b6b}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+
+.mos{display:grid;grid-template-columns:1fr 1fr;width:30px;height:30px;border-radius:4px;overflow:hidden;flex:none}.mos i{display:block}
+.mos.big{width:120px;height:120px;border-radius:6px}
+.acc{font-size:11px;color:#999;font-weight:700;margin-left:6px}
+</style></head><body>
+<div class="col"><div class="cap"><span>10</span> Accueil : playlists du serveur</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><img src="logo-texte-grand.png"><span class="r">⚙︎</span></div>
+<div class="body">
+ <span class="chip p">Tout ▾</span> <span class="chip">Navidrome</span> <span class="chip">Jellyfin</span>
+ <div class="sec">ALBUMS</div>
+ <div class="it"><span class="sq" style="background:#5b8a5e"></span>Studio Lafleur<span class="c">›</span></div>
+ <div class="it"><span class="sq" style="background:#8f1f2a"></span>Lafleur Surf <span class="dl">⬇︎</span><span class="c">›</span></div>
+ <div class="it"><span class="sq" style="background:#e0b53a"></span>Summer Mix<span class="c">›</span></div>
+ <div class="it"><span class="sq" style="background:#2c3b78"></span>Night Drive<span class="c">›</span></div>
+ <div class="sec" style="margin-top:20px">PLAYLISTS DU SERVEUR</div>
+ <div class="it on"><span class="mos "><i style="background:#5b8a5e"></i><i style="background:#8f1f2a"></i><i style="background:#e0b53a"></i><i style="background:#2c3b78"></i></span>Soirée<span class="acc" style="color:#111">Navidrome</span><span class="c">›</span></div>
+ <div class="it"><span class="mos"><i style="background:#2c3b78"></i><i style="background:#444"></i><i style="background:#9e2c36"></i><i style="background:#5b8a5e"></i></span>Running <span class="dl">⬇︎</span><span class="acc">Navidrome</span><span class="c">›</span></div>
+ <div class="it"><span class="mos "><i style="background:#5b8a5e"></i><i style="background:#8f1f2a"></i><i style="background:#e0b53a"></i><i style="background:#2c3b78"></i></span>Chill du dimanche<span class="acc">Jellyfin</span><span class="c">›</span></div>
+</div>
+<div class="prog"><i></i></div>
+<div class="mini"><span class="sq" style="background:#8f1f2a;width:42px;height:42px"></span><div><div class="t">Lafleur Surf</div><div class="a">LAFLEURSTUDIO</div></div><div class="b">⏸ ⏭</div></div>
+<div class="home"><i></i></div></div>
+<div style="font-size:13px;color:#bbb;width:390px;text-align:center;line-height:1.5">Sous les albums. Le nom du compte en petit (seulement en mode Tout / Perso). ⬇︎ rose = gardée sur l'iPhone.</div></div>
+
+<div class="col"><div class="cap"><span>11</span> Une playlist du serveur</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">‹ Accueil</span><img src="logo-texte-grand.png"><span class="r">⋯</span></div>
+<div class="body">
+ <div style="display:flex;gap:16px;align-items:flex-end"><span class="mos big"><i style="background:#5b8a5e"></i><i style="background:#8f1f2a"></i><i style="background:#e0b53a"></i><i style="background:#2c3b78"></i></span>
+ <div><div class="lbl">PLAYLIST · NAVIDROME</div><h1 style="margin-top:4px;font-size:24px">Soirée</h1><div style="color:#999;font-size:13px;font-weight:700;margin-top:4px">7 morceaux · 27 min</div></div></div>
+ <div style="margin-top:16px"><span class="pill p">▶ Lecture</span><span class="pill">⤨ Aléatoire</span><span class="pill">⬇︎</span></div>
+ <div style="margin-top:14px">
+ <div class="tr"><span class="n">1</span><div>Ocean Drive<div class="s">Johnny · Studio Lafleur</div></div><span class="d">3:42</span></div>
+ <div class="tr cur"><span class="n">2</span><div>Lafleur Surf<div class="s">LAFLEURSTUDIO · Lafleur Surf</div></div><span class="d">4:05</span></div>
+ <div class="tr"><span class="n">3</span><div>Nightcall<div class="s">Kavinsky · Night Drive</div></div><span class="d">4:19</span></div>
+ <div class="tr off"><span class="n">4</span><div>Night Swim<div class="s">Kavinsky · pas sur l'iPhone</div></div><span class="d">5:01</span></div>
+ <div class="tr"><span class="n">5</span><div>Golden Hour<div class="s">Divers · Summer Mix</div></div><span class="d">3:18</span></div>
+ <div class="tr"><span class="n">6</span><div>Ocean Drive<div class="s">Johnny · Studio Lafleur</div></div><span class="d">3:42</span></div>
+ </div>
+</div>
+<div class="prog"><i></i></div>
+<div class="mini"><span class="sq" style="background:#8f1f2a;width:42px;height:42px"></span><div><div class="t">Lafleur Surf</div><div class="a">LAFLEURSTUDIO</div></div><div class="b">⏸ ⏭</div></div>
+<div class="home"><i></i></div></div>
+<div style="font-size:13px;color:#bbb;width:390px;text-align:center;line-height:1.5">Comme un album : dans l'ordre du serveur, un morceau peut revenir deux fois. Lecture seule. ⬇︎ = garder toute la playlist.</div></div>
+</body></html>
