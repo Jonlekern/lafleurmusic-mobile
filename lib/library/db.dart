@@ -265,8 +265,12 @@ class LibraryDb extends _$LibraryDb {
             ..orderBy([(p) => OrderingTerm.asc(p.id)]))
           .get();
 
-  Future<void> deletePending(List<int> ids) =>
-      (delete(pendingScrobbles)..where((p) => p.id.isIn(ids))).go();
+  Future<void> deletePending(List<int> ids) async {
+    for (var i = 0; i < ids.length; i += 500) {
+      final chunk = ids.sublist(i, i + 500 > ids.length ? ids.length : i + 500);
+      await (delete(pendingScrobbles)..where((p) => p.id.isIn(chunk))).go();
+    }
+  }
 
   Track _fromRow(TrackRow r) => Track(
     id: r.id,

@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../library/db.dart';
 import '../library/models.dart';
+import '../library/play_counter.dart';
 import '../offline/device.dart';
 import '../library/sync.dart';
 import '../player/media_resolver.dart';
@@ -355,6 +356,41 @@ class AccountService extends ChangeNotifier {
     _checking.remove(id);
     _record(id, gen, r);
     notifyListeners();
+    if (r == TestResult.ok) await _flushPending(id);
+  }
+
+  final _flushing = <String>{};
+
+  /// The server answered: sends the account's pending listens one at a time, oldest first,
+  /// each with its original date. A sent one is erased at once; the first failure stops the
+  /// run (the rest waits for the next return); a song the server doesn't know is dropped.
+  /// Never two runs for one account.
+  Future<void> _flushPending(String id) async {
+    if (_removed.contains(id) || !_flushing.add(id)) return;
+    try {
+      final todo = await _db.pending(id)
+        ..sort(
+          (a, b) => a.at != b.at ? a.at.compareTo(b.at) : a.id.compareTo(b.id),
+        );
+      if (todo.isEmpty) return;
+      final source = await _sourceOf(id);
+      for (final q in todo) {
+        if (_removed.contains(id)) return;
+        try {
+          await source.scrobble(
+            q.remoteId,
+            DateTime.fromMillisecondsSinceEpoch(q.at),
+          );
+        } on Object catch (e) {
+          if (!scrobbleRefused(e)) return;
+        }
+        await _db.deletePending([q.id]);
+      }
+    } on Object {
+      // nothing sent is lost: it stays pending
+    } finally {
+      _flushing.remove(id);
+    }
   }
 
   /// Copies the server library to the phone; an interrupted sync asks the server why.
@@ -394,6 +430,7 @@ class AccountService extends ChangeNotifier {
       r = TestResult.unreachable;
     }
     _record(id, gen, r);
+    if (r == TestResult.ok && !flag.cancelled) await _flushPending(id);
   }
 
   /// Launch and pull-to-refresh.

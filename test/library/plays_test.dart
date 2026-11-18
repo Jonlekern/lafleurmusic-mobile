@@ -7,16 +7,17 @@ import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/library/play_counter.dart';
 import 'package:lafleurmusic/player/player.dart';
 import 'package:lafleurmusic/sources/source.dart';
+import 'package:lafleurmusic/sources/subsonic.dart';
 
 class _ScrobbleSource implements MusicSource {
-  _ScrobbleSource(this.accountId, this.log, {this.fail = false});
+  _ScrobbleSource(this.accountId, this.log, {this.error});
   @override
   final String accountId;
   final List<(String, String, DateTime)> log;
-  final bool fail;
+  final Object? error;
   @override
   Future<void> scrobble(String songId, DateTime at) async {
-    if (fail) throw SourceNetworkException(Exception('offline'));
+    if (error != null) throw error!;
     log.add((accountId, songId, at));
   }
 
@@ -188,22 +189,44 @@ void main() {
         expect(scrobbles, isEmpty);
       });
 
-      test('serveur injoignable → ignoré (file d’attente au plan 2)', () async {
+      Future<List<PendingScrobble>> listen(Object error) async {
+        final c = StreamController<PlayerState>();
+        final failing = PlayCounter(
+          c.stream,
+          db,
+          now: () => DateTime(2026, 10, 17),
+          sourceOf: (id) async => _ScrobbleSource(id, scrobbles, error: error),
+        );
+        c
+          ..add(s(server('s1'), 10))
+          ..add(s(server('s1'), 200));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        await failing.dispose();
+        return db.pending('acc1');
+      }
+
+      test('serveur injoignable → écoute en attente, rien d’autre', () async {
         final errors = <Object>[];
+        late List<PendingScrobble> queued;
         await runZonedGuarded(() async {
-          final c = StreamController<PlayerState>();
-          final failing = PlayCounter(
-            c.stream,
-            db,
-            sourceOf: (id) async => _ScrobbleSource(id, scrobbles, fail: true),
-          );
-          c
-            ..add(s(server('s1'), 10))
-            ..add(s(server('s1'), 200));
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-          await failing.dispose();
+          queued = await listen(SourceNetworkException(Exception('x')));
         }, (e, _) => errors.add(e));
         expect(errors, isEmpty);
+        expect(
+          [for (final q in queued) (q.accountId, q.remoteId, q.at)],
+          [('acc1', 's1', DateTime(2026, 10, 17).millisecondsSinceEpoch)],
+        );
+      });
+
+      test('erreur du serveur (5xx, autre code) → en attente', () async {
+        expect(
+          await listen(SubsonicException('HTTP 502: not a Subsonic response')),
+          hasLength(1),
+        );
+      });
+
+      test('morceau inconnu du serveur (code 70) → abandonné', () async {
+        expect(await listen(SubsonicException('gone', code: 70)), isEmpty);
       });
     });
 

@@ -3,8 +3,12 @@ import 'dart:async';
 import '../player/media_resolver.dart';
 import '../player/player.dart';
 import '../sources/source.dart';
+import '../sources/subsonic.dart';
 import 'db.dart';
 import 'models.dart';
+
+/// Le serveur ne connaît pas ce morceau (Subsonic 70) : renvoyer l'écoute ne servirait à rien.
+bool scrobbleRefused(Object e) => e is SubsonicException && e.code == 70;
 
 /// Compte une écoute quand on a écouté la moitié du morceau ou 4 min, une fois par lecture.
 /// Morceau du serveur : l'écoute est aussi envoyée au serveur (scrobble) par [sourceOf].
@@ -62,8 +66,10 @@ class PlayCounter {
     if (key == null || of == null) return;
     try {
       await (await of(key.$1)).scrobble(key.$2, at);
-    } on Object {
-      // serveur injoignable : écoute perdue pour le serveur (file d'attente au plan 2) ; rien dans les journaux
+    } on Object catch (e) {
+      // serveur injoignable ou en erreur : l'écoute attend son retour (rien dans les journaux) ;
+      // morceau inconnu du serveur : inutile de réessayer
+      if (!scrobbleRefused(e)) await db.addPending(key.$1, key.$2, at);
     }
   }
 

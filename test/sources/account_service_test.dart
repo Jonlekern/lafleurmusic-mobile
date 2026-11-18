@@ -425,6 +425,89 @@ void main() {
       },
     );
   });
+
+  group('écoutes en attente', () {
+    late LibraryDb db;
+    late _ScrobbleFake src;
+    late AccountService service;
+    final d1 = DateTime(2026, 11, 1, 10), d2 = DateTime(2026, 11, 1, 11);
+    final d3 = DateTime(2026, 11, 1, 12);
+
+    setUp(() async {
+      db = LibraryDb(NativeDatabase.memory());
+      src = _ScrobbleFake('acc');
+      service = AccountService(
+        Accounts(db, FakeSecretStore()),
+        db: db,
+        sourceOf: (_) async => src,
+        sync: (_) async =>
+            const SyncResult(added: 0, updated: 0, removed: 0, complete: true),
+      );
+      // added out of date order on purpose
+      await db.addPending('acc', 's2', d2);
+      await db.addPending('acc', 's1', d1);
+      await db.addPending('acc', 's3', d3);
+      await db.addPending('other', 'x', d1);
+    });
+    tearDown(() async {
+      service.dispose();
+      await db.close();
+    });
+
+    test(
+      'server back: sent in date order with the original date, then erased',
+      () async {
+        await service.checkAll(['acc']);
+        expect(src.sent, [('s1', d1), ('s2', d2), ('s3', d3)]);
+        expect(await db.pending('acc'), isEmpty);
+        expect((await db.pending('other')), hasLength(1)); // not this account
+      },
+    );
+
+    test('server unreachable: nothing sent, nothing erased', () async {
+      src.answer = TestResult.unreachable;
+      await service.checkAll(['acc']);
+      expect(src.sent, isEmpty);
+      expect(await db.pending('acc'), hasLength(3));
+    });
+
+    test('an error in the middle: the next ones stay', () async {
+      src.failOn = 's2';
+      await service.checkAll(['acc']);
+      expect(src.sent, [('s1', d1)]);
+      expect(
+        [for (final p in await db.pending('acc')) p.remoteId],
+        ['s2', 's3'],
+      );
+    });
+
+    test('unknown song (code 70): dropped, the rest goes on', () async {
+      src.failOn = 's2';
+      src.error = SubsonicException('gone', code: 70);
+      await service.checkAll(['acc']);
+      expect(src.sent, [('s1', d1), ('s3', d3)]);
+      expect(await db.pending('acc'), isEmpty);
+    });
+
+    test('two quick returns: no duplicate', () async {
+      src.gate = Completer<void>();
+      final first = service.checkAll(['acc']);
+      await src.reachedSend;
+      final second = service.checkAll([
+        'acc',
+      ]); // answers while the first flush runs
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      src.gate!.complete();
+      await Future.wait([first, second]);
+      expect([for (final s in src.sent) s.$1], ['s1', 's2', 's3']);
+    });
+
+    test('a finished sync sends them too', () async {
+      await service.sync('acc');
+      expect([for (final s in src.sent) s.$1], ['s1', 's2', 's3']);
+      expect(await db.pending('acc'), isEmpty);
+    });
+  });
 }
 
 /// Source whose album songs wait for [release] from album 2 on; [reached] waits for album n to be asked.
@@ -473,6 +556,35 @@ class GatedSource implements MusicSource {
         albumArtist: 'A',
       ),
     ];
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+/// Answers [test] with [answer]; records scrobbles. [failOn] makes that song fail with [error];
+/// [gate] holds the first scrobble until completed.
+class _ScrobbleFake implements MusicSource {
+  _ScrobbleFake(this.accountId);
+  @override
+  final String accountId;
+  TestResult answer = TestResult.ok;
+  String? failOn;
+  Object error = SourceNetworkException(Exception('offline'));
+  Completer<void>? gate;
+  final sent = <(String, DateTime)>[];
+  final _reached = Completer<void>();
+  Future<void> get reachedSend => _reached.future;
+
+  @override
+  Future<TestResult> test() async => answer;
+
+  @override
+  Future<void> scrobble(String songId, DateTime at) async {
+    if (!_reached.isCompleted) _reached.complete();
+    await gate?.future;
+    if (songId == failOn) throw error;
+    sent.add((songId, at));
   }
 
   @override
