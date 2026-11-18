@@ -70,9 +70,11 @@ void main() {
   testWidgets(
     'keep a song → server cut → plays from the copy → listen sent on return',
     (tester) async {
-      final app = await buildLafleurApp(
-        support: support,
-        secrets: SecureSecretStore(testStorage),
+      final app = await mountGuarded(
+        () => buildLafleurApp(
+          support: support,
+          secrets: SecureSecretStore(testStorage),
+        ),
       );
       final s = app.strings;
       await tester.pumpWidget(app);
@@ -166,7 +168,8 @@ void main() {
       await pumpUntil(tester, surf);
       expect(find.text(s.notOnDevice(track.artist, onIphone)), findsNothing);
 
-      // the kept song plays from its copy (3 s: a listen counts after 1.5 s)
+      // the kept song plays from its copy; a listen counts at half of the song (the counter
+      // decides: we wait for the queued listen, however slow the phone is)
       final before = DateTime.now();
       final streamsBefore = server.requests
           .where((r) => r.method == 'stream')
@@ -177,20 +180,14 @@ void main() {
         tester,
         () async =>
             player.current.track?.path == track.path &&
-            player.current.position > const Duration(seconds: 2),
-        'plays offline past 2 s',
-        timeout: const Duration(seconds: 15),
+            player.current.position > const Duration(milliseconds: 500),
+        'plays offline',
+        timeout: const Duration(seconds: 30),
       );
-      expect(player.current.playing, isTrue);
       expect(
         server.requests.where((r) => r.method == 'stream').length,
         streamsBefore,
         reason: 'played from the copy, not streamed',
-      );
-      await player.toggle();
-      debugPrint(
-        'PREUVE hors ligne : ${player.current.track?.title} à '
-        '${player.current.position}, ${server.refused} connexions coupées',
       );
 
       // the listen waits in the queue (the server can't be told)
@@ -198,7 +195,13 @@ void main() {
         tester,
         () async => (await app.db.pending(id)).isNotEmpty,
         'listen pending',
+        timeout: const Duration(seconds: 60),
       );
+      debugPrint(
+        'PREUVE hors ligne : ${player.current.track?.title} à '
+        '${player.current.position}, ${server.refused} connexions coupées',
+      );
+      if (player.current.playing) await player.toggle();
       expect((await app.db.pending(id)).map((q) => q.remoteId), ['s-2']);
       expect(server.requests.where((r) => r.method == 'scrobble'), isEmpty);
       final beforeBack = DateTime.now();

@@ -1,8 +1,13 @@
 // Shared by the end-to-end runs (app_test.dart, offline_test.dart): a keychain / Keystore
 // namespace of their own, and helpers to drive the screens on phones of any size.
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/main.dart';
+import 'package:path/path.dart' as p;
 
 /// Test-only secure storage: another keychain service on iOS, another preferences file on Android.
 const testStorage = FlutterSecureStorage(
@@ -74,4 +79,50 @@ Future<void> typeInto(WidgetTester tester, String key, String text) async {
   ); // keyboard up: the list may move
   await reveal(tester, field);
   await tester.pump();
+}
+
+/// The phone's real LAFLEURMUSIC folder (iOS: Documents, Android: Music), where copies go.
+Future<Directory> deviceRoot() async => Directory(
+  (await const MethodChannel('studio.lafleur/device')
+      .invokeMethod<String>('defaultRoot'))!,
+);
+
+List<String> _filesUnder(Directory root) => root.existsSync()
+    ? [
+        for (final e in root.listSync(recursive: true, followLinks: false))
+          if (e is File) p.relative(e.path, from: root.path),
+      ]
+    : const [];
+
+/// Builds the app with [mount] and guards the folder: whatever the run leaves in the phone's folder is removed
+/// when the test ends, passing or not. The Top 100 and the queue are stopped first (nothing
+/// re-queues after), every copy is forgotten, then the files our rows made and the `.part`
+/// files that weren't there at the start are deleted. Files that were there are never touched.
+Future<LafleurApp> mountGuarded(Future<LafleurApp> Function() mount) async {
+  final root = await deviceRoot();
+  final before = _filesUnder(root).toSet();
+  final app = await mount();
+  addTearDown(() async {
+    final made = <String>{};
+    try {
+      await app.topSub.cancel();
+      app.topKeeper.dispose();
+      app.downloader.pause();
+      await app.downloader.whenIdle();
+      final rows = (await app.db.watchOffline().first).values;
+      made.addAll([
+        for (final r in rows)
+          if (r.filePath != null) r.filePath!,
+      ]);
+      await app.downloader.forget([for (final r in rows) r.trackPath]);
+    } finally {
+      for (final rel in _filesUnder(root)) {
+        if (before.contains(rel)) continue;
+        if (made.contains(rel) || rel.endsWith('.lafleur.part')) {
+          File(p.join(root.path, rel)).deleteSync();
+        }
+      }
+    }
+  });
+  return app;
 }

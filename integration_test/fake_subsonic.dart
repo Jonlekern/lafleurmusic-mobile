@@ -72,11 +72,21 @@ class FakeRequest {
 }
 
 class FakeSubsonic {
-  FakeSubsonic._(this._server, this.user, this.password, this.secondAlbum);
+  FakeSubsonic._(
+    this._server,
+    this.user,
+    this.password,
+    this.secondAlbum,
+    this.topPlays,
+  );
 
   final HttpServer _server;
   final String user, password;
   final bool secondAlbum;
+
+  /// The songs carry a play count: the Top 100 is not empty, so at home the app keeps them
+  /// by itself. Off: nothing is kept unless the run asks for it.
+  final bool topPlays;
   final requests = <FakeRequest>[];
 
   /// Cuts the server: every connection is closed without an answer (the app sees a network
@@ -93,9 +103,10 @@ class FakeSubsonic {
     String user = 'johnny',
     String password = 'lafleur-e2e',
     bool secondAlbum = false,
+    bool topPlays = true,
   }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final fake = FakeSubsonic._(server, user, password, secondAlbum);
+    final fake = FakeSubsonic._(server, user, password, secondAlbum, topPlays);
     server.listen(fake._handle);
     return fake;
   }
@@ -168,7 +179,11 @@ class FakeSubsonic {
           );
         case 'getAlbum':
           if (q['id'] == 'al-1') {
-            json(albumJson);
+            json(
+              topPlays
+                  ? albumJson
+                  : albumJson.replaceFirst(',"playCount":3', ''),
+            );
           } else if (secondAlbum && q['id'] == 'al-2') {
             json(album2Json);
           } else {

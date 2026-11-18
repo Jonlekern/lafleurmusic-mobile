@@ -30,7 +30,7 @@ void main() {
   late Directory support;
 
   setUpAll(() async {
-    server = await FakeSubsonic.start();
+    server = await FakeSubsonic.start(topPlays: false);
     support = Directory(
       '${(await getTemporaryDirectory()).path}/lafleurmusic-e2e',
     );
@@ -45,9 +45,11 @@ void main() {
   });
 
   testWidgets('first launch → account → Home → album → plays', (tester) async {
-    final app = await buildLafleurApp(
-      support: support,
-      secrets: SecureSecretStore(testStorage),
+    final app = await mountGuarded(
+      () => buildLafleurApp(
+        support: support,
+        secrets: SecureSecretStore(testStorage),
+      ),
     );
     final s = app.strings;
     await tester.pumpWidget(app);
@@ -102,20 +104,15 @@ void main() {
     );
     expect(player.current.playing, isTrue);
 
-    // the song came from the server: streamed, or already kept by the Top 100 (it has plays
-    // on the server, the fake is « at home ») and read from that copy
-    final served = server.requests.where(
-      (r) => r.method == 'stream' || r.method == 'download',
-    );
-    expect(served, isNotEmpty);
-    expect(served.first.params['id'], 's-1');
+    // the song was streamed from the server (no plays: the Top 100 keeps nothing)
+    final streams = server.requests.where((r) => r.method == 'stream');
+    expect(streams, isNotEmpty);
+    expect(streams.first.params['id'], 's-1');
+    expect(server.requests.where((r) => r.method == 'download'), isEmpty);
     // every request carried the header and a good token
     expect(server.requests.where((r) => r.status != 200), isEmpty);
 
     await player.toggle(); // pause
     await tester.pump(const Duration(milliseconds: 200));
-
-    // the copies made go to the phone's own folder: remove them
-    await app.downloader.forget([...(await app.db.watchOffline().first).keys]);
   });
 }
