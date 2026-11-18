@@ -96,11 +96,18 @@ class _Reader implements TagReader {
 
 class _IO implements TagFileIO {
   final writes = <TagEdit>[];
+  int grow = 0; // bytes appended to the file, like real tags and cover
+  bool fail = false;
   @override
   Future<TagEdit?> snapshot(TagEdit edit) async => edit;
   @override
   Future<bool> write(TagEdit edit) async {
+    if (fail) throw StateError('taglib');
     writes.add(edit);
+    if (grow > 0) {
+      File(edit.path)
+          .writeAsBytesSync(List.filled(grow, 9), mode: FileMode.append);
+    }
     return true;
   }
 }
@@ -145,6 +152,16 @@ http.StreamedResponse _ok(
 class _Db extends LibraryDb {
   _Db() : super(NativeDatabase.memory());
   bool failMove = false;
+  final doneSeen =
+      <(String, int, int?)>[]; // path, row size, file length right then
+  Directory? doneRoot;
+  @override
+  Future<void> markOfflineDone(String trackPath, String filePath, int size) {
+    final f = File('${doneRoot!.path}/$filePath');
+    doneSeen.add((filePath, size, f.existsSync() ? f.lengthSync() : null));
+    return super.markOfflineDone(trackPath, filePath, size);
+  }
+
   @override
   Future<void> applyOfflineMove(Map<String, String> newRel, List<String> lost) {
     if (failMove) throw StateError('db closed');
@@ -194,6 +211,7 @@ void main() {
         hasCover: true,
       );
     io = _IO();
+    db.doneRoot = root;
     settings = AppSettings();
     seen = [];
     gate = null;
@@ -390,6 +408,46 @@ void main() {
     expect(io.writes, isEmpty);
   });
 
+  test('the row is done with the final size, tags already written', () async {
+    reader.result = const TrackTags(
+      title: '',
+      artist: '',
+      album: '',
+      durationMs: 1,
+      hasCover: false,
+    );
+    io.grow = 100;
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    final row = (await db.offlineOf('subsonic://acc/1'))!;
+    final file = File('${root.path}/${row.filePath}');
+    expect(file.lengthSync(), 104);
+    expect(row.size, 104);
+    // right when it became done, the file was already final
+    expect(db.doneSeen, [('Art/Alb/01 Song 1.mp3', 104, 104)]);
+    expect(io.writes.single.path, endsWith('01 Song 1.lafleur-part.mp3'));
+  });
+
+  test('a tag failure keeps the untagged copy', () async {
+    reader.result = const TrackTags(
+      title: '',
+      artist: '',
+      album: '',
+      durationMs: 1,
+      hasCover: false,
+    );
+    io.fail = true;
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    final row = (await db.offlineOf('subsonic://acc/1'))!;
+    expect((row.state, row.size), ('done', 4));
+    expect(Directory('${root.path}/Art/Alb').listSync().length, 1);
+  });
+
   test(
     'network cut mid-body: loop stops, nothing counted, no partial',
     () async {
@@ -540,7 +598,7 @@ void main() {
     expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
   });
 
-  test('the row is done before tags are read', () async {
+  test('tags are read from the partial file, before the row is done', () async {
     String? seenState;
     reader.onRead = () async =>
         seenState = (await db.offlineOf('subsonic://acc/1'))?.state;
@@ -548,7 +606,8 @@ void main() {
     await add(_t('1'));
     await d.keep([_t('1')]);
     await d.whenIdle();
-    expect(seenState, 'done');
+    expect(seenState, 'queued');
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
   });
 
   test('queued backlog counts toward the limit', () async {

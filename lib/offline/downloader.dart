@@ -464,6 +464,13 @@ class Downloader extends ChangeNotifier {
       if (len != null && len != got) {
         throw http.ClientException('truncated'); // coupure : comme le réseau
       }
+      // les tags dans le fichier en cours (il garde son extension audio) : la taille
+      // est définitive dès qu'il est rangé ; un échec laisse le fichier sans tags
+      await _fillTags(part.path, t, source, active);
+      if (active.cancelled) {
+        await _drop(part);
+        return null;
+      }
       await part.rename(file.path);
     } catch (_) {
       try {
@@ -473,22 +480,15 @@ class Downloader extends ChangeNotifier {
       rethrow;
     }
 
-    // fait dès le rangement : une coupure ensuite ne perd pas la copie
+    // fait dès le rangement (déjà taguée, taille définitive) : une coupure ensuite ne perd pas la copie
     if (await db.offlineOf(row.trackPath) == null) {
       await _drop(file); // oublié pendant le téléchargement
       return null;
     }
     await db.markOfflineDone(row.trackPath, rel, await file.length());
-    await _fillTags(file.path, t, source, active);
     try {
       await device.announce(file.path);
     } catch (_) {} // la médiathèque du système n'est pas vitale
-    try {
-      // les tags changent la taille du fichier
-      if (await db.offlineOf(row.trackPath) != null) {
-        await db.markOfflineDone(row.trackPath, rel, await file.length());
-      }
-    } catch (_) {}
     return rel;
   }
 
@@ -553,7 +553,7 @@ class Downloader extends ChangeNotifier {
   }
 
   /// Titre, artiste, album, numéros et pochette si le fichier n'a ni titre ni pochette.
-  /// Jamais fatal : le fichier est déjà rangé.
+  /// Jamais fatal : sans tags, le fichier reste tel que le serveur l'a envoyé.
   Future<void> _fillTags(
     String path,
     Track t,
