@@ -5,6 +5,7 @@
 //
 // Avec --dart-define=HOLD_SECONDS=90, le dernier essai laisse la musique tourner en boucle : le temps de
 // verrouiller l'écran et de regarder la pochette et les boutons (étape 3 de la tâche).
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -27,11 +28,25 @@ const fileTitle = 'Ocean_Drive';
 /// Sonde de test du paquet : ce que le système affiche vraiment
 /// (MPNowPlayingInfoCenter sur iPhone, la session Media3 sur Android).
 const _session = MethodChannel('mpv_audio_kit/media_session');
-Future<Map<Object?, Object?>?> osSession() => _session.invokeMapMethod(
-  defaultTargetPlatform == TargetPlatform.iOS
-      ? 'debugNowPlayingInfo'
-      : 'debugMediaSessionState',
-);
+
+/// Borné : sur l'émulateur API 34 la sonde peut ne jamais répondre ; une absence de réponse vaut null.
+Future<Map<Object?, Object?>?> osSession() async {
+  try {
+    return await _session
+        .invokeMapMethod(
+          defaultTargetPlatform == TargetPlatform.iOS
+              ? 'debugNowPlayingInfo'
+              : 'debugMediaSessionState',
+        )
+        .timeout(const Duration(seconds: 2));
+  } on TimeoutException {
+    return null;
+  }
+}
+
+/// Toute attente sur mpv ou la session est bornée : un blocage devient un échec, pas un gel.
+const _bound = Duration(seconds: 10);
+const _testTimeout = Timeout(Duration(minutes: 2));
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -75,16 +90,21 @@ void main() {
       await req.response.close();
     });
 
-    await mpv.setVolume(40);
+    await mpv.setVolume(40).timeout(_bound);
     // a.flac n'a pas de pochette : on prend la fleur de l'appli pour voir l'image sur l'écran verrouillé
     final fleur = await rootBundle.load('assets/fleur.png');
-    await mpv.setMediaSession(
-      MediaSession(
-        artwork: MediaSessionArtwork.custom(
-          CoverArt(bytes: fleur.buffer.asUint8List(), mimeType: 'image/png'),
-        ),
-      ),
-    );
+    await mpv
+        .setMediaSession(
+          MediaSession(
+            artwork: MediaSessionArtwork.custom(
+              CoverArt(
+                bytes: fleur.buffer.asUint8List(),
+                mimeType: 'image/png',
+              ),
+            ),
+          ),
+        )
+        .timeout(_bound);
   });
 
   /// Ouvre [media] et exige, en 5 s **en tout**, que **ce** morceau dépasse 1 s de lecture :
@@ -101,7 +121,7 @@ void main() {
     await tester.runAsync(() async {
       final ready = mpv.stream.seekCompleted.first;
       await () async {
-        await mpv.open(media);
+        await mpv.open(media).timeout(_bound);
         await ready;
         await mpv.stream.position.firstWhere(
           (d) => d > const Duration(seconds: 1) && isCurrent(),
@@ -114,7 +134,7 @@ void main() {
 
   testWidgets('(a) un fichier du dossier de l’appli joue', (tester) async {
     await playsPastOneSecond(tester, Media(localCopy('a')));
-  });
+  }, timeout: _testTimeout);
 
   testWidgets('(b) un flux http joue avec l’en-tête demandé', (tester) async {
     asked.clear();
@@ -124,7 +144,7 @@ void main() {
     );
     expect(asked, isNotEmpty);
     expect(asked, everyElement('ok'));
-  });
+  }, timeout: _testTimeout);
 
   testWidgets('(c) sans l’en-tête : erreur signalée, l’appli tient', (
     tester,
@@ -135,7 +155,7 @@ void main() {
       final end = mpv.stream.endFile.firstWhere(
         (e) => e.reason != MpvEndFileReason.stop,
       );
-      await mpv.open(Media(urlOf('c')));
+      await mpv.open(Media(urlOf('c'))).timeout(_bound);
       ended = await end.timeout(const Duration(seconds: 10));
     });
     expect(asked, isNotEmpty);
@@ -143,14 +163,16 @@ void main() {
     expect(ended.reason, MpvEndFileReason.error);
     // l'appli tient : le même lecteur rejoue juste après
     await playsPastOneSecond(tester, Media(localCopy('c')));
-  });
+  }, timeout: _testTimeout);
 
   testWidgets('(d) session multimédia publiée, (e) fréquence de sortie', (
     tester,
   ) async {
-    await mpv.setLoop(Loop.file);
+    await mpv.setLoop(Loop.file).timeout(_bound);
     // même si une vérification échoue, la boucle ne doit pas rester pour la suite
-    addTearDown(() => tester.runAsync(() => mpv.setLoop(Loop.off)));
+    addTearDown(
+      () => tester.runAsync(() => mpv.setLoop(Loop.off).timeout(_bound)),
+    );
     await playsPastOneSecond(tester, Media(localCopy('d')));
     expect(mpv.state.mediaSession, isNotNull);
 
@@ -196,6 +218,6 @@ void main() {
       );
       expect(mpv.state.playing, isTrue);
     }
-    await mpv.pause();
-  });
+    await mpv.pause().timeout(_bound);
+  }, timeout: _testTimeout);
 }
