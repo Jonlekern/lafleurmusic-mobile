@@ -138,13 +138,22 @@ Future<LafleurApp> buildLafleurApp({
     inFlight: () =>
         downloader.targetPath, // le fichier en cours n'est pas posé à la main
   );
-  String? scannedRoot =
-      (await device.musicRoot()).path; // le lancement relit déjà
+  // le lancement relit déjà ; une erreur du téléphone n'empêche jamais l'appli de démarrer
+  String? scannedRoot;
+  try {
+    scannedRoot = (await device.musicRoot()).path;
+  } on Object {
+    scannedRoot = null;
+  }
   accountService.addListener(() async {
-    final path = (await device.musicRoot()).path;
-    if (path == scannedRoot) return;
-    scannedRoot = path;
-    unawaited(localFolder.rescan());
+    try {
+      final path = (await device.musicRoot()).path;
+      if (path == scannedRoot) return;
+      scannedRoot = path;
+      unawaited(localFolder.rescan());
+    } on Object {
+      // dossier illisible : la prochaine annonce réessaie
+    }
   });
   final player = LafleurPlayer(resolver: resolver)
     // écran verrouillé : la pochette du serveur en octets, jamais une URL

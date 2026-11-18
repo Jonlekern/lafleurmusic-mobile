@@ -31,8 +31,10 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
                     Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
                     "LAFLEURMUSIC",
                 )
-                if (dir.isDirectory || dir.mkdirs()) result.success(dir.path)
-                else result.error("default_root", null, null)
+                // Avant l'API 30 sans le droit d'écriture, mkdirs échoue : le chemin est rendu
+                // quand même, le dossier se crée au premier téléchargement (après ensureAccess).
+                dir.mkdirs()
+                result.success(dir.path)
             }
             "pickFolder" -> pickFolder(result)
             "ensureAccess" -> ensureAccess(call.argument<Boolean>("readOthers") == true, result)
@@ -105,10 +107,18 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
         }
         // Android 11+ refuse l'écriture de fichiers dans bien des dossiers (Download, racine SD…),
         // et dans Music tout fichier qui n'est pas de l'audio : l'essai est un .mp3, nom unique.
+        var probe: File? = null
         val writable = try {
-            File.createTempFile("lafleur-probe", ".mp3", dir).delete()
+            probe = File.createTempFile("lafleur-probe", ".mp3", dir)
+            true
         } catch (e: Exception) {
             false
+        } finally {
+            // effacé à part : un effacement refusé ne dit rien du droit d'écrire
+            try {
+                probe?.delete()
+            } catch (e: Exception) {
+            }
         }
         if (!writable) {
             result.error("not_writable", null, null)
@@ -118,10 +128,13 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
         return true
     }
 
-    /** Permissions de stockage : écriture (API <= 28), lecture des autres fichiers si [readOthers]. */
+    /**
+     * Permissions de stockage : écriture (API <= 29 : l'API 29 garde l'ancien modèle avec
+     * requestLegacyExternalStorage), lecture des autres fichiers si [readOthers].
+     */
     private fun ensureAccess(readOthers: Boolean, result: MethodChannel.Result) {
         val needed = ArrayList<String>()
-        if (Build.VERSION.SDK_INT <= 28) needed.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        if (Build.VERSION.SDK_INT <= 29) needed.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         if (readOthers) {
             needed.add(
                 if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
