@@ -79,6 +79,18 @@ void main() {
     expect(await db.loudnessOf('/b', 1), isNull);
   });
 
+  test('movePlays additionne avec les écoutes déjà là et garde la plus récente', () async {
+    await db.upsertTracks([t('/a'), t('/b')]);
+    await db.addPlay('/a', DateTime(2026, 1, 1));
+    await db.addPlay('/b', DateTime(2026, 3, 1));
+    await db.addPlay('/b', DateTime(2026, 3, 1));
+    await db.movePlays('/a', '/b');
+    final rows = await db.select(db.playCounts).get();
+    expect(rows.single.path, '/b');
+    expect(rows.single.count, 3);
+    expect(rows.single.lastPlayed, DateTime(2026, 3, 1).millisecondsSinceEpoch);
+  });
+
   test('mesure « non mesurable » gardée (lufs null)', () async {
     await db.setLoudness('/x', null, 3);
     expect(await db.hasLoudness('/x', 3), isTrue);

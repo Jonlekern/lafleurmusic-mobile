@@ -122,12 +122,15 @@ class LocalFolder {
         if (o.state == OfflineState.done.name && o.filePath != null)
           p.join(root.path, o.filePath!): o.trackPath,
     };
-    final dupes = [
-      for (final e in known.entries)
-        if (done.containsKey(e.value.abs)) e.key,
-    ];
-    for (final key in dupes) {
-      await db.movePlays(key, done[known[key]!.abs]!);
+    // (relu : un doublon d'un lot précédent de ce même tour compte aussi)
+    final dupeTo = <String, String>{}; // clé du doublon → morceau du serveur
+    for (final t in await db.localTracks()) {
+      final server = done[await device.absolutePath(t.path)];
+      if (server != null) dupeTo[t.path] = server;
+    }
+    final dupes = dupeTo.keys.toList();
+    for (final e in dupeTo.entries) {
+      await db.movePlays(e.key, e.value);
     }
     if (dupes.isNotEmpty) await db.deletePaths(dupes);
     known.removeWhere((k, _) => dupes.contains(k));

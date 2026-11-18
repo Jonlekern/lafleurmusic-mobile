@@ -233,9 +233,13 @@ void main() {
       Track(path: f.path, title: 'dup', artist: '', album: '', durationMs: 1, hasCover: false, size: 4),
     );
     await db.addPlay(f.path, DateTime(2026));
+    await db.addPlay('subsonic://acc/1', DateTime(2026));
     await folder.rescan();
     expect(await db.localTracks(), isEmpty);
-    expect((await db.select(db.playCounts).get()).single.path, 'subsonic://acc/1');
+    final plays = (await db.select(db.playCounts).get()).single;
+    expect(plays.path, 'subsonic://acc/1');
+    expect(plays.count, 2); // summed, not overwritten
+    expect(f.existsSync(), isTrue); // the file is never touched
   });
 
   test('a throwing permission request does not escape and counts as refused', () async {

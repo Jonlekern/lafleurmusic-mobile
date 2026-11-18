@@ -495,12 +495,13 @@ class LibraryDb extends _$LibraryDb {
     )..where((p) => p.path.equals(from))).getSingleOrNull();
     if (old == null) return;
     await (delete(playCounts)..where((p) => p.path.equals(from))).go();
-    await into(playCounts).insertOnConflictUpdate(
-      PlayCountsCompanion.insert(
-        path: to,
-        count: old.count,
-        lastPlayed: old.lastPlayed,
-      ),
+    // la destination a déjà des écoutes : on additionne, la dernière écoute est la plus récente
+    await customUpdate(
+      'INSERT INTO play_counts (path, count, last_played) VALUES (?, ?, ?) '
+      'ON CONFLICT(path) DO UPDATE SET count = count + excluded.count, '
+      'last_played = max(last_played, excluded.last_played)',
+      variables: [Variable(to), Variable(old.count), Variable(old.lastPlayed)],
+      updates: {playCounts},
     );
   });
 
