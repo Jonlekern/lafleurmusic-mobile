@@ -61,10 +61,19 @@ jobs:
 
   # Proof of sound on Android (plan 1, task 3): mpv plays a local file and an
   # http stream with headers, survives a 403 and publishes the media session.
+  # Then the end-to-end run against a fake Subsonic server (task 10).
+  # The hosted runner (2 cores, 7 GB) was shut down when Gradle and the NDK
+  # built while the emulator ran: disk is freed first, the app is built
+  # before the emulator starts, and the emulator runs as light as possible.
   android-emulator:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h /
       - uses: actions/checkout@v4
       - name: Enable KVM
         run: |
@@ -75,6 +84,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -82,11 +92,16 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs
+      # Gradle and the NDK do their heavy work now, not next to the emulator.
+      - name: Build the test APK before the emulator
+        run: flutter build apk --debug -t integration_test/sound_proof_test.dart
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
           target: google_apis
+          ram-size: 2048M
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           # sound proof, then the end-to-end run against a fake Subsonic server (task 10)
           script: |
