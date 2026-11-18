@@ -161,12 +161,16 @@ class LibraryDb extends _$LibraryDb {
       });
 
   /// Le plus ancien morceau en attente (moins de 3 échecs).
-  Future<OfflineRow?> nextQueued() =>
+  /// Sans [top100], les copies du Top 100 sont laissées en file.
+  Future<OfflineRow?> nextQueued({bool top100 = true}) =>
       (select(offline)
             ..where(
               (o) =>
                   o.state.equals(OfflineState.queued.name) &
-                  o.failures.isSmallerThanValue(3),
+                  o.failures.isSmallerThanValue(3) &
+                  (top100
+                      ? const Constant(true)
+                      : o.reason.equals(OfflineReason.top100.name).not()),
             )
             ..orderBy([
               (o) => OrderingTerm.asc(o.addedAt),
@@ -469,24 +473,32 @@ class LibraryDb extends _$LibraryDb {
   );
 
   /// Les [limit] plus écoutés (morceaux absents du disque cachés) avec leur nombre d'écoutes.
-  Stream<List<(Track, int)>> watchTop(int limit) {
-    final q =
-        select(tracks).join([
-            innerJoin(playCounts, playCounts.path.equalsExp(tracks.path)),
-          ])
-          ..where(tracks.missing.equals(false))
-          ..orderBy([
-            OrderingTerm.desc(playCounts.count),
-            OrderingTerm.desc(playCounts.lastPlayed),
-          ])
-          ..limit(limit);
-    return q.watch().map(
-      (rows) => [
-        for (final r in rows)
-          (_fromRow(r.readTable(tracks)), r.readTable(playCounts).count),
-      ],
-    );
-  }
+  Stream<List<(Track, int)>> watchTop(int limit) =>
+      _topQuery(limit).watch().map(_topRows);
+
+  /// Le même classement, une fois (le Top 100 gardé sur le téléphone).
+  Future<List<(Track, int)>> top(int limit) async =>
+      _topRows(await _topQuery(limit).get());
+
+  JoinedSelectStatement<HasResultSet, dynamic> _topQuery(int limit) =>
+      select(tracks)
+          .join([innerJoin(playCounts, playCounts.path.equalsExp(tracks.path))])
+        ..where(tracks.missing.equals(false))
+        ..orderBy([
+          OrderingTerm.desc(playCounts.count),
+          OrderingTerm.desc(playCounts.lastPlayed),
+        ])
+        ..limit(limit);
+
+  List<(Track, int)> _topRows(List<TypedResult> rows) => [
+    for (final r in rows)
+      (_fromRow(r.readTable(tracks)), r.readTable(playCounts).count),
+  ];
+
+  /// Les copies `top100` (finies ou en file).
+  Future<List<OfflineRow>> top100Offline() => (select(
+    offline,
+  )..where((o) => o.reason.equals(OfflineReason.top100.name))).get();
 
   /// Remplacer : les écoutes de l'ancien fichier passent au nouveau.
   Future<void> movePlays(String from, String to) => transaction(() async {

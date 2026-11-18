@@ -140,6 +140,8 @@ void main() {
   late List<http.BaseRequest> seen;
   late Future<http.StreamedResponse> Function(http.BaseRequest) handler;
 
+  bool Function()? gate;
+
   Downloader make() => Downloader(
     db: db,
     resolver: MediaResolver((_) async => _Source()),
@@ -151,6 +153,7 @@ void main() {
     }),
     tags: io,
     reader: reader,
+    mayAutoDownload: gate == null ? null : () => gate!(),
   );
 
   Future<void> add(Track t) => db.upsertTrack(t);
@@ -171,11 +174,29 @@ void main() {
     io = _IO();
     settings = AppSettings();
     seen = [];
+    gate = null;
     handler = (r) async => _ok([1, 2, 3, 4]);
   });
   tearDown(() async {
     await db.close();
     tmp.deleteSync(recursive: true);
+  });
+
+  test('top100 rows wait for the gate, user rows go anyway', () async {
+    var home = false;
+    gate = () => home;
+    final d = make();
+    await add(_t('1'));
+    await add(_t('2', no: 2));
+    await d.keep([_t('1')], reason: OfflineReason.top100);
+    await d.keep([_t('2', no: 2)]);
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'queued');
+    home = true;
+    d.start();
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
   });
 
   test('download 200: file stored under Artist/Album, row done', () async {

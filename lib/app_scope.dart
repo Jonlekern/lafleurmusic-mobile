@@ -3,6 +3,8 @@ import 'package:flutter/widgets.dart';
 import 'l10n/strings.dart';
 import 'library/covers.dart';
 import 'library/db.dart';
+import 'offline/downloader.dart';
+import 'offline/home_state.dart';
 import 'player/equalizer.dart';
 import 'player/loudness.dart';
 import 'player/player.dart';
@@ -25,6 +27,8 @@ class AppScope extends InheritedWidget {
     this.loudness,
     this.accounts,
     this.accountService,
+    this.downloader,
+    this.home,
     required super.child,
   }) : _eq = equalizer;
   final LibraryDb db;
@@ -41,6 +45,12 @@ class AppScope extends InheritedWidget {
   accounts; // comptes de serveur (puces de l'Accueil du téléphone)
   /// Tester, enregistrer, synchroniser les comptes ; « Hors ligne ».
   final AccountService? accountService;
+
+  /// Les copies hors ligne : file, progression, « Garder sur mon iPhone ».
+  final Downloader? downloader;
+
+  /// « À la maison » (Wi-Fi et un serveur qui répond) : le Top 100 se garde alors tout seul.
+  final HomeState? home;
   static final _noEq = ValueNotifier(Equalizer.named('flat'));
 
   /// Réglage d'égaliseur en cours (l'appli l'applique au lecteur et l'enregistre à chaque changement).

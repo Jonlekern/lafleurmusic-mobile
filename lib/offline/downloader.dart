@@ -57,6 +57,7 @@ class Downloader extends ChangeNotifier {
     http.Client Function()? client,
     TagFileIO? tags,
     TagReader? reader,
+    this.mayAutoDownload,
   }) : _client = client ?? newServerClient,
        _tags = tags ?? TagLibIO(),
        _reader = reader ?? TagLibReader();
@@ -68,6 +69,10 @@ class Downloader extends ChangeNotifier {
   final http.Client Function() _client;
   final TagFileIO _tags;
   final TagReader _reader;
+
+  /// Les copies `top100` ne partent que si ceci répond vrai (à la maison) ; les `user` toujours.
+  /// Quand ça redevient vrai, l'appelant refait [start].
+  final bool Function()? mayAutoDownload;
 
   Future<void>? _loop;
   bool _paused = false;
@@ -180,7 +185,9 @@ class Downloader extends ChangeNotifier {
   Future<void> _run() async {
     try {
       while (!_paused && !_moving) {
-        final row = await db.nextQueued();
+        final row = await db.nextQueued(
+          top100: mayAutoDownload?.call() ?? true,
+        );
         if (row == null) break;
         if (await db.trackByPath(row.trackPath) == null) {
           // le morceau a disparu (synchro, compte retiré) : plus rien à copier, ni à compter

@@ -230,6 +230,9 @@ class AccountService extends ChangeNotifier {
       _results.isNotEmpty &&
       _results.values.every((r) => r == TestResult.unreachable);
 
+  /// At least one server answered the last test.
+  bool get anyConnected => _results.values.any((r) => r == TestResult.ok);
+
   /// A sync is running for at least one account.
   bool get syncing => _syncing.isNotEmpty;
 

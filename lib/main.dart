@@ -16,7 +16,10 @@ import 'library/covers.dart';
 import 'library/db.dart';
 import 'library/play_counter.dart';
 import 'offline/device.dart';
+import 'offline/downloader.dart';
+import 'offline/home_state.dart';
 import 'offline/local_folder.dart';
+import 'offline/top_keeper.dart';
 import 'player/equalizer.dart';
 import 'player/loudness.dart';
 import 'player/media_resolver.dart';
@@ -91,14 +94,49 @@ Future<LafleurApp> buildLafleurApp({
     device: device, // …mais ses copies gardées restent, en morceaux locaux
   );
   await accountService.watchOffline();
+  // à la maison : Wi-Fi et un serveur qui répond ; le Top 100 ne se garde que là
+  final home = HomeState(wifi: ConnectivityWifi(), accounts: accountService);
+  final downloader = Downloader(
+    db: db,
+    resolver: resolver,
+    device: device,
+    settings: () async => settings,
+    mayAutoDownload: () => home.atHome,
+  );
+  unawaited(downloader.resumeAtLaunch());
+  final topKeeper = TopKeeper(
+    db: db,
+    downloader: downloader,
+    atHome: () => home.atHome,
+  );
+  // le Top 100 change (une écoute comptée) : un tour de plus, sans rafale
+  final topSub = db.watchTop(100).listen((_) => topKeeper.schedule());
+  var wasAtHome = false;
+  home.addListener(() {
+    if (home.atHome == wasAtHome) return;
+    wasAtHome = home.atHome;
+    if (!wasAtHome) return;
+    downloader.start(); // les copies Top 100 en attente repartent
+    unawaited(topKeeper.refresh());
+  });
+  // un serveur revient : la file reprend (copies demandées par l'utilisateur)
+  var wasOnline = accountService.anyConnected;
+  accountService.addListener(() {
+    final online = accountService.anyConnected;
+    if (online && !wasOnline) downloader.start();
+    wasOnline = online;
+  });
   // fichiers posés à la main dans le dossier : relus au lancement, au retour au premier plan
   // et quand le dossier change (déplacement ou nouveau choix : refreshRoot prévient)
   final localFolder = LocalFolder(
     db: db,
     device: device,
     reader: TagLibReader(),
+    inFlight: () =>
+        downloader.targetPath, // le fichier en cours n'est pas posé à la main
   );
-  String? scannedRoot = (await device.musicRoot()).path; // le lancement relit déjà
+  String? scannedRoot =
+      (await device.musicRoot()).path; // le lancement relit déjà
   accountService.addListener(() async {
     final path = (await device.musicRoot()).path;
     if (path == scannedRoot) return;
@@ -144,6 +182,10 @@ Future<LafleurApp> buildLafleurApp({
     accounts: accounts,
     accountService: accountService,
     localFolder: localFolder,
+    downloader: downloader,
+    home: home,
+    topKeeper: topKeeper,
+    topSub: topSub,
     player: player,
     equalizer: equalizer,
     artistGrid: artistGrid,
@@ -169,6 +211,10 @@ class LafleurApp extends StatefulWidget {
     required this.accounts,
     required this.accountService,
     required this.localFolder,
+    required this.downloader,
+    required this.home,
+    required this.topKeeper,
+    required this.topSub,
   });
   final LoudnessService loudness;
   final MediaResolver resolver;
@@ -176,6 +222,10 @@ class LafleurApp extends StatefulWidget {
   final Accounts accounts;
   final AccountService accountService;
   final LocalFolder localFolder;
+  final Downloader downloader;
+  final HomeState home;
+  final TopKeeper topKeeper;
+  final StreamSubscription<Object?> topSub;
   final AppSettings settings;
   final VoidCallback saveSettings;
   final ValueNotifier<bool> artistGrid;
@@ -210,6 +260,10 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.localFolder.rescan());
+      unawaited(
+        widget.home.recheck(),
+      ); // le réseau a pu changer pendant l'absence
+      widget.downloader.start();
     }
   }
 
@@ -217,6 +271,9 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _plays.dispose();
+    widget.topSub.cancel();
+    widget.topKeeper.dispose();
+    widget.home.dispose();
     super.dispose();
   }
 
@@ -233,6 +290,8 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
     loudness: widget.loudness,
     accounts: widget.accounts,
     accountService: widget.accountService,
+    downloader: widget.downloader,
+    home: widget.home,
     child: MaterialApp(
       title: 'LAFLEURMUSIC',
       debugShowCheckedModeBanner: false,
