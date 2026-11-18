@@ -4,8 +4,10 @@ import 'l10n/strings.dart';
 import 'library/covers.dart';
 import 'library/db.dart';
 import 'library/models.dart';
+import 'offline/device.dart';
 import 'offline/downloader.dart';
 import 'offline/home_state.dart';
+import 'offline/local_folder.dart';
 import 'player/equalizer.dart';
 import 'player/loudness.dart';
 import 'player/player.dart';
@@ -29,6 +31,8 @@ class AppScope extends InheritedWidget {
     this.accounts,
     this.accountService,
     this.downloader,
+    this.device,
+    this.localFolder,
     this.home,
     required super.child,
   }) : _eq = equalizer;
@@ -49,6 +53,12 @@ class AppScope extends InheritedWidget {
 
   /// Les copies hors ligne : file, progression, « Garder sur mon iPhone ».
   final Downloader? downloader;
+
+  /// Le dossier des copies et ses réglages système (choisir le dossier, place libre).
+  final Device? device;
+
+  /// Relit le dossier des copies (fichiers posés à la main).
+  final LocalFolder? localFolder;
 
   /// « À la maison » (Wi-Fi et un serveur qui répond) : le Top 100 se garde alors tout seul.
   final HomeState? home;

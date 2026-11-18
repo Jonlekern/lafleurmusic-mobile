@@ -22,6 +22,7 @@ import '../ui/phone/account_form.dart';
 import '../ui/phone/accounts_screen.dart';
 import '../ui/phone/phone_shell.dart';
 import '../ui/phone/keep_screen.dart';
+import '../ui/phone/on_device_screen.dart';
 import 'demo_library.dart';
 import 'demo_offline.dart';
 import 'demo_player.dart';
@@ -32,11 +33,19 @@ import 'demo_player.dart';
 /// ou Ajouter un compte (rempli comme la maquette 2) au lancement (captures).
 /// `keephome|keep|greyed` : la bibliothèque d'un serveur dont Lafleur Surf est gardé : l'Accueil (⬇ rose),
 /// « Garder sur mon iPhone » (maquette 2, écran 8), l'album dont « Night Swim » est grisé (maquette 1, écran 4).
+/// `ondevice` : « Sur mon iPhone » (maquette 4).
 Future<Widget> demoApp() async {
   const screen = String.fromEnvironment('LAFLEUR_DEMO_SCREEN');
-  final remote = const {'keephome', 'keep', 'greyed'}.contains(screen);
+  final remote = const {
+    'keephome',
+    'keep',
+    'greyed',
+    'ondevice',
+  }.contains(screen);
   final db = LibraryDb(NativeDatabase.memory());
-  if (remote) {
+  if (screen == 'ondevice') {
+    await seedOnDeviceDemo(db);
+  } else if (remote) {
     await seedKeepDemo(db);
   } else {
     await db.upsertTracks(DemoLibrary.tracks);
@@ -88,6 +97,10 @@ Future<Widget> demoApp() async {
     sync: (_) async =>
         const SyncResult(added: 0, updated: 0, removed: 0, complete: true),
   );
+  // « Golden Hour » à 63 % : 12,4 sur 19,6 Mo
+  final demoDownloader = DemoDownloader()
+    ..current = screen == 'ondevice' ? DemoLibrary.goldenHour.path : null
+    ..progress = 12.4 / 19.6;
   final dir = await Directory.systemTemp.createTemp('lafleur-demo');
   final player = DemoPlayer(
     PlayerState(
@@ -116,7 +129,9 @@ Future<Widget> demoApp() async {
     saveSettings: () {},
     accounts: accounts,
     accountService: service,
-    downloader: DemoDownloader(),
+    downloader: demoDownloader,
+    device: DemoDevice(),
+    localFolder: null,
     child: MaterialApp(
       title: 'LAFLEURMUSIC',
       debugShowCheckedModeBanner: false,
@@ -131,6 +146,7 @@ Future<Widget> demoApp() async {
             const AccountsScreen(),
             const AccountFormScreen(initial: demoDraft),
           ],
+          'ondevice' => () => [const OnDeviceScreen()],
           'keep' => () => [
             const KeepScreen(preselect: {'Studio Lafleur', 'Summer Mix'}),
           ],

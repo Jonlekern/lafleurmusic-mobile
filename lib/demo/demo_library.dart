@@ -127,6 +127,16 @@ abstract final class DemoLibrary {
     ]),
   ];
 
+  /// « Golden Hour » de Summer Mix (19,6 Mo) : le téléchargement en cours de « Sur mon iPhone ».
+  static final goldenHour = _r(
+    'Summer Mix',
+    5,
+    'Golden Hour',
+    'Divers',
+    198,
+    20552090,
+  );
+
   /// Les morceaux de Lafleur Surf : copiés sur le téléphone.
   static List<String> get keptPaths => [
     for (final t in remote)
@@ -148,7 +158,10 @@ abstract final class DemoLibrary {
       'Night Drive': _solid(44, 59, 120),
       'Ports': _solid(68, 68, 68),
     };
-    return {for (final t in remote) t.path: colors[t.album] ?? studioCover};
+    return {
+      for (final t in [...remote, goldenHour])
+        t.path: colors[t.album] ?? studioCover,
+    };
   }
 
   /// Lafleur Surf en cours (1:33 sur 4:05).

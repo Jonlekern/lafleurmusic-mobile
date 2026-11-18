@@ -383,6 +383,67 @@ class Strings {
           'Not on the phone: nothing to play offline.',
         );
 
+  // plan 2 : écran « Sur mon iPhone » (maquette 4)
+  String inProgress(int waiting) => waiting > 0
+      ? _t('EN COURS · $waiting EN ATTENTE', 'DOWNLOADING · $waiting WAITING')
+      : _t('EN COURS', 'DOWNLOADING');
+  String get keptSection => _t('GARDÉS', 'KEPT');
+  String get toRetry => _t('À RÉESSAYER', 'TO RETRY');
+  String get retry => _t('Réessayer', 'Retry');
+  String get notFoundOnServer =>
+      _t('Introuvable sur le serveur', 'Not found on the server');
+  String get top100Tag => 'TOP 100';
+  String songCount(int n) => _t(
+    '$n ${n == 1 ? 'titre' : 'titres'}',
+    '$n ${n == 1 ? 'song' : 'songs'}',
+  );
+  String get pause => _t('Pause', 'Pause');
+  String get resume => _t('Reprendre', 'Resume');
+
+  /// « 12,4 sur 19,6 Mo » : la progression d'un morceau.
+  String mbOf(int done, int total) {
+    String mb(int b) {
+      final t = (b / (1024 * 1024)).toStringAsFixed(1);
+      return fr ? t.replaceAll('.', ',') : t;
+    }
+
+    return _t(
+      '${mb(done)} sur ${mb(total)} Mo',
+      '${mb(done)} of ${mb(total)} MB',
+    );
+  }
+
+  String removeHint(bool iphone) => _t(
+    'Glisse un album vers la gauche, ou appuie longtemps, pour le retirer du téléphone. Il reste sur le serveur.',
+    'Swipe an album left, or long-press, to remove it from the phone. It stays on the server.',
+  );
+  String get limitSection => _t('LIMITE', 'LIMIT');
+  String get allTheFreeSpace =>
+      _t('toute la place libre', 'all the free space');
+  String get top100Hint => _t(
+    "Le Top 100 se garde tout seul à la maison, en Wi-Fi, tant qu'il reste de la place. Ce que tu gardes toi-même n'est jamais retiré tout seul.",
+    'The Top 100 keeps itself at home, on Wi-Fi, as long as there is room. What you keep yourself is never removed on its own.',
+  );
+  String get folderSection => _t('DOSSIER', 'FOLDER');
+  String defaultFolder(bool iphone) => iphone
+      ? _t('Sur mon iPhone › LAFLEURMUSIC', 'On My iPhone › LAFLEURMUSIC')
+      : _t('Musique › LAFLEURMUSIC', 'Music › LAFLEURMUSIC');
+  String get chooseTheFolder => _t('Choisir le dossier…', 'Choose the folder…');
+  String get moving => _t('Déplacement…', 'Moving…');
+  String folderHint(bool iphone) => iphone
+      ? _t(
+          'iCloud Drive marche aussi. En changeant de dossier, les morceaux gardés y sont déplacés.',
+          'iCloud Drive works too. When you change folder, the kept songs are moved there.',
+        )
+      : _t(
+          'Une carte SD marche aussi. En changeant de dossier, les morceaux gardés y sont déplacés.',
+          'An SD card works too. When you change folder, the kept songs are moved there.',
+        );
+  String get folderMoveFailed => _t(
+    "Le dossier n'a pas pu être changé. Rien n'a été déplacé.",
+    "The folder couldn't be changed. Nothing was moved.",
+  );
+
   /// Taille lisible : Mo en dessous d'un Go, sinon Go à une décimale (virgule en français).
   String size(int bytes) {
     const mb = 1024 * 1024, gb = 1024 * mb;

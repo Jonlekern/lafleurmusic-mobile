@@ -1,8 +1,13 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../library/db.dart';
 import '../library/models.dart';
+import '../offline/device.dart';
 import '../offline/downloader.dart';
+import '../settings.dart';
 import '../sources/account_service.dart';
 import 'demo_library.dart';
 
@@ -22,6 +27,44 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
 
   @override
   bool accessDenied = false;
+
+  /// Le morceau en cours et sa progression (0 à 1) : [current] null = rien ne tourne.
+  @override
+  String? current;
+  @override
+  double progress = 0;
+
+  /// Appels à [pause] et à [start].
+  int pauses = 0, starts = 0;
+
+  /// Réponse de [moveRoot] ; avec [moveGate], elle attend que le test la libère.
+  KeepResult moveResult = const KeepResult.queued(0, 0);
+  Completer<void>? moveGate;
+
+  /// Les déplacements demandés : de, vers.
+  final moves = <(Directory, Directory)>[];
+
+  @override
+  void pause() {
+    pauses++;
+    current = null;
+    notifyListeners();
+  }
+
+  @override
+  void start() => starts++;
+
+  @override
+  Future<KeepResult> moveRoot({
+    required Directory from,
+    required Directory to,
+    Future<void> Function()? commit,
+  }) async {
+    moves.add((from, to));
+    await moveGate?.future;
+    if (moveResult.ok) await commit?.call();
+    return moveResult;
+  }
 
   @override
   Future<KeepResult> keep(
@@ -71,4 +114,92 @@ Future<void> seedKept(LibraryDb db, List<String> paths, int bytes) async {
 Future<void> seedKeepDemo(LibraryDb db) async {
   await db.upsertTracks(DemoLibrary.remote);
   await seedKept(db, DemoLibrary.keptPaths, 4509715661); // 4,2 Go
+}
+
+const _mib = 1024 * 1024, _gib = 1024 * _mib;
+
+/// Le téléphone de la démo : un dossier par défaut, 54 Go de place en tout (copies comprises), et
+/// ce que le sélecteur de dossier répond ([picked], ou [pickError] levée).
+class DemoDevice implements Device {
+  DemoDevice({
+    this.root = '/var/mobile/Documents/LAFLEURMUSIC',
+    this.free =
+        54 * _gib -
+        4509715661 +
+        1024, // + les octets perdus aux divisions des copies
+    this.settings,
+  });
+
+  /// Le dossier adopté s'y inscrit, comme avec le vrai téléphone.
+  final AppSettings? settings;
+  String root;
+  int free;
+  PickedFolder? picked;
+  Object? pickError;
+  bool reachable = true;
+
+  /// Dossiers adoptés par [commitFolder], et abandons par [releaseCandidate].
+  final committed = <PickedFolder>[];
+  int released = 0;
+
+  @override
+  Future<Directory> musicRoot() async => Directory(root);
+
+  @override
+  Future<bool> rootReachable() async => reachable;
+
+  @override
+  Future<PickedFolder?> pickFolder() async {
+    final e = pickError;
+    if (e != null) throw e;
+    return picked;
+  }
+
+  @override
+  Future<void> commitFolder(PickedFolder c) async {
+    committed.add(c);
+    root = c.path;
+    settings?.musicFolder = c.bookmark ?? c.path;
+  }
+
+  @override
+  Future<void> releaseCandidate() async => released++;
+
+  @override
+  Future<int> freeBytes(String path) async => free;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Les données de la démo « Sur mon iPhone » (maquette 4) : Studio Lafleur et Lafleur Surf gardés,
+/// Night Drive gardé par le Top 100 (1 titre sur 3), « Golden Hour » en cours avec 3 titres derrière,
+/// « Ports » refusé par le serveur. 4,2 Go utilisés : le reste, des copies dont le morceau n'est plus
+/// dans la bibliothèque (rien à afficher, mais la place compte).
+Future<void> seedOnDeviceDemo(LibraryDb db) async {
+  await db.upsertTracks([...DemoLibrary.remote, DemoLibrary.goldenHour]);
+  String of(String album, int no) => 'subsonic://demo/$album/$no';
+  await seedKept(db, [
+    for (final t in DemoLibrary.remote)
+      if (t.album == 'Studio Lafleur') t.path,
+  ], 310 * _mib);
+  await seedKept(db, DemoLibrary.keptPaths, 420 * _mib);
+  await db.queueOffline([of('Night Drive', 1)], OfflineReason.top100);
+  await db.markOfflineDone(of('Night Drive', 1), 'kept/nd.mp3', 38 * _mib);
+  await db.queueOffline([of('Other', 1)], OfflineReason.user);
+  await db.markOfflineDone(
+    of('Other', 1),
+    'kept/other.mp3',
+    4509715661 - (310 + 420 + 38) * _mib,
+  );
+  await db.queueOffline([
+    DemoLibrary.goldenHour.path,
+    of('Summer Mix', 1),
+    of('Summer Mix', 2),
+    of('Summer Mix', 3),
+  ], OfflineReason.user);
+  await db.queueOffline([of('Ports', 1)], OfflineReason.user);
+  for (var i = 0; i < 3; i++) {
+    await db.markOfflineFailed(of('Ports', 1));
+  }
 }

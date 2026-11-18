@@ -186,6 +186,7 @@ Future<LafleurApp> buildLafleurApp({
     accountService: accountService,
     localFolder: localFolder,
     downloader: downloader,
+    device: device,
     home: home,
     topKeeper: topKeeper,
     topSub: topSub,
@@ -215,6 +216,7 @@ class LafleurApp extends StatefulWidget {
     required this.accountService,
     required this.localFolder,
     required this.downloader,
+    required this.device,
     required this.home,
     required this.topKeeper,
     required this.topSub,
@@ -226,6 +228,7 @@ class LafleurApp extends StatefulWidget {
   final AccountService accountService;
   final LocalFolder localFolder;
   final Downloader downloader;
+  final Device device;
   final HomeState home;
   final TopKeeper topKeeper;
   final StreamSubscription<Object?> topSub;
@@ -295,6 +298,8 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
     accounts: widget.accounts,
     accountService: widget.accountService,
     downloader: widget.downloader,
+    device: widget.device,
+    localFolder: widget.localFolder,
     home: widget.home,
     child: MaterialApp(
       title: 'LAFLEURMUSIC',

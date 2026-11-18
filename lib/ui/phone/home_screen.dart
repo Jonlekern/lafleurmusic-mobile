@@ -12,6 +12,7 @@ import '../track_menu.dart';
 import 'accounts_screen.dart';
 import 'album_screen.dart';
 import 'names_screen.dart';
+import 'on_device_screen.dart';
 import 'phone_shell.dart';
 
 /// Accueil du téléphone = la barre de côté du Mac (maquette 1, écran 1) : comptes, recherche, bibliothèque,
@@ -138,9 +139,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              // morceaux gardés sur le téléphone : plan 2 (pour l'instant ne fait rien)
+              // les copies gardées sur le téléphone (sans téléchargeur : rien à montrer)
               PhoneItem(
                 label: s.onDevice(defaultTargetPlatform == TargetPlatform.iOS),
+                onTap: app.downloader == null
+                    ? null
+                    : () => open(const OnDeviceScreen()),
               ),
               PhoneSection(s.playlists),
               StreamBuilder<List<Album>>(

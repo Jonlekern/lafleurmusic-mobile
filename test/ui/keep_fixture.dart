@@ -13,7 +13,9 @@ import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/player/equalizer.dart';
 import 'package:lafleurmusic/player/player.dart';
 import 'package:lafleurmusic/player/queue.dart';
+import 'package:lafleurmusic/offline/local_folder.dart';
 import 'package:lafleurmusic/settings.dart';
+import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
 import 'package:lafleurmusic/theme/lafleur_theme.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
@@ -41,6 +43,12 @@ Future<KeepFixture> pumpKeep(
   DemoDownloader? downloader,
   Locale locale = const Locale('fr'),
   List<Track> extra = const [],
+  Future<void> Function(LibraryDb)? seed,
+  DemoDevice? device,
+  LocalFolder? localFolder,
+  AppSettings? settings,
+  VoidCallback? saveSettings,
+  AccountService Function(Accounts, LibraryDb)? makeService,
 }) async {
   phoneSize(tester);
   final dir = Directory.systemTemp.createTempSync('keep');
@@ -76,7 +84,7 @@ Future<KeepFixture> pumpKeep(
   }
   final accounts = Accounts(db, FakeSecretStore());
   await tester.runAsync(() async {
-    await seedKeepDemo(db);
+    await (seed ?? seedKeepDemo)(db);
     await db.upsertTracks(extra);
     await accounts.add(
       type: AccountType.subsonic,
@@ -86,11 +94,13 @@ Future<KeepFixture> pumpKeep(
       password: 'demo',
     );
   });
-  final service = DemoAccountService(
-    accounts,
-    db: db,
-    notOnPhone: notOnPhone ?? DemoLibrary.notOnPhonePaths.toSet(),
-  );
+  final service =
+      makeService?.call(accounts, db) ??
+      DemoAccountService(
+        accounts,
+        db: db,
+        notOnPhone: notOnPhone ?? DemoLibrary.notOnPhonePaths.toSet(),
+      );
   final fake = downloader ?? DemoDownloader();
   final player = FakePlayer()
     ..queue = (PlayQueue(DemoLibrary.studio, index: 1)
@@ -108,11 +118,13 @@ Future<KeepFixture> pumpKeep(
       covers: ReadyCovers(files),
       strings: Strings.of(locale),
       equalizer: ValueNotifier(Equalizer.named('flat')),
-      settings: AppSettings(),
-      saveSettings: () {},
+      settings: settings ?? AppSettings(),
+      saveSettings: saveSettings ?? () {},
       accounts: accounts,
       accountService: service,
       downloader: fake,
+      device: device,
+      localFolder: localFolder,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: lafleurTheme(),
