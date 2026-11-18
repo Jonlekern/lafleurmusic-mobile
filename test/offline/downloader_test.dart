@@ -258,6 +258,24 @@ void main() {
     expect(device.ensureCalls, 1);
   });
 
+  test('a stopped loop keeps its last error, without the URL', () async {
+    // a file where the artist folder should go: the copy cannot be written
+    File('${root.path}/Art').createSync(recursive: true);
+    final d = make();
+    await add(_t('1'));
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'queued');
+    expect(d.lastError, startsWith('FileSystemException'));
+
+    handler = (r) async => throw http.ClientException('boom', r.url);
+    d.start();
+    await d.whenIdle();
+    expect(d.lastError, startsWith('ClientException'));
+    expect(d.lastError, isNot(contains('SECRET')));
+    expect(d.lastError, isNot(contains('srv')));
+  });
+
   test(
     'a queued row whose track is gone is dropped, the loop goes on',
     () async {

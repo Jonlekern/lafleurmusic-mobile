@@ -35,11 +35,13 @@ Future<void> waitFor(
   Future<bool> Function() done,
   String what, {
   Duration timeout = const Duration(seconds: 20),
+  Future<String> Function()? why,
 }) async {
   final end = DateTime.now().add(timeout);
   while (!await done()) {
     if (DateTime.now().isAfter(end)) {
-      throw TestFailure('Not within $timeout: $what');
+      final detail = why == null ? '' : ' (${await why()})';
+      throw TestFailure('Not within $timeout: $what$detail');
     }
     await tester.pump(const Duration(milliseconds: 100));
   }
@@ -124,6 +126,10 @@ void main() {
             (await app.db.offlineOf(track.path))?.state ==
             OfflineState.done.name,
         'copy done',
+        why: () async =>
+            'row: ${(await app.db.offlineOf(track.path))?.state}, '
+            'access denied: ${app.downloader.accessDenied}, '
+            'last error: ${app.downloader.lastError}',
       );
 
       // the file is under the LAFLEURMUSIC folder, whole

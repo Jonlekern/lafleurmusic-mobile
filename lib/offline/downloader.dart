@@ -99,6 +99,23 @@ class Downloader extends ChangeNotifier {
   /// Vrai si l'utilisateur a refusé l'accès au stockage : la file est arrêtée.
   bool get accessDenied => _accessDenied;
 
+  String? _lastError;
+
+  /// Dernière erreur qui a arrêté la file ou fait échouer un morceau (type et message,
+  /// jamais l'URL ni le jeton). Pour les tests de bout en bout.
+  @visibleForTesting
+  String? get lastError => _lastError;
+
+  static String _describe(Object e) => switch (e) {
+    FileSystemException(:final message, :final osError, :final path) =>
+      'FileSystemException: $message (${osError?.message}, errno '
+          '${osError?.errorCode}) ${path == null ? '' : p.basename(path)}',
+    // jamais l'URL d'une ClientException ; les autres : leur type seul
+    http.ClientException(:final message) => 'ClientException: $message',
+    StateError(:final message) => 'StateError: $message',
+    _ => e.runtimeType.toString(),
+  };
+
   /// Se termine quand la boucle s'arrête (file vide, pause ou accès refusé).
   Future<void> whenIdle() => _loop ?? Future.value();
 
@@ -241,6 +258,7 @@ class Downloader extends ChangeNotifier {
       return true;
     } catch (e) {
       if (active.cancelled) return true; // pause ou oubli : pas un échec
+      _lastError = _describe(e);
       if (e is! _Refusal) return false;
       await db.markOfflineFailed(row.trackPath);
       await db.sendOfflineToBack(row.trackPath);
