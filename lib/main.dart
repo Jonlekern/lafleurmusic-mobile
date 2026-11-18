@@ -243,18 +243,18 @@ class LafleurApp extends StatefulWidget {
 }
 
 class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
-  late final PlayCounter _plays = PlayCounter(
-    widget.player.state,
-    widget.db,
-    sourceOf:
-        widget.resolver.source, // écoute d'un morceau du serveur → scrobble
-  ); // Top 100
+  late final PlayCounter _plays; // Top 100 et scrobbles
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _plays; // lazy field: starts counting listens (Top 100, scrobbles)
+    _plays = PlayCounter(
+      widget.player.state,
+      widget.db,
+      sourceOf:
+          widget.resolver.source, // écoute d'un morceau du serveur → scrobble
+    );
     unawaited(widget.localFolder.rescan());
     // au lancement : la bibliothèque des serveurs est remise à jour en arrière-plan
     unawaited(widget.accountService.syncAll());
