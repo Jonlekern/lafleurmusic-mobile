@@ -115,9 +115,12 @@ Future<LafleurApp> buildLafleurApp({
   home.addListener(() {
     if (home.atHome == wasAtHome) return;
     wasAtHome = home.atHome;
-    if (!wasAtHome) return;
+    if (!wasAtHome) {
+      downloader.cancelAuto(); // jamais en données mobiles : le Top 100 en cours s'arrête
+      return;
+    }
     downloader.start(); // les copies Top 100 en attente repartent
-    unawaited(topKeeper.refresh());
+    topKeeper.refreshQuietly();
   });
   // un serveur revient : la file reprend (copies demandées par l'utilisateur)
   var wasOnline = accountService.anyConnected;

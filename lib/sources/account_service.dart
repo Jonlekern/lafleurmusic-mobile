@@ -347,6 +347,10 @@ class AccountService extends ChangeNotifier {
       if (!_syncing.containsKey(id) && _checking.add(id)) _check(id),
   ]).then((_) {});
 
+  /// [checkAll] on every account (the network changed: who answers from here?).
+  Future<void> checkAccounts() async =>
+      checkAll([for (final a in await accounts.watch().first) a.id]);
+
   Future<void> _check(String id) async {
     notifyListeners();
     final gen = _genOf(id);

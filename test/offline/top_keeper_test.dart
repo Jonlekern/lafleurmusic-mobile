@@ -147,4 +147,28 @@ void main() {
       'subsonic://acc/2',
     });
   });
+
+  test(
+    'a done top100 copy the user keeps stays when it leaves the top',
+    () async {
+      await play('1', 5);
+      await db.queueOffline(['subsonic://acc/1'], OfflineReason.top100);
+      await db.markOfflineDone('subsonic://acc/1', 'Art/Alb/01 Song 1.mp3', 4);
+      await dl.keep([_t('1')]); // the user keeps it too
+      expect((await db.offlineOf('subsonic://acc/1'))!.reason, 'user');
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+      await db.customStatement(
+        'DELETE FROM play_counts',
+      ); // it falls out of the top
+      await keeper.refresh();
+      expect(await db.offlineOf('subsonic://acc/1'), isNotNull);
+    },
+  );
+
+  test('reason is re-read at deletion: a user keep wins the race', () async {
+    await play('1', 5);
+    await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+    await dl.forget(['subsonic://acc/1'], only: OfflineReason.top100);
+    expect(await db.offlineOf('subsonic://acc/1'), isNotNull);
+  });
 }

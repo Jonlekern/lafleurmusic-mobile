@@ -199,6 +199,41 @@ void main() {
     expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
   });
 
+  test(
+    'cancelAuto drops the top100 download in flight, user rows go on',
+    () async {
+      final hold = Completer<void>();
+      handler = (r) async {
+        await hold.future;
+        return _ok([1, 2, 3, 4]);
+      };
+      var home = true;
+      gate = () => home;
+      final d = make();
+      await add(_t('1'));
+      await add(_t('2', no: 2));
+      await d.keep([_t('1')], reason: OfflineReason.top100);
+      while (d.current == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      home = false; // left home: mobile data
+      d.cancelAuto();
+      await d.keep([_t('2', no: 2)]); // user row asked meanwhile
+      hold.complete();
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'queued');
+      expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+      expect(
+        root.existsSync() &&
+            root
+                .listSync(recursive: true)
+                .whereType<File>()
+                .any((f) => f.path.contains('Song 1')),
+        isFalse,
+      );
+    },
+  );
+
   test('download 200: file stored under Artist/Album, row done', () async {
     final d = make();
     await add(_t('1'));
@@ -223,18 +258,24 @@ void main() {
     expect(device.ensureCalls, 1);
   });
 
-  test('a queued row whose track is gone is dropped, the loop goes on', () async {
-    final d = make();
-    await add(_t('1'));
-    await add(_t('2'));
-    await db.queueOffline(['subsonic://acc/1', 'subsonic://acc/2'], OfflineReason.user);
-    await db.deletePaths(['subsonic://acc/1']); // vanished from the server
-    d.start();
-    await d.whenIdle();
-    expect(await db.offlineOf('subsonic://acc/1'), isNull);
-    expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
-    expect(seen, hasLength(1)); // nothing requested for the vanished one
-  });
+  test(
+    'a queued row whose track is gone is dropped, the loop goes on',
+    () async {
+      final d = make();
+      await add(_t('1'));
+      await add(_t('2'));
+      await db.queueOffline([
+        'subsonic://acc/1',
+        'subsonic://acc/2',
+      ], OfflineReason.user);
+      await db.deletePaths(['subsonic://acc/1']); // vanished from the server
+      d.start();
+      await d.whenIdle();
+      expect(await db.offlineOf('subsonic://acc/1'), isNull);
+      expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+      expect(seen, hasLength(1)); // nothing requested for the vanished one
+    },
+  );
 
   test('every request carries the account headers', () async {
     handler = (r) async =>
@@ -627,20 +668,23 @@ void main() {
     expect(await db.offlineOf('subsonic://acc/2'), isNull);
   });
 
-  test('chosen folder unreachable: forget drops the rows but deletes no file', () async {
-    final d = make();
-    await add(_t('1'));
-    await d.keep([_t('1')]);
-    await d.whenIdle();
-    // the chosen folder is gone: musicRoot() answers with the default one,
-    // where the same relative path is somebody else's file
-    final other = File('${root.path}/Art/Alb/01 Song 1.mp3');
-    expect(other.existsSync(), isTrue);
-    device.reachable = false;
-    await d.forget(['subsonic://acc/1']);
-    expect(await db.offlineOf('subsonic://acc/1'), isNull);
-    expect(other.existsSync(), isTrue);
-  });
+  test(
+    'chosen folder unreachable: forget drops the rows but deletes no file',
+    () async {
+      final d = make();
+      await add(_t('1'));
+      await d.keep([_t('1')]);
+      await d.whenIdle();
+      // the chosen folder is gone: musicRoot() answers with the default one,
+      // where the same relative path is somebody else's file
+      final other = File('${root.path}/Art/Alb/01 Song 1.mp3');
+      expect(other.existsSync(), isTrue);
+      device.reachable = false;
+      await d.forget(['subsonic://acc/1']);
+      expect(await db.offlineOf('subsonic://acc/1'), isNull);
+      expect(other.existsSync(), isTrue);
+    },
+  );
 
   test('chosen folder unreachable: no .part sweep, no move', () async {
     final part = File('${root.path}/x.mp3.lafleur.part')

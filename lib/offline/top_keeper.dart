@@ -29,8 +29,11 @@ class TopKeeper {
   void schedule() {
     if (_disposed) return;
     _timer?.cancel();
-    _timer = Timer(debounce, () => unawaited(refresh()));
+    _timer = Timer(debounce, refreshQuietly);
   }
+
+  /// Comme [refresh], sans attendre ni laisser une erreur s'échapper.
+  void refreshQuietly() => unawaited(refresh().catchError((Object _) {}));
 
   /// Un tour à la fois : une demande arrivée pendant un tour en refait un après.
   Future<void> refresh() {
@@ -44,7 +47,7 @@ class TopKeeper {
       _running = null;
       if (_again && !_disposed) {
         _again = false;
-        unawaited(refresh());
+        refreshQuietly();
       }
     });
     return _running = f;
@@ -59,7 +62,10 @@ class TopKeeper {
       for (final p in known)
         if (!inTop.contains(p)) p,
     ];
-    if (out.isNotEmpty) await downloader.forget(out);
+    // la raison est relue au moment d'effacer : un « garder » de l'utilisateur entre-temps l'emporte
+    if (out.isNotEmpty) {
+      await downloader.forget(out, only: OfflineReason.top100);
+    }
     for (final (t, _) in top) {
       if (!atHome()) return;
       // local : déjà sur le téléphone

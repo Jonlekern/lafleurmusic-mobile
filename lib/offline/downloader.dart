@@ -116,12 +116,18 @@ class Downloader extends ChangeNotifier {
     final batch = _albumOrder(remote);
     final fresh = <Track>[]; // ni terminés ni déjà en file
     final toQueue = <Track>[];
+    final done = <String>[];
     for (final t in batch) {
       final state = (await db.offlineOf(t.path))?.state;
-      if (state == OfflineState.done.name) continue;
+      if (state == OfflineState.done.name) {
+        done.add(t.path);
+        continue;
+      }
       toQueue.add(t);
       if (state != OfflineState.queued.name) fresh.add(t);
     }
+    // une copie déjà faite par le Top 100 devient celle de l'utilisateur : plus jamais retirée toute seule
+    await db.queueOffline(done, reason);
     final need = fresh.fold<int>(0, (s, t) => s + _sizeOf(t));
     // la file d'attente déjà promise compte aussi dans la limite
     var backlog = 0;
@@ -175,6 +181,13 @@ class Downloader extends ChangeNotifier {
     _loop = f;
   }
 
+  /// Sorti de la maison : le morceau du Top 100 en cours est abandonné (il reste en file) ;
+  /// un morceau demandé par l'utilisateur continue.
+  void cancelAuto() {
+    final a = _active;
+    if (a != null && a.auto) a.cancel();
+  }
+
   /// Arrête après avoir abandonné le morceau en cours (il reste en file).
   void pause() {
     _paused = true;
@@ -213,7 +226,11 @@ class Downloader extends ChangeNotifier {
   /// Faux si la boucle doit s'arrêter (réseau coupé : rien n'est compté, le prochain
   /// start() reprend). Un refus du serveur compte un échec et passe au morceau suivant.
   Future<bool> _one(OfflineRow row) async {
-    final active = _Active(row.trackPath, _client());
+    final active = _Active(
+      row.trackPath,
+      _client(),
+      auto: row.reason == OfflineReason.top100.name,
+    );
     _active = active;
     _setProgress(0);
     final done = Completer<void>();
@@ -460,20 +477,17 @@ class Downloader extends ChangeNotifier {
 
   /// Retire les copies de [trackPaths] : efface leurs fichiers (sous la racine seulement,
   /// jamais un morceau `local`) puis les lignes. Annule d'abord le téléchargement en cours.
-  Future<void> forget(List<String> trackPaths) async {
+  /// Avec [only], seules les lignes de cette raison sont oubliées (relue au moment même).
+  Future<void> forget(List<String> trackPaths, {OfflineReason? only}) async {
     final remote = [
       for (final t in trackPaths)
         if (parseRemoteKey(t) != null) t,
     ];
     // les lignes d'abord : la boucle ne reprend pas un morceau qu'on oublie
-    final rels = <String>[];
-    for (final t in remote) {
-      final rel = (await db.offlineOf(t))?.filePath;
-      if (rel != null) rels.add(rel);
-    }
-    await db.removeOffline(remote);
+    final taken = await db.takeOffline(remote, reason: only);
+    final rels = [for (final rel in taken.values) ?rel];
     final a = _active;
-    if (a != null && remote.contains(a.path)) {
+    if (a != null && taken.containsKey(a.path)) {
       a.cancel();
       await a.done;
     }
@@ -630,8 +644,9 @@ class Downloader extends ChangeNotifier {
 
 /// Le téléchargement en cours : son client (le fermer l'interrompt).
 class _Active {
-  _Active(this.path, this.client);
+  _Active(this.path, this.client, {required this.auto});
   final String path;
+  final bool auto; // copie du Top 100
   final http.Client client;
   bool cancelled = false;
   Future<void> done = Future.value();

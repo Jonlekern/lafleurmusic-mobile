@@ -495,6 +495,24 @@ class LibraryDb extends _$LibraryDb {
       (_fromRow(r.readTable(tracks)), r.readTable(playCounts).count),
   ];
 
+  /// Retire les lignes [trackPaths] (seulement celles de [reason] si donné), en une
+  /// transaction, et rend `chemin du morceau -> fichier` de celles retirées.
+  Future<Map<String, String?>> takeOffline(
+    List<String> trackPaths, {
+    OfflineReason? reason,
+  }) => transaction(() async {
+    final taken = <String, String?>{};
+    for (final p in trackPaths) {
+      final row = await offlineOf(p);
+      if (row == null || (reason != null && row.reason != reason.name)) {
+        continue;
+      }
+      taken[p] = row.filePath;
+    }
+    await removeOffline(taken.keys.toList());
+    return taken;
+  });
+
   /// Les copies `top100` (finies ou en file).
   Future<List<OfflineRow>> top100Offline() => (select(
     offline,
