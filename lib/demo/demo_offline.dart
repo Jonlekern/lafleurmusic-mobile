@@ -66,7 +66,9 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
   }
 
   @override
-  Future<KeepResult> adoptRoot({required Future<void> Function() commit}) async {
+  Future<KeepResult> adoptRoot({
+    required Future<void> Function() commit,
+  }) async {
     adopted++;
     if (moveResult.ok) await commit();
     return moveResult;
@@ -94,8 +96,11 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
   }
 
   @override
-  Future<void> forget(List<String> trackPaths, {OfflineReason? only}) async =>
-      forgotten.add(trackPaths);
+  Future<void> forget(
+    List<String> trackPaths, {
+    OfflineReason? only,
+    bool byUser = false,
+  }) async => forgotten.add(trackPaths);
 
   @override
   Future<void> whenIdle() => Future.value();

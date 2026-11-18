@@ -81,5 +81,5 @@ Future<void> forgetTracks(BuildContext context, List<Track> tracks) async {
   await downloader.forget([
     for (final t in tracks)
       if (isRemote(t)) t.path,
-  ]);
+  ], byUser: true);
 }

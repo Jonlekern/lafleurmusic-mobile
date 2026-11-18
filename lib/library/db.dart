@@ -84,6 +84,15 @@ class Offline extends Table {
   Set<Column> get primaryKey => {trackPath};
 }
 
+/// Morceaux que l'utilisateur a retirés du téléphone : le Top 100 ne les regarde plus
+/// tant qu'un « Garder » de l'utilisateur ne lève pas le blocage. Table à part : la
+/// ligne `Offline` disparaît avec la copie.
+class AutoKeepBlocks extends Table {
+  TextColumn get trackPath => text()();
+  @override
+  Set<Column> get primaryKey => {trackPath};
+}
+
 /// Écoutes faites hors ligne, à envoyer au serveur (scrobble) au retour du réseau.
 @DataClassName('PendingScrobble')
 class PendingScrobbles extends Table {
@@ -109,14 +118,15 @@ class CopyRoot {
     AccountRows,
     Offline,
     PendingScrobbles,
+    AutoKeepBlocks,
   ],
 )
 class LibraryDb extends _$LibraryDb {
   LibraryDb(super.e);
 
-  // v2 : copies hors ligne et écoutes en attente.
+  // v2 : copies hors ligne et écoutes en attente. v3 : morceaux retirés du Top 100 par l'utilisateur.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -126,6 +136,7 @@ class LibraryDb extends _$LibraryDb {
         await m.createTable(offline);
         await m.createTable(pendingScrobbles);
       }
+      if (from < 3) await m.createTable(autoKeepBlocks);
     },
   );
 
@@ -178,7 +189,9 @@ class LibraryDb extends _$LibraryDb {
                       : o.reason.equals(OfflineReason.top100.name).not());
               for (final acc in skipAccounts) {
                 final prefix = 'subsonic://$acc/';
-                w = w & o.trackPath.substr(1, prefix.length).equals(prefix).not();
+                w =
+                    w &
+                    o.trackPath.substr(1, prefix.length).equals(prefix).not();
               }
               return w;
             })
@@ -232,15 +245,15 @@ class LibraryDb extends _$LibraryDb {
   /// Le dossier des copies est perdu (on en adopte un autre) : chaque copie finie passe
   /// en échec, sans chemin ni taille, à refaire depuis « À réessayer ».
   Future<void> failDoneCopies() =>
-      (update(offline)
-            ..where((o) => o.state.equals(OfflineState.done.name)))
-          .write(
-            OfflineCompanion(
-              filePath: const Value(null),
-              size: const Value(0),
-              state: Value(OfflineState.failed.name),
-            ),
-          );
+      (update(
+        offline,
+      )..where((o) => o.state.equals(OfflineState.done.name))).write(
+        OfflineCompanion(
+          filePath: const Value(null),
+          size: const Value(0),
+          state: Value(OfflineState.failed.name),
+        ),
+      );
 
   /// Octets promis par la file d'attente : la taille connue de chaque morceau,
   /// [unknownSize] pour un morceau sans taille ou disparu.
@@ -557,6 +570,48 @@ class LibraryDb extends _$LibraryDb {
     await removeOffline(taken.keys.toList());
     return taken;
   });
+
+  /// Le Top 100 ne garde plus [trackPaths] tout seul (l'utilisateur les a retirés).
+  Future<void> blockAutoKeep(List<String> trackPaths) => batch(
+    (b) => b.insertAll(autoKeepBlocks, [
+      for (final p in trackPaths) AutoKeepBlocksCompanion.insert(trackPath: p),
+    ], mode: InsertMode.insertOrIgnore),
+  );
+
+  /// Lève le blocage de [trackPaths] (un « Garder » de l'utilisateur).
+  Future<void> unblockAutoKeep(List<String> trackPaths) =>
+      (delete(autoKeepBlocks)..where((b) => b.trackPath.isIn(trackPaths))).go();
+
+  Future<Set<String>> autoKeepBlocked() async => {
+    for (final b in await select(autoKeepBlocks).get()) b.trackPath,
+  };
+
+  /// Les copies `top100` (finies ou en file), de la moins écoutée à la plus écoutée
+  /// (le classement du Top 100 à l'envers) : celles qui ont quitté le Top viennent d'abord.
+  Future<List<OfflineRow>> top100ByLeastPlayed() async {
+    final rows = await top100Offline();
+    final plays = {
+      for (final c in await select(playCounts).get())
+        c.path: (c.count, c.lastPlayed),
+    };
+    rows.sort((a, b) {
+      final x = plays[a.trackPath], y = plays[b.trackPath];
+      final c = (x?.$1 ?? 0).compareTo(y?.$1 ?? 0);
+      if (c != 0) return c;
+      final l = (x?.$2 ?? 0).compareTo(y?.$2 ?? 0);
+      return l != 0 ? l : a.trackPath.compareTo(b.trackPath);
+    });
+    return rows;
+  }
+
+  /// Taille que le serveur annonce pour ce morceau (0 ou absente : inconnue).
+  Future<int?> trackSize(String path) async {
+    final t = await (select(
+      tracks,
+    )..where((t) => t.path.equals(path))).getSingleOrNull();
+    final s = t?.size ?? 0;
+    return s > 0 ? s : null;
+  }
 
   /// Les copies `top100` (finies ou en file).
   Future<List<OfflineRow>> top100Offline() => (select(

@@ -12,8 +12,14 @@ const _v1 = [
   'CREATE TABLE "accounts" ("id" TEXT NOT NULL, "type" TEXT NOT NULL, "name" TEXT NOT NULL, "base" TEXT NOT NULL, "user" TEXT NOT NULL, "position" INTEGER NOT NULL, PRIMARY KEY ("id"))',
 ];
 
+// Les tables ajoutées par la v2 (copies hors ligne, écoutes en attente).
+const _v2 = [
+  'CREATE TABLE "offline" ("track_path" TEXT NOT NULL, "file_path" TEXT NULL, "size" INTEGER NOT NULL DEFAULT 0, "added_at" INTEGER NOT NULL, "reason" TEXT NOT NULL, "state" TEXT NOT NULL, "failures" INTEGER NOT NULL DEFAULT 0, PRIMARY KEY ("track_path"))',
+  'CREATE TABLE "pending_scrobbles" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "account_id" TEXT NOT NULL, "remote_id" TEXT NOT NULL, "at" INTEGER NOT NULL)',
+];
+
 void main() {
-  test('a v1 database upgrades to v2 and keeps its data', () async {
+  test('a v1 database upgrades to v3 and keeps its data', () async {
     final raw = sqlite3.openInMemory();
     for (final sql in _v1) {
       raw.execute(sql);
@@ -44,5 +50,33 @@ void main() {
     await db.addPending('acc', '1', DateTime.fromMillisecondsSinceEpoch(9));
     expect((await db.offlineOf('subsonic://acc/1'))!.state, 'queued');
     expect((await db.pending('acc')).single.remoteId, '1');
+
+    // la table v3 existe, vide, et sert
+    expect(await db.autoKeepBlocked(), isEmpty);
+    await db.blockAutoKeep(['subsonic://acc/1']);
+    expect(await db.autoKeepBlocked(), {'subsonic://acc/1'});
+  });
+
+  test('a v2 database upgrades to v3 and keeps its offline rows', () async {
+    final raw = sqlite3.openInMemory();
+    for (final sql in [..._v1, ..._v2]) {
+      raw.execute(sql);
+    }
+    raw.execute(
+      "INSERT INTO offline VALUES ('subsonic://acc/1', 'A/a.mp3', 5, 1, 'top100', 'done', 0)",
+    );
+    raw.execute("INSERT INTO pending_scrobbles VALUES (1, 'acc', '1', 9)");
+    raw.execute('PRAGMA user_version = 2');
+
+    final db = LibraryDb(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+
+    expect((await db.offlineOf('subsonic://acc/1'))!.reason, 'top100');
+    expect((await db.pending('acc')).single.remoteId, '1');
+    expect(await db.autoKeepBlocked(), isEmpty);
+    await db.blockAutoKeep(['subsonic://acc/1', 'subsonic://acc/1']);
+    expect(await db.autoKeepBlocked(), {'subsonic://acc/1'});
+    await db.unblockAutoKeep(['subsonic://acc/1']);
+    expect(await db.autoKeepBlocked(), isEmpty);
   });
 }

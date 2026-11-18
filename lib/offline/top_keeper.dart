@@ -66,8 +66,11 @@ class TopKeeper {
     if (out.isNotEmpty) {
       await downloader.forget(out, only: OfflineReason.top100);
     }
+    // retirés par l'utilisateur : on n'y touche plus, jusqu'à son prochain « Garder »
+    final blocked = await db.autoKeepBlocked();
     for (final (t, _) in top) {
       if (!atHome()) return;
+      if (blocked.contains(t.path)) continue;
       // local : déjà sur le téléphone
       if (parseRemoteKey(t.path) == null) continue;
       // gardé, en file ou en échec : rien à refaire

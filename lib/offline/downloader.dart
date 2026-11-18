@@ -176,21 +176,71 @@ class Downloader extends ChangeNotifier {
     // une copie déjà faite par le Top 100 devient celle de l'utilisateur : plus jamais retirée toute seule
     await db.queueOffline(done, reason);
     final need = fresh.fold<int>(0, (s, t) => s + _sizeOf(t));
-    // la file d'attente déjà promise compte aussi dans la limite
-    final backlog = await db.queuedBytes(unknownTrackSize);
     final limit = (await settings()).storageLimitBytes;
     final root = await device.musicRoot();
-    final free = await device.freeBytes(root.path) - _freeMargin;
-    final over = await db.offlineBytes() + backlog + need - limit;
+    // la file d'attente déjà promise compte aussi dans la limite
+    Future<int> overLimit() async =>
+        await db.offlineBytes() +
+        await db.queuedBytes(unknownTrackSize) +
+        need -
+        limit;
+    Future<int> freeNow() async =>
+        await device.freeBytes(root.path) - _freeMargin;
+    var over = await overLimit();
+    var free = await freeNow();
     if (over > 0 || need > free) {
       final shortfall = over > need - free ? over : need - free;
-      return KeepResult.tooBig(shortfall);
+      if (reason != OfflineReason.user ||
+          !await _evictTop100(over, need - free, {
+            for (final t in batch) t.path,
+          })) {
+        return KeepResult.tooBig(shortfall);
+      }
+      // seuls les fichiers vraiment effacés ont libéré de la place
+      over = await overLimit();
+      free = await freeNow();
+      if (over > 0 || need > free) {
+        return KeepResult.tooBig(over > need - free ? over : need - free);
+      }
     }
     await db.queueOffline([for (final t in toQueue) t.path], reason);
+    // un « Garder » de l'utilisateur lève le blocage du Top 100
+    if (reason == OfflineReason.user) {
+      await db.unblockAutoKeep([for (final t in toQueue) t.path]);
+    }
     _accessDenied = false;
     if (reason == OfflineReason.user) _userPaused = false;
     start();
     return KeepResult.queued(fresh.length, need);
+  }
+
+  /// Fait de la place pour un « Garder » de l'utilisateur : efface des copies `top100`,
+  /// les moins écoutées d'abord, juste ce qu'il faut pour couvrir [overLimit] (la limite)
+  /// et [overDisk] (la place libre ; seules les copies finies en libèrent). Jamais une
+  /// copie de l'utilisateur ni de [keep] (le lot demandé). Faux, sans rien effacer, si
+  /// les copies `top100` ne suffisent pas.
+  Future<bool> _evictTop100(
+    int overLimit,
+    int overDisk,
+    Set<String> keep,
+  ) async {
+    final out = <String>[];
+    var limitLeft = overLimit, diskLeft = overDisk;
+    for (final r in await db.top100ByLeastPlayed()) {
+      if (limitLeft <= 0 && diskLeft <= 0) break;
+      if (keep.contains(r.trackPath)) continue;
+      final done = r.state == OfflineState.done.name;
+      // en file : la taille annoncée par le serveur, comme le décompte de la limite
+      final size = done
+          ? r.size
+          : await db.trackSize(r.trackPath) ?? unknownTrackSize;
+      out.add(r.trackPath);
+      limitLeft -= size;
+      if (done) diskLeft -= r.size;
+    }
+    if (limitLeft > 0 || diskLeft > 0) return false;
+    await forget(out, only: OfflineReason.top100);
+    return true;
   }
 
   /// Albums dans l'ordre où ils apparaissent, chacun par disque puis numéro.
@@ -254,7 +304,8 @@ class Downloader extends ChangeNotifier {
   }
 
   Future<void> _run() async {
-    final skip = <String>{}; // comptes dont le serveur a refusé un morceau ce tour
+    final skip =
+        <String>{}; // comptes dont le serveur a refusé un morceau ce tour
     try {
       while (!_paused && !_moving) {
         final row = await db.nextQueued(
@@ -288,7 +339,9 @@ class Downloader extends ChangeNotifier {
         }
       }
     } on Object catch (e) {
-      _lastError = _describe(e); // base fermée, canal natif… : la boucle s'arrête, sans planter
+      _lastError = _describe(
+        e,
+      ); // base fermée, canal natif… : la boucle s'arrête, sans planter
     } finally {
       _reserved.clear();
       _setProgress(0);
@@ -340,7 +393,8 @@ class Downloader extends ChangeNotifier {
   Future<String?> _download(OfflineRow row, _Active active) async {
     final key = parseRemoteKey(row.trackPath);
     final t = await db.trackByPath(row.trackPath);
-    if (key == null || t == null) throw StateError('unknown track'); // pas un refus du serveur
+    if (key == null || t == null)
+      throw StateError('unknown track'); // pas un refus du serveur
     final source = await resolver.source(key.$1);
     final root = await device.musicRoot();
 
@@ -454,8 +508,7 @@ class Downloader extends ChangeNotifier {
         (await res.stream.toBytes().timeout(requestTimeout)).take(4096),
       );
       notFound =
-          notFound ||
-          RegExp(r'"code"\s*:\s*70\b|code="70"').hasMatch(body);
+          notFound || RegExp(r'"code"\s*:\s*70\b|code="70"').hasMatch(body);
     } else {
       await res.stream.drain<void>().timeout(requestTimeout);
     }
@@ -569,11 +622,19 @@ class Downloader extends ChangeNotifier {
   /// Retire les copies de [trackPaths] : efface leurs fichiers (sous la racine seulement,
   /// jamais un morceau `local`) puis les lignes. Annule d'abord le téléchargement en cours.
   /// Avec [only], seules les lignes de cette raison sont oubliées (relue au moment même).
-  Future<void> forget(List<String> trackPaths, {OfflineReason? only}) async {
+  /// [byUser] : c'est l'utilisateur qui retire (« Retirer du téléphone ») ; le Top 100 ne
+  /// regarde plus ces morceaux jusqu'à un « Garder » de l'utilisateur.
+  Future<void> forget(
+    List<String> trackPaths, {
+    OfflineReason? only,
+    bool byUser = false,
+  }) async {
     final remote = [
       for (final t in trackPaths)
         if (parseRemoteKey(t) != null) t,
     ];
+    // le blocage d'abord : un tour du Top 100 entre-temps ne remet pas le morceau en file
+    if (byUser) await db.blockAutoKeep(remote);
     // les lignes d'abord : la boucle ne reprend pas un morceau qu'on oublie
     final taken = await db.takeOffline(remote, reason: only);
     final rels = [for (final rel in taken.values) ?rel];
@@ -777,7 +838,9 @@ class Downloader extends ChangeNotifier {
   /// transaction, chaque copie finie passe en échec sans chemin (à refaire depuis
   /// « À réessayer ») puis [commit] adopte le dossier. Si [commit] échoue, rien ne change.
   /// Rien n'est effacé : l'ancien dossier, s'il revient, garde ses fichiers.
-  Future<KeepResult> adoptRoot({required Future<void> Function() commit}) async {
+  Future<KeepResult> adoptRoot({
+    required Future<void> Function() commit,
+  }) async {
     _moving = true;
     _active?.cancel();
     try {

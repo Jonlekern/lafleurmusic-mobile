@@ -329,7 +329,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   }
 
   Future<void> _remove(_Kept k) async {
-    await AppScope.of(context).downloader?.forget(k.paths);
+    await AppScope.of(context).downloader?.forget(k.paths, byUser: true);
   }
 
   Future<void> _removeSheet(_Kept k) async {

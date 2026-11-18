@@ -171,4 +171,53 @@ void main() {
     await dl.forget(['subsonic://acc/1'], only: OfflineReason.top100);
     expect(await db.offlineOf('subsonic://acc/1'), isNotNull);
   });
+
+  test('a track the user removes is not kept again by the Top 100', () async {
+    await play('1', 5);
+    await play('2', 4);
+    await keeper.refresh();
+    expect((await reasons()).keys, hasLength(2));
+    await dl.forget(['subsonic://acc/1'], byUser: true);
+    await keeper.refresh();
+    expect((await reasons()).keys, ['subsonic://acc/2']);
+    await keeper.refresh(); // and it stays so
+    expect((await reasons()).keys, ['subsonic://acc/2']);
+  });
+
+  test('a user keep lifts the block and the copy is the user\'s', () async {
+    await play('1', 5);
+    await keeper.refresh();
+    await dl.forget(['subsonic://acc/1'], byUser: true);
+    expect(await db.autoKeepBlocked(), {'subsonic://acc/1'});
+    final r = await dl.keep([_t('1')]);
+    expect(r.ok, isTrue);
+    expect(await db.autoKeepBlocked(), isEmpty);
+    expect((await db.offlineOf('subsonic://acc/1'))!.reason, 'user');
+    // removed again by the user, then the Top 100 stays away again
+    await dl.forget(['subsonic://acc/1'], byUser: true);
+    await keeper.refresh();
+    expect(await reasons(), isEmpty);
+  });
+
+  test('a refused user keep does not lift the block', () async {
+    await play('1', 5);
+    await dl.forget(['subsonic://acc/1'], byUser: true);
+    settings.storageLimitBytes = 1;
+    expect((await dl.keep([_t('1')])).ok, isFalse);
+    expect(await db.autoKeepBlocked(), {'subsonic://acc/1'});
+  });
+
+  test('the Top 100 own drop-out and plain forgets create no block', () async {
+    await play('1', 5);
+    await keeper.refresh();
+    await db.customStatement('DELETE FROM play_counts'); // out of the top
+    await keeper.refresh();
+    expect(await reasons(), isEmpty);
+    expect(await db.autoKeepBlocked(), isEmpty);
+    await db.addPlay('subsonic://acc/1', DateTime(2026, 2, 1)); // back in
+    await keeper.refresh();
+    expect((await reasons()).keys, ['subsonic://acc/1']);
+    await dl.forget(['subsonic://acc/1']); // not by the user
+    expect(await db.autoKeepBlocked(), isEmpty);
+  });
 }

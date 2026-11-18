@@ -2874,6 +2874,173 @@ class PendingScrobblesCompanion extends UpdateCompanion<PendingScrobble> {
   }
 }
 
+class $AutoKeepBlocksTable extends AutoKeepBlocks
+    with TableInfo<$AutoKeepBlocksTable, AutoKeepBlock> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AutoKeepBlocksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _trackPathMeta = const VerificationMeta(
+    'trackPath',
+  );
+  @override
+  late final GeneratedColumn<String> trackPath = GeneratedColumn<String>(
+    'track_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [trackPath];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'auto_keep_blocks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AutoKeepBlock> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('track_path')) {
+      context.handle(
+        _trackPathMeta,
+        trackPath.isAcceptableOrUnknown(data['track_path']!, _trackPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_trackPathMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {trackPath};
+  @override
+  AutoKeepBlock map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AutoKeepBlock(
+      trackPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}track_path'],
+      )!,
+    );
+  }
+
+  @override
+  $AutoKeepBlocksTable createAlias(String alias) {
+    return $AutoKeepBlocksTable(attachedDatabase, alias);
+  }
+}
+
+class AutoKeepBlock extends DataClass implements Insertable<AutoKeepBlock> {
+  final String trackPath;
+  const AutoKeepBlock({required this.trackPath});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['track_path'] = Variable<String>(trackPath);
+    return map;
+  }
+
+  AutoKeepBlocksCompanion toCompanion(bool nullToAbsent) {
+    return AutoKeepBlocksCompanion(trackPath: Value(trackPath));
+  }
+
+  factory AutoKeepBlock.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AutoKeepBlock(
+      trackPath: serializer.fromJson<String>(json['trackPath']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{'trackPath': serializer.toJson<String>(trackPath)};
+  }
+
+  AutoKeepBlock copyWith({String? trackPath}) =>
+      AutoKeepBlock(trackPath: trackPath ?? this.trackPath);
+  AutoKeepBlock copyWithCompanion(AutoKeepBlocksCompanion data) {
+    return AutoKeepBlock(
+      trackPath: data.trackPath.present ? data.trackPath.value : this.trackPath,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AutoKeepBlock(')
+          ..write('trackPath: $trackPath')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => trackPath.hashCode;
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AutoKeepBlock && other.trackPath == this.trackPath);
+}
+
+class AutoKeepBlocksCompanion extends UpdateCompanion<AutoKeepBlock> {
+  final Value<String> trackPath;
+  final Value<int> rowid;
+  const AutoKeepBlocksCompanion({
+    this.trackPath = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AutoKeepBlocksCompanion.insert({
+    required String trackPath,
+    this.rowid = const Value.absent(),
+  }) : trackPath = Value(trackPath);
+  static Insertable<AutoKeepBlock> custom({
+    Expression<String>? trackPath,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (trackPath != null) 'track_path': trackPath,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AutoKeepBlocksCompanion copyWith({
+    Value<String>? trackPath,
+    Value<int>? rowid,
+  }) {
+    return AutoKeepBlocksCompanion(
+      trackPath: trackPath ?? this.trackPath,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (trackPath.present) {
+      map['track_path'] = Variable<String>(trackPath.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AutoKeepBlocksCompanion(')
+          ..write('trackPath: $trackPath, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LibraryDb extends GeneratedDatabase {
   _$LibraryDb(QueryExecutor e) : super(e);
   $LibraryDbManager get managers => $LibraryDbManager(this);
@@ -2885,6 +3052,7 @@ abstract class _$LibraryDb extends GeneratedDatabase {
   late final $PendingScrobblesTable pendingScrobbles = $PendingScrobblesTable(
     this,
   );
+  late final $AutoKeepBlocksTable autoKeepBlocks = $AutoKeepBlocksTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2896,6 +3064,7 @@ abstract class _$LibraryDb extends GeneratedDatabase {
     accountRows,
     offline,
     pendingScrobbles,
+    autoKeepBlocks,
   ];
 }
 
@@ -4426,6 +4595,135 @@ typedef $$PendingScrobblesTableProcessedTableManager =
       PendingScrobble,
       PrefetchHooks Function()
     >;
+typedef $$AutoKeepBlocksTableCreateCompanionBuilder =
+    AutoKeepBlocksCompanion Function({
+      required String trackPath,
+      Value<int> rowid,
+    });
+typedef $$AutoKeepBlocksTableUpdateCompanionBuilder =
+    AutoKeepBlocksCompanion Function({
+      Value<String> trackPath,
+      Value<int> rowid,
+    });
+
+class $$AutoKeepBlocksTableFilterComposer
+    extends Composer<_$LibraryDb, $AutoKeepBlocksTable> {
+  $$AutoKeepBlocksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get trackPath => $composableBuilder(
+    column: $table.trackPath,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AutoKeepBlocksTableOrderingComposer
+    extends Composer<_$LibraryDb, $AutoKeepBlocksTable> {
+  $$AutoKeepBlocksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get trackPath => $composableBuilder(
+    column: $table.trackPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AutoKeepBlocksTableAnnotationComposer
+    extends Composer<_$LibraryDb, $AutoKeepBlocksTable> {
+  $$AutoKeepBlocksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get trackPath =>
+      $composableBuilder(column: $table.trackPath, builder: (column) => column);
+}
+
+class $$AutoKeepBlocksTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDb,
+          $AutoKeepBlocksTable,
+          AutoKeepBlock,
+          $$AutoKeepBlocksTableFilterComposer,
+          $$AutoKeepBlocksTableOrderingComposer,
+          $$AutoKeepBlocksTableAnnotationComposer,
+          $$AutoKeepBlocksTableCreateCompanionBuilder,
+          $$AutoKeepBlocksTableUpdateCompanionBuilder,
+          (
+            AutoKeepBlock,
+            BaseReferences<_$LibraryDb, $AutoKeepBlocksTable, AutoKeepBlock>,
+          ),
+          AutoKeepBlock,
+          PrefetchHooks Function()
+        > {
+  $$AutoKeepBlocksTableTableManager(_$LibraryDb db, $AutoKeepBlocksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AutoKeepBlocksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AutoKeepBlocksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AutoKeepBlocksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> trackPath = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) => AutoKeepBlocksCompanion(trackPath: trackPath, rowid: rowid),
+          createCompanionCallback:
+              ({
+                required String trackPath,
+                Value<int> rowid = const Value.absent(),
+              }) => AutoKeepBlocksCompanion.insert(
+                trackPath: trackPath,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$AutoKeepBlocksTable, AutoKeepBlock>(table),
+                  BaseReferences<
+                    _$LibraryDb,
+                    $AutoKeepBlocksTable,
+                    AutoKeepBlock
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AutoKeepBlocksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDb,
+      $AutoKeepBlocksTable,
+      AutoKeepBlock,
+      $$AutoKeepBlocksTableFilterComposer,
+      $$AutoKeepBlocksTableOrderingComposer,
+      $$AutoKeepBlocksTableAnnotationComposer,
+      $$AutoKeepBlocksTableCreateCompanionBuilder,
+      $$AutoKeepBlocksTableUpdateCompanionBuilder,
+      (
+        AutoKeepBlock,
+        BaseReferences<_$LibraryDb, $AutoKeepBlocksTable, AutoKeepBlock>,
+      ),
+      AutoKeepBlock,
+      PrefetchHooks Function()
+    >;
 
 class $LibraryDbManager {
   final _$LibraryDb _db;
@@ -4442,4 +4740,6 @@ class $LibraryDbManager {
       $$OfflineTableTableManager(_db, _db.offline);
   $$PendingScrobblesTableTableManager get pendingScrobbles =>
       $$PendingScrobblesTableTableManager(_db, _db.pendingScrobbles);
+  $$AutoKeepBlocksTableTableManager get autoKeepBlocks =>
+      $$AutoKeepBlocksTableTableManager(_db, _db.autoKeepBlocks);
 }
