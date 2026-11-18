@@ -517,7 +517,10 @@ void main() {
     expect((await d.keep([_t('1', size: 60 * _mb)])).ok, isTrue);
     await d.whenIdle();
     final r = await d.keep([_t('2', size: 60 * _mb, no: 2)]);
-    expect((r.ok, r.neededBytes), (false, 60 * _mb));
+    expect(
+      (r.ok, r.neededBytes),
+      (false, 20 * _mb),
+    ); // 120 promised, 100 allowed
     // the same track again is not counted twice
     expect((await d.keep([_t('1', size: 60 * _mb)])).ok, isTrue);
   });
@@ -569,13 +572,16 @@ void main() {
       settings.storageLimitBytes = 100 * _mb;
       await add(_t('1'));
       var r = await d.keep([_t('1', size: 150 * _mb)]);
-      expect((r.ok, r.neededBytes), (false, 150 * _mb));
+      expect(
+        (r.ok, r.neededBytes),
+        (false, 50 * _mb),
+      ); // 150 asked, 100 allowed
       expect(await db.nextQueued(), isNull);
 
       settings.storageLimitBytes = 10000 * _mb;
       device.free = 300 * _mb; // 100 MiB usable after the 200 MiB margin
       r = await d.keep([_t('1', size: 150 * _mb)]);
-      expect((r.ok, r.neededBytes), (false, 150 * _mb));
+      expect((r.ok, r.neededBytes), (false, 50 * _mb)); // 150 asked, 100 usable
       expect(await db.nextQueued(), isNull);
 
       // unknown size counts 10 MiB: fits
@@ -585,6 +591,19 @@ void main() {
       await d.whenIdle();
     },
   );
+
+  test('tooBig reports the shortfall, not the whole request', () async {
+    final d = make();
+    await add(_t('1'));
+    settings.storageLimitBytes = 500 * _mb;
+    var r = await d.keep([_t('1', size: 790 * _mb)]);
+    expect((r.ok, r.neededBytes), (false, 290 * _mb));
+    // the larger of the two shortfalls: 100 MiB usable on the disk, limit 10000
+    settings.storageLimitBytes = 10000 * _mb;
+    device.free = 300 * _mb;
+    r = await d.keep([_t('1', size: 790 * _mb)]);
+    expect((r.ok, r.neededBytes), (false, 690 * _mb));
+  });
 
   test('tracks already done are not counted again', () async {
     final d = make();
@@ -859,7 +878,10 @@ void main() {
         device.free = 100 * _mb; // under the margin
         final to = Directory('${tmp.path}/sd');
         final r = await d.moveRoot(from: device.root, to: to);
-        expect((r.ok, r.neededBytes), (false, 4));
+        expect(
+          (r.ok, r.neededBytes),
+          (false, 4 + 100 * _mb),
+        ); // 4 bytes, -100 MiB usable
         expect(File('${root.path}/Art/Alb/01 Song 1.mp3').existsSync(), isTrue);
         expect(to.listSync(), isEmpty);
         device.free = 100 * 1024 * _mb;

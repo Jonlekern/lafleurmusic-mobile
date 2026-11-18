@@ -137,9 +137,7 @@ class AlbumScreen extends StatelessWidget {
                     label: s.play,
                     icon: Icons.play_arrow_rounded,
                     primary: true,
-                    onPressed: list.isEmpty
-                        ? null
-                        : () => app.player.playTracks(list, 0),
+                    onPressed: list.isEmpty ? null : () => _play(context, list),
                   ),
                   const SizedBox(width: 8),
                   PillButton(
@@ -147,7 +145,7 @@ class AlbumScreen extends StatelessWidget {
                     icon: Icons.shuffle_rounded,
                     onPressed: list.isEmpty
                         ? null
-                        : () => app.player.playTracks(list, 0, shuffle: true),
+                        : () => _play(context, list, shuffle: true),
                   ),
                   if (app.downloader != null && list.any(isRemote)) ...[
                     const SizedBox(width: 8),
@@ -173,8 +171,18 @@ class AlbumScreen extends StatelessWidget {
   }
 }
 
+/// Lecture / Aléatoire : rien de jouable hors ligne → le dire au lieu de ne rien faire.
+void _play(BuildContext context, List<Track> list, {bool shuffle = false}) {
+  final app = AppScope.of(context);
+  if (!list.any(app.playableNow)) {
+    say(ScaffoldMessenger.of(context), app.strings.nothingOffline(onIphone));
+    return;
+  }
+  app.player.playTracks(list, 0, shuffle: shuffle);
+}
+
 /// Le rond ⬇ à côté de Lecture / Aléatoire : garde la liste sur le téléphone, rose quand tout y est
-/// (un toucher de plus la retire).
+/// (un toucher de plus dit comment la retirer : appui long sur un morceau).
 class _KeepPill extends StatelessWidget {
   const _KeepPill({required this.tracks});
   final List<Track> tracks;
@@ -190,11 +198,12 @@ class _KeepPill extends StatelessWidget {
         return PillButton(
           icon: Icons.arrow_downward_rounded,
           iconColor: kept ? LafleurColors.pink : null,
-          tooltip: kept
-              ? app.strings.removeFromDevice(onIphone)
-              : app.strings.keepOnDevice(onIphone),
+          tooltip: kept ? null : app.strings.keepOnDevice(onIphone),
           onPressed: () => kept
-              ? forgetTracks(context, remote)
+              ? say(
+                  ScaffoldMessenger.of(context),
+                  app.strings.alreadyOnDevice(onIphone),
+                )
               : keepTracks(context, remote),
         );
       },

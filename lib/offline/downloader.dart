@@ -25,7 +25,7 @@ const unknownTrackSize = 10 * 1024 * 1024;
 class KeepResult {
   const KeepResult.queued(this.count, this.bytes) : ok = true, neededBytes = 0;
 
-  /// Refusé : il faut [neededBytes] de plus que ce qui est permis.
+  /// Refusé : il manque [neededBytes] (le plus grand écart avec la limite ou la place libre).
   const KeepResult.tooBig(this.neededBytes) : ok = false, count = 0, bytes = 0;
 
   /// Une erreur au milieu : rien n'a changé.
@@ -141,7 +141,8 @@ class Downloader extends ChangeNotifier {
     final free = await device.freeBytes(root.path) - _freeMargin;
     final over = await db.offlineBytes() + backlog + need - limit;
     if (over > 0 || need > free) {
-      return KeepResult.tooBig(need);
+      final shortfall = over > need - free ? over : need - free;
+      return KeepResult.tooBig(shortfall);
     }
     await db.queueOffline([for (final t in toQueue) t.path], reason);
     _accessDenied = false;
@@ -580,8 +581,9 @@ class Downloader extends ChangeNotifier {
     final need = rows.fold<int>(0, (s, r) => s + r.size);
     try {
       await to.create(recursive: true);
-      if (need > await device.freeBytes(to.path) - _freeMargin) {
-        return KeepResult.tooBig(need);
+      final room = await device.freeBytes(to.path) - _freeMargin;
+      if (need > room) {
+        return KeepResult.tooBig(need - room);
       }
     } catch (_) {
       return const KeepResult.failed();

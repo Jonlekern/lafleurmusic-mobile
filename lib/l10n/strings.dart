@@ -355,6 +355,15 @@ class Strings {
     'Pas assez de place : il faut encore $size.',
     'Not enough space: $size more needed.',
   );
+  String alreadyOnDevice(bool iphone) => iphone
+      ? _t(
+          "Déjà sur l'iPhone. Appui long sur un morceau pour le retirer.",
+          'Already on the iPhone. Long-press a song to remove it.',
+        )
+      : _t(
+          'Déjà sur le téléphone. Appui long sur un morceau pour le retirer.',
+          'Already on the phone. Long-press a song to remove it.',
+        );
   String get keepFailed =>
       _t('Impossible de garder ces morceaux.', 'Could not keep these songs.');
   String get storageDenied => _t(

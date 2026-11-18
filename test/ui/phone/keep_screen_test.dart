@@ -249,6 +249,19 @@ void main() {
       },
     );
 
+    phoneTest('trop gros : seul le manque est annoncé', TargetPlatform.iOS, (
+      tester,
+    ) async {
+      // 790 Mo demandés, 500 Mo de place : il manque 290 Mo
+      await open(tester, result: KeepResult.tooBig(290 * 1024 * 1024));
+      await tester.tap(find.text('Garder sur mon iPhone · 790 Mo'));
+      await done(tester);
+      expect(
+        find.text('Pas assez de place : il faut encore 290 Mo.'),
+        findsOneWidget,
+      );
+    });
+
     phoneTest('en anglais', TargetPlatform.android, (tester) async {
       await pumpKeep(
         tester,
@@ -365,17 +378,50 @@ void main() {
     );
 
     phoneTest(
-      'le rond ⬇ rose d\'un album gardé le retire',
+      'le rond ⬇ rose d\'un album gardé ne retire rien, il dit comment',
       TargetPlatform.iOS,
       (tester) async {
         final f = await pumpKeep(tester);
         await tester.ensureVisible(find.text('Lafleur Surf').first);
         await tester.tap(find.text('Lafleur Surf').first);
         await done(tester);
-        await tester.tap(find.byTooltip('Retirer du téléphone'));
+        await tester.tap(find.byIcon(Icons.arrow_downward_rounded).first);
         await tester.pump();
-        expect(f.downloader.forgotten.single, pathsOf('Lafleur Surf'));
+        expect(f.downloader.forgotten, isEmpty);
         expect(f.downloader.kept, isEmpty);
+        expect(
+          find.text(
+            "Déjà sur l'iPhone. Appui long sur un morceau pour le retirer.",
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    phoneTest(
+      'Lecture / Aléatoire sans rien de jouable : le message, pas de lecture',
+      TargetPlatform.iOS,
+      (tester) async {
+        final f = await pumpKeep(
+          tester,
+          notOnPhone: {
+            for (final t in DemoLibrary.remote)
+              if (t.album == 'Ports') t.path,
+          },
+        );
+        await tester.ensureVisible(find.text('Ports'));
+        await tester.tap(find.text('Ports'));
+        await done(tester);
+        await tester.tap(find.text('Lecture'));
+        await tester.pump();
+        expect(f.player.calls, isEmpty);
+        expect(
+          find.text("Pas sur l'iPhone : rien à jouer hors ligne."),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Aléatoire'));
+        await tester.pump();
+        expect(f.player.calls, isEmpty);
       },
     );
 
