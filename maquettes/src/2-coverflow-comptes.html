@@ -1,0 +1,131 @@
+<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:2300px;height:1000px;background:#2b2b2b;font-family:Inter;color:#F2F2F2;display:flex;gap:36px;padding:40px 36px;overflow:hidden}
+.col{display:flex;flex-direction:column;align-items:center;gap:14px;justify-content:center}
+.cap{color:#ddd;font-size:15px;font-weight:700}.cap span{color:#F26EF2}
+.ph{width:390px;height:844px;background:#0D0D0D;border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.sb{height:44px;display:flex;justify-content:space-between;align-items:center;padding:6px 28px 0;font-size:14px;font-weight:700;flex:none}
+.top{height:50px;display:flex;align-items:center;justify-content:center;position:relative;flex:none;background:#1C1C1C;border-bottom:1px solid #000}
+.top img{height:15px}.top.bk img{height:11px;margin-left:80px}.ph,.land{flex:none}.top .l{position:absolute;left:14px;color:#F26EF2;font-size:15px;font-weight:700}.top .r{position:absolute;right:16px;color:#bbb;font-size:18px}
+.body{flex:1;overflow:hidden;padding:14px 16px;position:relative}
+.sec{font-size:11px;font-weight:700;color:#999;letter-spacing:1px;margin:14px 4px 8px}
+.it{font-size:16px;font-weight:700;padding:11px 12px;border-radius:8px;display:flex;align-items:center;gap:12px}.it .c{margin-left:auto;color:#666}
+.it.on{background:#F26EF2;color:#111}.it.on .c{color:#111}
+.sq{width:30px;height:30px;border-radius:4px;flex:none}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid #444;border-radius:16px;padding:6px 12px;font-size:13px;font-weight:700}
+.chip.p{border-color:#F26EF2;color:#F26EF2}
+.search{background:#1C1C1C;border-radius:10px;color:#888;font-size:14px;padding:10px 14px;margin-top:10px}
+.mini{height:64px;background:#1C1C1C;border-top:1px solid #000;display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+.mini .t{font-size:14px;font-weight:700}.mini .a{font-size:12px;color:#999;margin-top:2px}.mini .b{margin-left:auto;font-size:20px;display:flex;gap:18px}
+.prog{height:3px;background:#333;flex:none}.prog i{display:block;height:3px;width:38%;background:#F26EF2}
+.home{height:30px;flex:none;display:flex;justify-content:center;align-items:center}.home i{width:134px;height:5px;border-radius:3px;background:#fff}
+h1{font-size:28px;font-weight:700;margin-top:12px}.lbl{color:#999;font-size:11px;letter-spacing:.9px;font-weight:700}
+.pill{display:inline-block;border-radius:22px;padding:10px 18px;font-weight:700;font-size:14px;border:1px solid #444;margin-right:8px}.pill.p{background:#F26EF2;color:#111;border-color:#F26EF2}
+.tr{display:flex;align-items:center;gap:12px;padding:11px 8px;font-size:15px;font-weight:700;border-bottom:1px solid #1e1e1e;position:relative}
+.tr .n{width:20px;color:#bbb}.tr .s{color:#999;font-size:12px;font-weight:400;margin-top:2px}.tr .d{margin-left:auto;color:#bbb;font-weight:400;font-size:13px}
+.tr.cur{background:#F26EF2;color:#111;border-radius:8px}.tr.cur .n,.tr.cur .s,.tr.cur .d{color:#111}
+.tr.off{color:#555}.tr.off .s,.tr.off .d,.tr.off .n{color:#444}
+.dl{color:#F26EF2;font-size:13px}
+.swipe{position:absolute;right:0;top:0;bottom:0;width:110px;background:#F26EF2;color:#111;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:0 8px 8px 0}
+.cover{width:300px;height:300px;margin:6px auto 0;border-radius:8px;background:#EDE8DE;position:relative;overflow:hidden}
+.ctl{display:flex;justify-content:space-between;align-items:center;padding:0 30px;font-size:26px;margin-top:18px}.ctl .pp{width:64px;height:64px;border-radius:32px;background:#F26EF2;color:#111;display:flex;align-items:center;justify-content:center}
+.bar2{height:4px;background:#333;border-radius:2px;margin-top:16px}.bar2 i{display:block;height:4px;width:38%;background:#F26EF2;border-radius:2px}
+.times{display:flex;justify-content:space-between;color:#999;font-size:12px;margin-top:6px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0}.row .t{font-size:14px;font-weight:700}.row .a{color:#999;font-size:12px;margin-top:2px}.row .x{color:#777;font-size:15px;margin-left:auto}.grip{color:#666;font-size:13px;width:12px}
+.tabs{display:flex;gap:8px;margin-top:16px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#232323;border-top:1px solid #3a3a3a;border-radius:18px 18px 0 0;padding:10px 12px 22px;box-shadow:0 -12px 40px rgba(0,0,0,.6);font-size:16px}
+.sheet .g{width:40px;height:5px;border-radius:3px;background:#555;margin:0 auto 10px}
+.sheet div.o{padding:12px 12px;border-radius:8px}.sheet .hl{background:#F26EF2;color:#111;font-weight:700}.sheet hr{border:0;border-top:1px solid #3a3a3a;margin:5px 4px}.sheet .red{color:#ff6b6b}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+
+.land{width:844px;height:390px;background:radial-gradient(ellipse at 50% 40%,#1c1c1c,#050505 75%);border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;box-sizing:content-box}
+.cf{position:absolute;left:0;right:0;top:52px;height:170px;perspective:700px}
+.cv{position:absolute;top:10px;width:150px;height:150px;border-radius:2px;-webkit-box-reflect:below 2px linear-gradient(transparent 55%,rgba(255,255,255,.18))}
+.cv.c{left:337px;width:170px;height:170px;top:0}
+.lt{color:#999;font-size:12px}
+.acc{display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:#161616;margin-bottom:8px}
+.acc .ic{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#111;flex:none}
+.acc .t{font-size:15px;font-weight:700}.acc .a{font-size:12px;color:#999;margin-top:2px}.acc .r{margin-left:auto;display:flex;gap:10px;align-items:center;color:#666}
+.ck{width:22px;height:22px;border-radius:6px;border:2px solid #555;flex:none}.ck.on{background:#F26EF2;border-color:#F26EF2;color:#111;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.f{margin-top:12px}.f label{display:block;color:#999;font-size:11px;letter-spacing:1px;font-weight:700;margin-bottom:6px}.f .in{background:#161616;border:1px solid #333;border-radius:8px;padding:11px 12px;font-size:14px}.f .in.on{border-color:#F26EF2}
+.seg{display:flex;background:#161616;border-radius:9px;padding:3px;gap:3px}.seg span{flex:1;text-align:center;padding:8px 0;font-size:13px;font-weight:700;border-radius:7px;color:#bbb}.seg span.on{background:#F26EF2;color:#111}
+.hd{display:flex;gap:6px;margin-top:6px}.hd .in{flex:1;font-size:12px;padding:9px 10px}
+.gauge{height:8px;border-radius:4px;background:#2a2a2a;overflow:hidden;margin-top:8px}.gauge i{display:block;height:8px;width:42%;background:#F26EF2}
+.selbar{position:absolute;left:12px;right:12px;bottom:12px;background:#F26EF2;color:#111;border-radius:14px;padding:14px;font-weight:700;font-size:15px;text-align:center}
+</style></head><body>
+<div class="col"><div class="cap"><span>5</span> Téléphone couché = Cover Flow</div>
+<div class="land">
+ <img src="logo-texte-grand.png" style="position:absolute;top:16px;left:50%;transform:translateX(-50%);height:13px">
+ <div class="cf">
+  <div class="cv" style="left:90px;background:#333;transform:rotateY(55deg)"></div>
+  <div class="cv" style="left:150px;background:#2c3b78;transform:rotateY(55deg)"></div>
+  <div class="cv" style="left:205px;background:#8f1f2a;transform:rotateY(55deg)"></div>
+  <div class="cv" style="left:490px;background:#e0b53a;transform:rotateY(-55deg)"></div>
+  <div class="cv" style="left:545px;background:#5b8a5e;transform:rotateY(-55deg)"></div>
+  <div class="cv" style="left:605px;background:#444;transform:rotateY(-55deg)"></div>
+  <div class="cv c" style="background:#EDE8DE"><div style="position:absolute;left:22px;top:50px;width:130px;height:66px;background:#5b8a5e;transform:rotate(-2deg)"></div></div>
+ </div>
+ <div style="position:absolute;bottom:22px;left:0;right:0;text-align:center">
+  <div style="font-size:20px;font-weight:700">Studio Lafleur</div>
+  <div class="lt" style="margin:3px 0 10px">Playlist · 9 morceaux · ⬇︎ sur l'iPhone</div>
+  <span class="pill p" style="padding:7px 16px;font-size:13px">▶ Lecture</span><span class="pill" style="padding:7px 16px;font-size:13px">Ouvrir la playlist</span>
+ </div>
+ <div class="lt" style="position:absolute;right:26px;bottom:24px;width:120px;text-align:right">Glisse pour défiler · touche pour jouer</div>
+</div></div>
+
+<div class="col"><div class="cap"><span>6</span> Réglages → Comptes</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">‹ Réglages</span><img src="logo-texte-grand.png"></div>
+<div class="body">
+ <div class="sec" style="margin-top:4px">MES COMPTES <span style="float:right;color:#666">glisse ⋮⋮ pour l'ordre</span></div>
+ <div class="acc"><span class="grip">⋮⋮</span><span class="ic" style="background:#F26EF2">N</span><div><div class="t">Navidrome maison</div><div class="a">Subsonic · 192.168.1.20:4533</div></div><div class="r"><span style="color:#5fd16f;font-size:12px">● connecté</span>›</div></div>
+ <div class="acc"><span class="grip">⋮⋮</span><span class="ic" style="background:#7aa7ff">J</span><div><div class="t">Jellyfin de Max</div><div class="a">Jellyfin · 2 en-têtes</div></div><div class="r"><span style="font-size:12px">● absent</span>›</div></div>
+ <div class="acc"><span class="grip">⋮⋮</span><span class="ic" style="background:#e5a00d">P</span><div><div class="t">Plex</div><div class="a">Plex · code validé</div></div><div class="r"><span style="color:#5fd16f;font-size:12px">●</span>›</div></div>
+ <div class="pill" style="width:100%;text-align:center;margin-top:4px">+ Ajouter un compte</div>
+ <div class="sec" style="margin-top:22px">AFFICHAGE</div>
+ <div class="seg"><span>Un compte</span><span>Tout</span><span class="on">Perso</span></div>
+ <div style="margin-top:12px">
+  <div class="acc" style="background:none;padding:8px 4px;margin:0"><span class="ck on">✓</span><div class="t">Navidrome maison</div></div>
+  <div class="acc" style="background:none;padding:8px 4px;margin:0"><span class="ck on">✓</span><div class="t">Jellyfin de Max</div></div>
+  <div class="acc" style="background:none;padding:8px 4px;margin:0"><span class="ck"></span><div class="t" style="color:#999">Plex</div></div>
+ </div>
+ <div class="lt" style="margin-top:8px;line-height:1.5">Un album présent sur deux comptes n'apparaît qu'une fois : il joue depuis l'iPhone, sinon depuis le premier compte de la liste.</div>
+</div>
+<div class="home"><i></i></div></div></div>
+
+<div class="col"><div class="cap"><span>7</span> Ajouter un compte</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">‹ Comptes</span><img src="logo-texte-grand.png"></div>
+<div class="body">
+ <div class="f" style="margin-top:2px"><label>TYPE DE SERVEUR</label><div class="seg"><span class="on">Subsonic</span><span>Jellyfin</span><span>Plex</span></div>
+ <div class="lt" style="margin-top:6px">Navidrome, Airsonic, Gonic, LMS, Ampache…</div></div>
+ <div class="f"><label>NOM</label><div class="in">Navidrome maison</div></div>
+ <div class="f"><label>ADRESSE</label><div class="in on">http://192.168.1.20:4533</div></div>
+ <div class="f"><label>UTILISATEUR</label><div class="in">johnny</div></div>
+ <div class="f"><label>MOT DE PASSE</label><div class="in">••••••••</div></div>
+ <div class="f"><label>EN-TÊTES HTTP (FACULTATIF)</label>
+  <div class="hd"><div class="in">CF-Access-Client-Id</div><div class="in">abc123…</div><span style="color:#777;align-self:center">✕</span></div>
+  <div style="color:#F26EF2;font-size:13px;font-weight:700;margin-top:8px">+ Ajouter un en-tête</div></div>
+ <div style="margin-top:20px;text-align:right"><span class="pill">Tester</span><span class="pill p" style="margin-right:0">Enregistrer</span></div>
+</div>
+<div class="home"><i></i></div></div></div>
+
+<div class="col"><div class="cap"><span>8</span> Sélectionner → Garder sur mon iPhone</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">Annuler</span><img src="logo-texte-grand.png"></div>
+<div class="body">
+ <div class="sec" style="margin-top:2px">ALBUMS · 2 SÉLECTIONNÉS</div>
+ <div class="it"><span class="ck on">✓</span><span class="sq" style="background:#5b8a5e"></span>Studio Lafleur<span class="c lt">36 min · 310 Mo</span></div>
+ <div class="it"><span class="ck"></span><span class="sq" style="background:#8f1f2a"></span>Lafleur Surf <span class="dl">⬇︎</span><span class="c lt">déjà gardé</span></div>
+ <div class="it"><span class="ck on">✓</span><span class="sq" style="background:#e0b53a"></span>Summer Mix<span class="c lt">52 min · 480 Mo</span></div>
+ <div class="it"><span class="ck"></span><span class="sq" style="background:#2c3b78"></span>Night Drive<span class="c lt">41 min · 390 Mo</span></div>
+ <div class="it"><span class="ck"></span><span class="sq" style="background:#444"></span>Ports<span class="c lt">28 min · 260 Mo</span></div>
+ <div class="sec" style="margin-top:24px">PLACE SUR L'IPHONE</div>
+ <div style="font-size:13px;color:#ccc">4,2 Go utilisés sur 10 Go · <span style="color:#F26EF2">+ 790 Mo</span></div>
+ <div class="gauge"><i></i></div>
+ <div class="lt" style="margin-top:10px;line-height:1.5">Les fichiers vont dans Fichiers → Sur mon iPhone → LAFLEURMUSIC. Pour les mettre sur ton NAS, copie-les avec l'appli Fichiers.</div>
+ <div class="selbar">⬇︎ Garder sur mon iPhone · 790 Mo</div>
+</div>
+<div class="home"><i></i></div></div></div>
+</body></html>
