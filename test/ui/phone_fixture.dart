@@ -114,7 +114,11 @@ Future<PhoneFixture> pumpPhone(
       settings: AppSettings(),
       saveSettings: () {},
       accounts: accounts,
-      child: MaterialApp(theme: lafleurTheme(), home: home),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: lafleurTheme(),
+        home: home,
+      ),
     ),
   );
   await settle(tester);

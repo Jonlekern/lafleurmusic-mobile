@@ -12,12 +12,14 @@ class DialogFrame extends StatelessWidget {
     required this.confirm,
     required this.onConfirm,
     this.width = 520,
+    this.inset = const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
     this.confirmColor = LafleurColors.pink,
   });
   final String title, cancel, confirm;
   final List<Widget> children;
   final VoidCallback onConfirm;
   final double width;
+  final EdgeInsets inset; // marge autour de la fenêtre (étroite sur téléphone)
   final Color confirmColor;
 
   static const body = TextStyle(
@@ -32,6 +34,7 @@ class DialogFrame extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
     );
     return Dialog(
+      insetPadding: inset,
       backgroundColor: const Color(0xFF1F1F1F),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),

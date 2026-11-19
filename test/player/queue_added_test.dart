@@ -72,6 +72,31 @@ void main() {
     expect(q.addedCount, 0);
   });
 
+  test('Vider : le morceau en cours et la suite de l’album restent', () {
+    final q = abc()..enqueue(['X', 'Y']);
+    q.next(); // X joue : il est un ajout, mais en cours
+    q.clearAdded();
+    expect(q.current, 'X');
+    expect(q.order, ['A', 'X', 'B', 'C']);
+    expect(q.addedCount, 0);
+    q.next();
+    expect(q.current, 'B'); // l'album reprend après A
+  });
+
+  test('Vider sans ajouts : rien ne bouge', () {
+    final q = abc();
+    q.clearAdded();
+    expect(q.order, ['A', 'B', 'C']);
+    expect(q.position, 0);
+  });
+
+  test('Vider ne touche que les ajouts du bloc qui suit', () {
+    final q = abc()..enqueue(['X', 'Y']);
+    q.move(1, 3); // X derrière B : il rejoint l'album
+    q.clearAdded();
+    expect(q.order, ['A', 'B', 'X', 'C']);
+  });
+
   test('glisser un ajout derrière B : il quitte le bloc', () {
     final q = abc()..enqueue(['X', 'Y']);
     q.move(1, 3); // X derrière B : A, Y, B, X, C

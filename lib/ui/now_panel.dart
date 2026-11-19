@@ -5,6 +5,7 @@ import '../library/models.dart';
 import '../player/player.dart';
 import '../theme/colors.dart';
 import 'cover_image.dart';
+import 'dialog_frame.dart';
 import 'now_playing_screen.dart';
 
 /// Panneau de droite (maquettes 2 et 8a) : en cours, puis À suivre (ajouts glissables, suite de l'album).
@@ -96,13 +97,34 @@ class UpNextSection extends StatelessWidget {
   final bool title;
   final double coverSize;
 
+  /// Vider : on demande d'abord ; seuls les ajouts partent, la suite de l'album reste.
+  Future<void> _confirmClear(BuildContext context) async {
+    final app = AppScope.of(context);
+    final s = app.strings;
+    final n = app.player.queue?.addedCount ?? 0;
+    if (n == 0) return;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DialogFrame(
+        title: s.clearAddedTitle,
+        width: 340,
+        inset: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        cancel: s.cancel,
+        confirm: s.clearQueue,
+        onConfirm: () => Navigator.pop(ctx, true),
+        children: [Text(s.clearAddedBody(n), style: DialogFrame.body)],
+      ),
+    );
+    if (yes == true) await app.player.clearAdded();
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final s = app.strings;
     final section = title ? NowPanel._section : NowPanel.head;
     final clear = GestureDetector(
-      onTap: app.player.clearAdded,
+      onTap: () => _confirmClear(context),
       child: Text(
         s.clearQueue,
         style: const TextStyle(

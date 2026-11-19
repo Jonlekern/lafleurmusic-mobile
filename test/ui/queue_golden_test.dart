@@ -3,9 +3,12 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Overlay;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/ui/phone/album_screen.dart';
+import 'package:lafleurmusic/ui/phone/mini_player.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 import 'package:lafleurmusic/ui/queue_toast.dart';
 
@@ -50,6 +53,24 @@ void main() {
     );
     await g.cancel();
     await tester.pumpAndSettle(const Duration(seconds: 5));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('C À suivre : « Vider » et la fenêtre « Vider tes ajouts ? »', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final f = await pumpPhone(tester, images: true);
+    // la maquette : deux ajouts
+    f.player.queue!.enqueue([DemoLibrary.tracks.first]);
+    await tester.tap(find.byType(MiniPlayer));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vider'));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Overlay).first,
+      matchesGoldenFile('goldens/queue-c-vider.png'),
+    );
     debugDefaultTargetPlatformOverride = null;
   });
 }

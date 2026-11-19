@@ -190,6 +190,16 @@ class Strings {
   String get addedByYou => _t('AJOUTÉS PAR TOI', 'ADDED BY YOU');
   String get nextInAlbum => _t("SUITE DE L'ALBUM", 'NEXT IN ALBUM');
   String get clearQueue => _t('Vider', 'Clear');
+  String get clearAddedTitle => _t('Vider tes ajouts ?', 'Clear your additions?');
+  String clearAddedBody(int n) => n == 1
+      ? _t(
+          "Le morceau que tu as ajouté part de la file. La suite de l'album reste.",
+          'The song you added leaves the queue. The rest of the album stays.',
+        )
+      : _t(
+          "Les $n morceaux que tu as ajoutés partent de la file. La suite de l'album reste.",
+          'The $n songs you added leave the queue. The rest of the album stays.',
+        );
   // plan 5 : Top 100
   String get top100 => 'Top 100';
   String get topLabel => 'TOP 100';

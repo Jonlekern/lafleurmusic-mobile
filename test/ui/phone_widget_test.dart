@@ -150,6 +150,24 @@ void main() {
     expect(find.byType(NowScreen), findsNothing);
   });
 
+  testWidgets('À suivre : Vider demande, puis retire les ajouts seulement', (
+    tester,
+  ) async {
+    final f = await pumpPhone(tester);
+    await tester.tap(find.byType(MiniPlayer));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vider tes ajouts ?'), findsOneWidget);
+    expect(f.player.calls, isNot(contains('clearAdded')));
+    await tester.tap(find.widgetWithText(FilledButton, 'Vider'));
+    await tester.pumpAndSettle();
+    expect(f.player.calls, contains('clearAdded'));
+    expect(f.player.queue!.addedCount, 0);
+    expect(find.text('AJOUTÉS PAR TOI'), findsNothing);
+    expect(find.text('Vider'), findsNothing);
+  });
+
   testWidgets('En cours : onglets À suivre / Égaliseur / Lecture', (
     tester,
   ) async {

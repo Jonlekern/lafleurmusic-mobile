@@ -117,12 +117,57 @@ void main() {
     expect(player.queue!.added.first.title, 'Sunset Tape');
   });
 
-  testWidgets('Vider → clearAdded', (tester) async {
+  testWidgets('Vider : une fenêtre demande d’abord, Annuler ne retire rien', (
+    tester,
+  ) async {
     await pump(tester);
     await tester.tap(find.text('Vider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vider tes ajouts ?'), findsOneWidget);
+    expect(
+      find.text(
+        "Les 2 morceaux que tu as ajoutés partent de la file. La suite de l'album reste.",
+      ),
+      findsOneWidget,
+    );
+    expect(player.calls, isEmpty);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vider tes ajouts ?'), findsNothing);
+    expect(player.calls, isEmpty);
+    expect(find.text('AJOUTÉS PAR TOI'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Vider → confirmer → clearAdded, sans compte, la suite de l’album reste',
+    (tester) async {
+      await pump(tester);
+      await tester.tap(find.text('Vider'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(of: find.byType(Dialog), matching: find.text('Vider')),
+      );
+      await tester.pumpAndSettle();
+      expect(player.calls, ['clearAdded']);
+      expect(find.text('Vider tes ajouts ?'), findsNothing);
+      expect(find.text('AJOUTÉS PAR TOI'), findsNothing);
+      expect(find.text('Golden Hour'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Vider avec un seul ajout : le singulier', (tester) async {
+    await pump(tester);
+    player.queue!.removeLastAdded([player.queue!.added.last]);
+    player.show(const PlayerState());
     await tester.pump();
-    expect(player.calls, ['clearAdded']);
-    expect(find.text('AJOUTÉS PAR TOI'), findsNothing);
+    await tester.tap(find.text('Vider'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        "Le morceau que tu as ajouté part de la file. La suite de l'album reste.",
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('sans ajouts : ni AJOUTÉS ni Vider', (tester) async {

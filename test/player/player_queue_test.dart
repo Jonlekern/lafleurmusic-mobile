@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/player/crossfade.dart';
 import 'package:lafleurmusic/player/mpv_port.dart';
 import 'package:lafleurmusic/player/queue.dart';
 
@@ -90,6 +91,60 @@ void main() {
     await sync.enqueue(q, ['X', 'Y']);
     await sync.clearAdded(q);
     same();
+  });
+
+  test('Vider : le morceau en cours (un ajout) ne bouge pas, mpv suit', () async {
+    await sync.enqueue(q, ['X', 'Y']);
+    await sync.next(q); // X en cours
+    port.calls.clear();
+    await sync.clearAdded(q);
+    same();
+    expect(q.current, 'X');
+    expect(port.list, ['A', 'X', 'B', 'C']);
+    expect(port.calls, ['remove 2']); // seul Y part, jamais X ni la suite
+  });
+
+  test('Vider sans ajouts : mpv n’est pas touché', () async {
+    await sync.clearAdded(q);
+    expect(port.calls, isEmpty);
+    same();
+  });
+
+  test('Vider pendant un fondu vers un ajout : plus de fondu, la suite de l’album prend sa place', () async {
+    await sync.enqueue(q, ['X']);
+    expect(fadeTarget(q, null), 1); // le fondu va vers X
+    await sync.clearAdded(q);
+    same();
+    expect(q.current, 'A'); // le morceau qui finit n'est pas retiré
+    expect(fadeTarget(q, null), 1);
+    expect(q.order[1], 'B'); // la suite de l'album, intacte
+    // le fondu lancé vers X n'a plus de sens ; mpv, lui, joue toujours A
+    expect(
+      CrossfadePlan.stillValid(
+        current: q.current,
+        next: q.order[1],
+        fadedFrom: 'A',
+        fadeNext: 'X',
+      ),
+      isFalse,
+    );
+  });
+
+  test('Vider après le passage du fondu : l’ajout qui joue reste', () async {
+    await sync.enqueue(q, ['X', 'Y']);
+    await sync.next(q); // le relais du fondu est passé sur X
+    await sync.clearAdded(q);
+    same();
+    expect(q.current, 'X');
+    expect(
+      CrossfadePlan.stillValid(
+        current: q.current,
+        next: q.order[q.position + 1],
+        fadedFrom: 'A',
+        fadeNext: 'X',
+      ),
+      isTrue,
+    );
   });
 
   test('Suivant après un ajout : il est retiré de mpv aussi', () async {
