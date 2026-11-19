@@ -13,7 +13,7 @@ import 'tablet.dart';
 import 'phone/keep_screen.dart';
 import 'phone/phone_shell.dart' show pushPhone;
 
-enum _Action { playNext, enqueue, keep, remove, select }
+enum _Action { playNext, enqueue, keep, remove, select, goAlbum, goArtist }
 
 PopupMenuItem<_Action> _item(_Action a, String label) => PopupMenuItem(
   value: a,
@@ -44,7 +44,11 @@ Future<void> showTrackMenu(BuildContext context, Offset at, Track track) async {
       await app.player.playNext([track]);
     case _Action.enqueue:
       await app.player.enqueue([track]);
-    case _Action.keep || _Action.remove || _Action.select:
+    case _Action.keep ||
+        _Action.remove ||
+        _Action.select ||
+        _Action.goAlbum ||
+        _Action.goArtist:
       break; // seulement dans la feuille du téléphone
   }
 }
@@ -107,7 +111,8 @@ class TrackMenuArea extends StatelessWidget {
 /// quand tout est gardé) et « Sélectionner… » pour les morceaux d'un serveur. En-tête : [title] · [sub].
 /// Une playlist du serveur dit elle-même si elle est gardée ([kept]) et se garde ou se retire
 /// entière ([onKeep], [onRemove] : son `.m3u8` avec). [album] : [tracks] est un album (gardé et
-/// retiré comme tel, règle Q13).
+/// retiré comme tel, règle Q13). [onGoAlbum], [onGoArtist] (En cours, maquette 13 D) : « Aller à l'album »
+/// et « Aller à l'artiste » en tête, avant un séparateur ; sans eux, la feuille reste comme avant.
 Future<void> showTrackSheet(
   BuildContext context, {
   required String title,
@@ -117,6 +122,8 @@ Future<void> showTrackSheet(
   bool album = false,
   Future<void> Function()? onKeep,
   Future<void> Function()? onRemove,
+  Future<void> Function()? onGoAlbum,
+  Future<void> Function()? onGoArtist,
 }) async {
   final app = AppScope.of(context);
   final s = app.strings;
@@ -205,7 +212,29 @@ Future<void> showTrackSheet(
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            option(ctx, _Action.playNext, s.playNextAction, hl: true),
+            if (onGoAlbum != null)
+              option(ctx, _Action.goAlbum, s.goToAlbum, hl: true),
+            if (onGoArtist != null)
+              option(
+                ctx,
+                _Action.goArtist,
+                s.goToArtist,
+                hl: onGoAlbum == null,
+              ),
+            if (onGoAlbum != null || onGoArtist != null)
+              const Divider(
+                color: Color(0xFF3A3A3A),
+                height: 11,
+                thickness: 1,
+                indent: 4,
+                endIndent: 4,
+              ),
+            option(
+              ctx,
+              _Action.playNext,
+              s.playNextAction,
+              hl: onGoAlbum == null && onGoArtist == null,
+            ),
             option(ctx, _Action.enqueue, s.addToQueue),
             if (canKeep) ...[
               const Divider(
@@ -235,6 +264,10 @@ Future<void> showTrackSheet(
   );
   if (a == null) return;
   switch (a) {
+    case _Action.goAlbum:
+      await onGoAlbum?.call();
+    case _Action.goArtist:
+      await onGoArtist?.call();
     case _Action.playNext:
       await app.player.playNext(list);
     case _Action.enqueue:

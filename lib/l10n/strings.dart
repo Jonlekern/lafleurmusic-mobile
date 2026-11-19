@@ -155,6 +155,8 @@ class Strings {
 
   // plan 5 : menu d'un morceau, Supprimer, Remplacer, Modifier
   String get playNextAction => _t('Lire ensuite', 'Play next');
+  String get goToAlbum => _t("Aller à l'album", 'Go to album');
+  String get goToArtist => _t("Aller à l'artiste", 'Go to artist');
   String get addToQueue => _t('Ajouter à la file', 'Add to queue');
   String get editTrack => _t('Modifier…', 'Edit…');
   String get replaceWith => _t('Remplacer par…', 'Replace with…');

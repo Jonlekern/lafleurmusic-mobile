@@ -3,7 +3,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Overlay;
+import 'package:flutter/material.dart' show Icons, Overlay;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
@@ -70,6 +70,22 @@ void main() {
     await expectLater(
       find.byType(Overlay).first,
       matchesGoldenFile('goldens/queue-c-vider.png'),
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('D En cours : le menu ⋯ « Aller à l\'album / l\'artiste »', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await pumpPhone(tester, images: true);
+    await tester.tap(find.byType(MiniPlayer));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Overlay).first,
+      matchesGoldenFile('goldens/queue-d-aller-a.png'),
     );
     debugDefaultTargetPlatformOverride = null;
   });

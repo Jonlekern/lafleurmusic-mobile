@@ -33,6 +33,23 @@ Future<void> openAlbum(BuildContext context, String album, String key) {
   );
 }
 
+/// Ouvre la page de l'artiste [name] (ses morceaux, tous comptes confondus), comme depuis la liste des Artistes.
+Future<void> openArtist(BuildContext context, String name) {
+  final app = AppScope.of(context);
+  final s = app.strings;
+  return pushPhone(
+    context,
+    AlbumScreen(
+      back: s.artists,
+      label: s.artistHeader,
+      title: name,
+      artist: name,
+      tracks: app.library.artistTracks(name),
+    ),
+    settings: RouteSettings(name: 'artist', arguments: name),
+  );
+}
+
 /// Album, et toute liste de morceaux (Morceaux, artiste, genre, Top 100) : la colonne du milieu du Mac
 /// (maquette 1, écran 2). Toucher une ligne joue la liste à partir d'elle ; glisser à gauche = Lire ensuite,
 /// à droite = Ajouter à la file ;

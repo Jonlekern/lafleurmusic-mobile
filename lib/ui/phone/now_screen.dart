@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../library/merge.dart';
 import '../../player/player.dart';
 import '../../player/queue.dart';
 import '../../theme/colors.dart';
@@ -11,6 +12,7 @@ import '../format.dart';
 import '../now_panel.dart';
 import '../playback_card.dart';
 import '../track_menu.dart';
+import 'album_screen.dart';
 import 'phone_shell.dart';
 
 Future<void> openNow(BuildContext context) => pushPhone(
@@ -102,6 +104,17 @@ class _NowScreenState extends State<NowScreen> {
                       title: t.title,
                       sub: t.artist,
                       tracks: () async => [t],
+                      // un fichier sans tag d'album ou d'artiste : la ligne n'est pas là
+                      onGoAlbum: t.album.trim().isEmpty
+                          ? null
+                          : () => _goTo(
+                              context,
+                              (c) => openAlbum(c, t.album, albumKeyOf(t)),
+                            ),
+                      onGoArtist: t.artist.trim().isEmpty
+                          ? null
+                          : () =>
+                                _goTo(context, (c) => openArtist(c, t.artist)),
                     ),
             ),
           ),
@@ -244,6 +257,16 @@ class _NowScreenState extends State<NowScreen> {
         );
       },
     );
+  }
+
+  /// En cours se ferme, puis la page s'ouvre sur le navigateur du téléphone : « retour » ramène où l'on était.
+  Future<void> _goTo(
+    BuildContext context,
+    Future<void> Function(BuildContext) open,
+  ) async {
+    final nav = Navigator.of(context);
+    nav.pop();
+    await open(nav.context);
   }
 
   static const _time = TextStyle(color: Color(0xFF999999), fontSize: 12);
