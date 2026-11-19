@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1100px;background:#0d1117;font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;color:#e6edf3;padding:28px 40px 40px}
+.gh{display:flex;align-items:center;gap:10px;color:#9198a1;font-size:14px;margin-bottom:18px}
+.gh b{color:#e6edf3}.tag{border:1px solid #3d444d;border-radius:20px;padding:2px 10px;font-size:12px}
+.latest{border:1px solid #238636;color:#3fb950;border-radius:20px;padding:2px 10px;font-size:12px}
+.box{border:1px solid #3d444d;border-radius:8px;padding:24px 28px}
+h1.rel{font-size:30px;font-weight:600;margin-bottom:18px;display:flex;gap:12px;align-items:center}
+/* banner */
+.banner{width:100%;height:300px;border-radius:12px;background:#0D0D0D;position:relative;overflow:hidden;display:flex;align-items:center;gap:40px;padding:0 56px;font-family:Inter}
+.banner .fl{width:190px;height:190px;background:url(fleur-tile.png) center/260px no-repeat;border-radius:24px;flex:none}
+.banner .logo{width:560px;display:block}
+.banner .sub{color:#bbb;font-size:20px;margin-top:16px}
+.banner .v{display:inline-block;margin-top:18px;background:#F26EF2;color:#111;font-weight:700;border-radius:20px;padding:6px 16px;font-size:15px}
+.banner::after{content:"";position:absolute;right:-110px;bottom:-110px;width:240px;height:240px;border-radius:50%;border:2px solid #F26EF2;opacity:.25}
+/* buttons */
+.btns{display:flex;justify-content:center;gap:22px;margin:28px 0 8px}
+.btn{width:330px;height:76px;border-radius:38px;background:#F26EF2;color:#111;display:flex;align-items:center;gap:16px;padding:0 28px;font-family:Inter}
+.btn.dark{background:#0D0D0D;color:#F2F2F2;border:2px solid #F26EF2}
+.btn svg{width:34px;height:34px;flex:none}
+.btn .t1{font-size:13px;opacity:.75}.btn .t2{font-size:22px;font-weight:700}
+.note{text-align:center;color:#9198a1;font-size:13px;margin-bottom:22px}
+h2{font-size:20px;font-weight:600;border-bottom:1px solid #3d444d;padding-bottom:8px;margin:22px 0 12px}
+ul{padding-left:24px;line-height:1.8;font-size:15px}
+p{font-size:15px;line-height:1.6}
+.assets{margin-top:26px;border:1px solid #3d444d;border-radius:6px}
+.assets div{padding:10px 16px;border-top:1px solid #3d444d;font-size:14px;display:flex;justify-content:space-between;color:#4493f8}
+.assets div:first-child{border-top:0;color:#e6edf3;font-weight:600}
+.assets span{color:#9198a1}
+.shots{display:flex;gap:18px;justify-content:center;margin:26px 0 6px}.shots img{width:220px;border-radius:26px;border:6px solid #000;box-shadow:0 8px 30px rgba(0,0,0,.5)}.cap2{text-align:center;color:#9198a1;font-size:13px;margin-bottom:10px}</style></head><body>
+<div class="gh"><b>Jonlekern / lafleurmusic-mobile</b> › Releases <span class="tag">v0.2.0</span><span class="latest">Latest</span></div>
+<div class="box">
+<h1 class="rel">LAFLEURMUSIC 0.2.0 — your music, at home and outside</h1>
+
+<div class="banner"><div class="fl"></div><div>
+<img class="logo" src="logo-texte-grand.png">
+<div class="sub">Your music, iPod style, on your phone.</div>
+<span class="v">v0.2.0 · Android &amp; iPhone</span></div></div>
+
+<div class="btns">
+<div class="btn"><svg viewBox="0 0 24 24" fill="#111"><path d="M17.6 9.5l1.8-3.1a.4.4 0 0 0-.7-.4l-1.8 3.1A11 11 0 0 0 12 8a11 11 0 0 0-4.9 1.1L5.3 6a.4.4 0 0 0-.7.4l1.8 3.1A10 10 0 0 0 1.5 17h21a10 10 0 0 0-4.9-7.5zM7 14.3a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm10 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
+<div><div class="t1">Download for</div><div class="t2">Android</div></div></div>
+<div class="btn dark"><svg viewBox="0 0 24 24" fill="#F26EF2"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9a4.8 4.8 0 0 0-3.8-2c-1.6-.2-3.1.9-3.9.9s-2-.9-3.4-.9a5 5 0 0 0-4.2 2.6c-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.5s1.7-.8 3.2-.8 1.9.8 3.2.8 2.2-1.3 3-2.5a10 10 0 0 0 1.4-2.8 4.3 4.3 0 0 1-2.1-4.1zM13.9 5a4.3 4.3 0 0 0 1-3.2 4.5 4.5 0 0 0-2.9 1.5 4.2 4.2 0 0 0-1 3.1A3.7 3.7 0 0 0 13.9 5z"/></svg>
+<div><div class="t1">Download for</div><div class="t2">iPhone</div></div></div>
+</div>
+<div class="note">Android: APK · iPhone: unsigned IPA</div>
+
+<div class="shots"><img src="../../docs/release/screens/phone-1.png"><img src="../../docs/release/screens/phone-2.png"><img src="../../docs/release/screens/phone-3.png"><img src="../../docs/release/screens/phone-9.png"></div>
+<div class="cap2">Home · Album · Now Playing · On my iPhone</div>
+<p>LAFLEURMUSIC is an iPod-style music player for your own music server — Navidrome and the other Subsonic-style servers. Same look as LAFLEURMUSIC on the computer, made for the phone. Keep albums on the phone and listen anywhere, even without network.</p>
+<h2>Listen</h2><ul>
+<li>iPod-style menu: albums, artists, genres, songs, Top 100</li>
+<li>Now Playing with Up Next, equalizer, crossfade and equal volume</li>
+<li>Lock-screen, notification and Bluetooth controls</li>
+<li>Swipe a song to play it next · long press for the menu</li></ul>
+<h2>Your server</h2><ul>
+<li>Navidrome and the Subsonic family (Airsonic, Gonic, LMS, Funkwhale, Nextcloud Music, Ampache)</li>
+<li>Custom HTTP headers per account (Cloudflare Access, reverse proxies…)</li>
+<li>Your password stays in the phone's keychain</li></ul>
+<h2>Offline</h2><ul>
+<li>Keep songs and albums on the phone: real files in a visible folder (Files → On My iPhone → LAFLEURMUSIC, or Music/LAFLEURMUSIC on Android)</li>
+<li>Choose the folder — iCloud Drive included — and a space limit</li>
+<li>Top 100 kept automatically at home on Wi-Fi</li>
+<li>Outside, what isn't on the phone is greyed; listens are sent to the server when you're back</li>
+<li>Music files you add to the folder yourself show up too</li></ul>
+<h2>Install</h2><ul>
+<li><b>Android 7+</b>: download the APK and allow installing apps from this source when asked.</li>
+<li><b>iPhone (iOS 15+)</b>: unsigned IPA.</li></ul>
+<h2>Coming next</h2><ul>
+<li>Several accounts merged · server playlists · Cover Flow in landscape · tablets · Jellyfin · Plex · Classic mode (click wheel) · light mode</li></ul>
+<div class="assets"><div>Assets 4</div>
+<div>LAFLEURMUSIC-android.apk <span>98 MB</span></div>
+<div>LAFLEURMUSIC-iphone-unsigned.ipa <span>14 MB</span></div>
+<div>Source code (zip)</div><div>Source code (tar.gz)</div></div>
+</div>
+</body></html>
