@@ -12,6 +12,7 @@ import '../offline/paths.dart';
 import '../player/media_resolver.dart';
 import 'accounts.dart';
 import 'jellyfin.dart';
+import 'plex_link.dart';
 import 'remote_key.dart';
 import 'source.dart';
 import 'subsonic.dart';
@@ -83,8 +84,9 @@ class AccountDraft {
 
 enum DraftProblem { missing, badAddress }
 
-/// Status dot of an account on the accounts screen.
-enum AccountState { checking, syncing, connected, absent }
+/// Status dot of an account on the accounts screen. [relink]: its token was revoked (Plex),
+/// a new code is needed (« À reconnecter »).
+enum AccountState { checking, syncing, connected, absent, relink }
 
 /// Test, save, sync and remove accounts; remembers whether each server answered.
 /// One per app: it shares the [Accounts] and the [MediaResolver] built in main.
@@ -100,6 +102,7 @@ class AccountService extends ChangeNotifier {
     this.device,
     Future<void> Function(Duration)? wait,
     DateTime Function()? clock,
+    this._plexLink,
   }) : _clock = clock ?? DateTime.now,
        _wait = wait, // ignore: prefer_initializing_formals
        _db = db,
@@ -112,6 +115,14 @@ class AccountService extends ChangeNotifier {
            ).run;
 
   final LibraryDb _db;
+  final PlexLink Function(String clientId)? _plexLink;
+
+  /// A new plex.tv sign-in (a fake plex.tv in tests), with this install's client identifier.
+  /// The caller closes it.
+  Future<PlexLink> newPlexLink() async {
+    final id = await accounts.plexClientId();
+    return _plexLink?.call(id) ?? PlexLink(clientId: id);
+  }
 
   /// Pause between the quick syncs after a save (a fake clock in tests).
   final Future<void> Function(Duration)? _wait;
@@ -208,7 +219,18 @@ class AccountService extends ChangeNotifier {
     if (_checking.contains(id)) return AccountState.checking;
     final r = _results[id];
     if (r == null) return null;
-    return r == TestResult.ok ? AccountState.connected : AccountState.absent;
+    return switch (r) {
+      TestResult.ok => AccountState.connected,
+      TestResult.tokenRevoked => AccountState.relink,
+      _ => AccountState.absent,
+    };
+  }
+
+  /// May the account's server answer now? Not when found unreachable, nor when its token
+  /// was revoked. Unknown (never tested yet) counts as yes.
+  bool mayAnswer(String id) {
+    final st = stateOf(id);
+    return st != AccountState.absent && st != AccountState.relink;
   }
 
   Map<String, OfflineRow> _kept = const {};
@@ -299,9 +321,7 @@ class AccountService extends ChangeNotifier {
     )) {
       return true;
     }
-    return rows.any(
-      (r) => r.$2 != 'local' && stateOf(r.$2) != AccountState.absent,
-    );
+    return rows.any((r) => r.$2 != 'local' && mayAnswer(r.$2));
   }
 
   bool _keptCopyExists(String path) {
@@ -372,8 +392,10 @@ class AccountService extends ChangeNotifier {
           final r = await _timed(source);
           draftRedirect = source.redirectedBase;
           return r;
-        case AccountType.subsonic:
         case AccountType.plex:
+          return TestResult
+              .unreachable; // signed in by a code, never from the form
+        case AccountType.subsonic:
           final source = SubsonicSource(
             accountId: id ?? 'draft',
             base: d.base!,
@@ -443,6 +465,39 @@ class AccountService extends ChangeNotifier {
     }
     unawaited(_syncAfterSave(a.id));
     return a;
+  }
+
+  /// A Plex account found by a code (see [PlexLink]), then synced like a saved one.
+  Future<Account> addPlex({
+    required String name,
+    required PlexServer server,
+    required String token,
+    required Uri base,
+  }) async {
+    final a = await accounts.addPlex(
+      name: name,
+      server: server,
+      token: token,
+      base: base,
+    );
+    unawaited(_syncAfterSave(a.id));
+    return a;
+  }
+
+  /// « Nouveau code » on an account « À reconnecter »: the token is replaced in place (same
+  /// id, tracks and kept copies), the old source dropped, then a sync.
+  Future<void> relinkPlex(
+    String id, {
+    required PlexServer server,
+    required String token,
+    required Uri base,
+  }) async {
+    await accounts.relinkPlex(id, server: server, token: token, base: base);
+    resolver?.invalidate(id);
+    _bump(id);
+    _results.remove(id);
+    notifyListeners();
+    unawaited(_syncAfterSave(id));
   }
 
   /// Now, 30 s later, and once more 30 s after that while the last one wasn't complete

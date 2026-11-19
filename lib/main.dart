@@ -108,7 +108,7 @@ Future<LafleurApp> buildLafleurApp({
     settings: () async => settings,
     mayAutoDownload: () => home.atHome,
     // un compte qui ne répond pas : ses morceaux viennent d'un jumeau qui répond
-    reachable: (id) => accountService.stateOf(id) != AccountState.absent,
+    reachable: (id) => accountService.mayAnswer(id),
   );
   downloader.followPlaylists(); // synchro, compte retiré : les .m3u8 suivent
   unawaited(downloader.resumeAtLaunch());
@@ -116,7 +116,7 @@ Future<LafleurApp> buildLafleurApp({
     db: db,
     downloader: downloader,
     atHome: () => home.atHome,
-    reachable: (id) => accountService.stateOf(id) != AccountState.absent,
+    reachable: (id) => accountService.mayAnswer(id),
   );
   // le Top 100 change (une écoute comptée) : un tour de plus, sans rafale
   final topSub = db.watchTop(100).listen((_) => topKeeper.schedule());
@@ -171,8 +171,7 @@ Future<LafleurApp> buildLafleurApp({
     }
   });
   // le même morceau sur plusieurs comptes : joué depuis le premier qui répond (P8)
-  resolver.reachable = (id) =>
-      accountService.stateOf(id) != AccountState.absent;
+  resolver.reachable = (id) => accountService.mayAnswer(id);
   final library = LibraryView(db, settings: settings);
   final player = LafleurPlayer(resolver: resolver)
     // écran verrouillé : la pochette du serveur en octets, jamais une URL

@@ -8,6 +8,8 @@ import '../library/db.dart';
 import 'secret_store.dart';
 import 'source.dart';
 import 'jellyfin.dart';
+import 'plex.dart';
+import 'plex_link.dart';
 import 'subsonic.dart';
 
 enum AccountType { subsonic, jellyfin, plex }
@@ -42,6 +44,15 @@ class Accounts {
     JellyfinSource.tokenKey(id),
     JellyfinSource.userIdKey(id),
   ];
+  // Plex's token and server: replaced only by a new code (an edit can't change them), gone
+  // with the account
+  static List<String> _plexKeys(String id) => [
+    PlexSource.tokenKey(id),
+    PlexSource.serverKey(id),
+  ];
+
+  /// `X-Plex-Client-Identifier`: one per install, kept when accounts go.
+  static const plexClientIdKey = 'plex.clientIdentifier';
 
   static Account _from(AccountRow r) => Account(
     id: r.id,
@@ -70,12 +81,16 @@ class Accounts {
     required String user,
     required String password,
     Map<String, String> headers = const {},
+    Map<String, String> Function(String id)? moreSecrets,
   }) async {
     final id = _newId();
     final order = await _nextPosition();
     try {
       await _secrets.write(_pwKey(id), password);
       await _secrets.write(_hdrKey(id), jsonEncode(headers));
+      for (final e in (moreSecrets?.call(id) ?? const {}).entries) {
+        await _secrets.write(e.key, e.value);
+      }
       await _db
           .into(_db.accountRows)
           .insert(
@@ -102,6 +117,64 @@ class Accounts {
     );
   }
 
+  /// A Plex account found by a code: [token] and [server] (its addresses) in the store; the
+  /// row's address is [base], the best one when it was added (shown in the list).
+  Future<Account> addPlex({
+    required String name,
+    required PlexServer server,
+    required String token,
+    required Uri base,
+  }) => add(
+    type: AccountType.plex,
+    name: name,
+    base: base,
+    user: '',
+    password: '',
+    moreSecrets: (id) => {
+      PlexSource.tokenKey(id): token,
+      PlexSource.serverKey(id): jsonEncode(server.toJson()),
+    },
+  );
+
+  /// « Nouveau code »: the same account (id, tracks, keys) with a new token and fresh addresses.
+  Future<void> relinkPlex(
+    String id, {
+    required PlexServer server,
+    required String token,
+    required Uri base,
+  }) async {
+    final row = await (_db.select(
+      _db.accountRows,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row == null || row.type != AccountType.plex.name) {
+      throw StateError('Unknown Plex account $id');
+    }
+    await _secrets.write(PlexSource.tokenKey(id), token);
+    await _secrets.write(PlexSource.serverKey(id), jsonEncode(server.toJson()));
+    await (_db.update(_db.accountRows)..where((t) => t.id.equals(id))).write(
+      AccountRowsCompanion(base: Value(base.toString())),
+    );
+  }
+
+  /// The Plex server of account [id] (its id and addresses), or null.
+  Future<PlexServer?> plexServer(String id) async {
+    final j = await _secrets.read(PlexSource.serverKey(id));
+    return j == null ? null : PlexServer.fromJson(jsonDecode(j));
+  }
+
+  /// This install's `X-Plex-Client-Identifier`, made on first use.
+  Future<String> plexClientId() async {
+    final known = await _secrets.read(plexClientIdKey);
+    if (known != null && known.isNotEmpty) return known;
+    final rnd = Random.secure();
+    final id = List.generate(
+      32,
+      (_) => rnd.nextInt(16).toRadixString(16),
+    ).join();
+    await _secrets.write(plexClientIdKey, id);
+    return id;
+  }
+
   Future<int> _nextPosition() async {
     final m = _db.accountRows.position.max();
     final r = await (_db.selectOnly(
@@ -113,7 +186,12 @@ class Accounts {
 
   Future<void> _deleteSecrets(String id) async {
     // each delete is tried even if the other fails; errors are swallowed on cleanup
-    for (final k in [_pwKey(id), _hdrKey(id), ..._tokenKeys(id)]) {
+    for (final k in [
+      _pwKey(id),
+      _hdrKey(id),
+      ..._tokenKeys(id),
+      ..._plexKeys(id),
+    ]) {
       try {
         await _secrets.delete(k);
       } catch (_) {}
@@ -137,7 +215,9 @@ class Accounts {
       for (final k in _tokenKeys(a.id)) {
         try {
           await _secrets.delete(k);
-        } catch (_) {} // a leftover token is refused and replaced at the next sign-in
+        } catch (
+          _
+        ) {} // a leftover token is refused and replaced at the next sign-in
       }
     }
     if (password != null) await _secrets.write(_pwKey(a.id), password);
@@ -168,7 +248,7 @@ class Accounts {
     });
     await _secrets.delete(_pwKey(id));
     await _secrets.delete(_hdrKey(id));
-    for (final k in _tokenKeys(id)) {
+    for (final k in [..._tokenKeys(id), ..._plexKeys(id)]) {
       await _secrets.delete(k);
     }
   }
@@ -235,7 +315,16 @@ class Accounts {
           secrets: _secrets,
         );
       case AccountType.plex:
-        throw UnsupportedError('${a.type.name} is not supported yet');
+        final server = await plexServer(id);
+        if (server == null) throw StateError('Missing server for account $id');
+        return PlexSource(
+          accountId: id,
+          server: server,
+          clientId: await plexClientId(),
+          headers: await headers(id),
+          client: client,
+          secrets: _secrets,
+        );
     }
   }
 }

@@ -262,6 +262,7 @@ class Strings {
     AccountState.absent => _t('● absent', '● unavailable'),
     AccountState.syncing => _t('synchronisation…', 'syncing…'),
     AccountState.checking => '…',
+    AccountState.relink => plexRelink,
   };
   String typeName(AccountType t) => switch (t) {
     AccountType.subsonic => 'Subsonic',
@@ -324,7 +325,55 @@ class Strings {
       'Certificat refusé (https)',
       'Certificate rejected (https)',
     ),
+    TestResult.tokenRevoked => plexRelink,
   };
+
+  // plan 5 : Plex, connexion par code (maquette 14)
+  String get fieldAccountName => _t('NOM DU COMPTE', 'ACCOUNT NAME');
+  String get plexHint => _t(
+    "Pas de mot de passe à taper ici. L'appli te donne un code, tu le tapes sur plex.tv/link (sur ce téléphone ou un ordinateur), et c'est tout.",
+    'No password to type here. The app gives you a code, you type it on plex.tv/link (on this phone or a computer), and that’s it.',
+  );
+  String get plexSignIn => _t('Se connecter avec Plex', 'Sign in with Plex');
+  String get plexYourCode => _t('Ton code Plex', 'Your Plex code');
+  String get plexGoTo => _t('Va sur ', 'Go to ');
+  String get plexLinkSite => 'plex.tv/link';
+  String get plexTypeIt =>
+      _t(',\nconnecte-toi et tape ce code.', ',\nsign in and type this code.');
+  String get plexOpenLink => _t('Ouvrir plex.tv/link', 'Open plex.tv/link');
+  String get plexCopyCode => _t('Copier le code', 'Copy the code');
+  String get plexWaiting => _t('En attente de Plex…', 'Waiting for Plex…');
+  String get plexCodeLasts =>
+      _t('Le code marche 15 minutes.', 'The code works for 15 minutes.');
+  String get plexCodeExpired => _t('Code expiré', 'Code expired');
+  String get plexNewCode => _t('Nouveau code', 'New code');
+  String get plexDone => _t("C'est bon ✓", 'All set ✓');
+  String plexWhichServer(int n) => _t(
+    'Ton compte Plex a $n serveurs. Lequel ?',
+    'Your Plex account has $n servers. Which one?',
+  );
+  String get plexAdd => _t('Ajouter', 'Add');
+  String get plexAtHome => _t('À la maison', 'At home');
+  String get plexOverInternet => _t('Par Internet', 'Over the Internet');
+  String get plexNoAnswer => _t('Ne répond pas', 'Not answering');
+  String plexMusicLibraries(int n) => n == 1
+      ? _t('1 bibliothèque musique', '1 music library')
+      : _t('$n bibliothèques musique', '$n music libraries');
+  String get plexNoServer => _t(
+    'Aucun serveur Plex sur ce compte.',
+    'No Plex server on this account.',
+  );
+  String get plexTvUnreachable =>
+      _t('plex.tv ne répond pas.', 'plex.tv is not answering.');
+  String get plexServerGone => _t(
+    "Ce serveur n'est plus sur ce compte Plex.",
+    'This server is no longer on this Plex account.',
+  );
+  String get plexRelink => _t('À reconnecter', 'Sign in again');
+  String get plexKeptStillPlays => _t(
+    'Ta musique gardée sur le téléphone reste là et continue de jouer.',
+    'Music kept on the phone stays there and keeps playing.',
+  );
 
   /// iPhone, serveur de la maison injoignable : l'accès au réseau local a peut-être été refusé.
   String get localNetworkHint => _t(

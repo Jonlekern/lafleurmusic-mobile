@@ -27,7 +27,7 @@ bool sameHostHop(Uri from, Uri to) {
   return _portOf(to) == _portOf(from) || (upgrade && _portOf(to) == 443);
 }
 
-/// A music source (Subsonic, Jellyfin) as seen by sync and playback.
+/// A music source (Subsonic, Jellyfin, Plex) as seen by sync and playback.
 class SourceAlbum {
   const SourceAlbum({
     required this.id,
@@ -125,6 +125,10 @@ enum TestResult {
 
   /// https: the server's certificate was refused (self-signed, expired, wrong name).
   certificateRejected,
+
+  /// The token was revoked (Plex: access removed on plex.tv) and can't be renewed by the app:
+  /// the account needs a new code (« À reconnecter »).
+  tokenRevoked,
 }
 
 abstract interface class MusicSource {
