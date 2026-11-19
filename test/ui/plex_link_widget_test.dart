@@ -101,6 +101,9 @@ void main() {
     expect(a.name, 'Plex maison');
     expect(a.base.host, homeLocal);
     expect(f.secrets.data[PlexSource.tokenKey(a.id)], 'server-token-home');
+    // the plex.tv token and who it belongs to (relink, address refresh)
+    expect(f.secrets.data[PlexSource.accountTokenKey(a.id)], 'user-token-1');
+    expect(f.secrets.data[PlexSource.userKey(a.id)], 'user-uuid-1');
     // the code screen and the form are gone: back on the accounts
     expect(find.byType(PlexLinkScreen), findsNothing);
     expect(find.byType(AccountFormScreen), findsNothing);
@@ -277,6 +280,7 @@ void main() {
         resourceJson(homeResource.replaceAll('mach-home', machine)),
       )!;
       f.secrets.data[PlexSource.tokenKey(acc.id)] = 'revoked-token';
+      f.secrets.data[PlexSource.userKey(acc.id)] = 'user-uuid-1';
       f.secrets.data[PlexSource.serverKey(acc.id)] = jsonEncode(
         server.toJson(),
       );
@@ -331,5 +335,86 @@ void main() {
       expect(f.secrets.data[PlexSource.tokenKey(acc.id)], 'revoked-token');
       await tapIt(tester, find.text('Annuler'));
     });
+
+    testWidgets('un code d\'un autre compte Plex : refusé, rien ne change', (
+      tester,
+    ) async {
+      final tv = FakePlexTv()..userUuid = 'user-uuid-2';
+      final (f, acc) = await pumpRevoked(tester, tv);
+      await tapIt(tester, find.text('Nouveau code'));
+      await settle(tester);
+      await settle(tester);
+      expect(
+        find.text("Ce code vient d'un autre compte Plex. Rien n'a changé."),
+        findsOneWidget,
+      );
+      expect(f.secrets.data[PlexSource.tokenKey(acc.id)], 'revoked-token');
+      expect(f.secrets.data[PlexSource.userKey(acc.id)], 'user-uuid-1');
+      expect(
+        f.secrets.data.containsKey(PlexSource.accountTokenKey(acc.id)),
+        isFalse,
+      );
+      expect(f.synced, isNot(contains(acc.id)));
+      await tapIt(tester, find.text('Annuler'));
+    });
+
+    testWidgets('« Nouveau code » aussi dans la fiche du compte Plex', (
+      tester,
+    ) async {
+      final tv = FakePlexTv();
+      final (f, acc) = await pumpRevoked(tester, tv);
+      await tapIt(tester, find.text('Plex maison'));
+      expect(find.byType(AccountFormScreen), findsOneWidget);
+      await tapIt(tester, find.text('Nouveau code'));
+      await settle(tester);
+      await settle(tester);
+      await tester.pump(const Duration(milliseconds: 600));
+      await settle(tester);
+      expect(find.byType(PlexLinkScreen), findsNothing);
+      expect(find.byType(AccountFormScreen), findsNothing);
+      expect((await f.list(tester)).single.id, acc.id);
+      expect(f.secrets.data[PlexSource.tokenKey(acc.id)], 'server-token-home');
+    });
   });
+
+  testWidgets('un serveur sans adresse : message clair, rien d\'enregistré', (
+    tester,
+  ) async {
+    final tv = FakePlexTv()
+      ..resources = [
+        homeResource.replaceAll(
+          RegExp(r'"connections":\[[\s\S]*\]'),
+          '"connections":[]',
+        ),
+      ];
+    final f = await pumpWithPlex(tester, tv);
+    await openCode(tester);
+    await settle(tester);
+    expect(find.text('Ce serveur ne donne aucune adresse.'), findsOneWidget);
+    expect(find.text('Aucun serveur Plex sur ce compte.'), findsNothing);
+    expect(await f.list(tester), isEmpty);
+  });
+
+  testWidgets(
+    '« C\'est bon ✓ » : « Je cherche tes serveurs… », plus « En attente »',
+    (tester) async {
+      final tv = FakePlexTv()..resources = [homeResource];
+      tv.pms.delay = {homeLocal: const Duration(seconds: 3)};
+      await pumpWithPlex(tester, tv);
+      await openCode(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text("C'est bon ✓"), findsOneWidget);
+      expect(find.text('Je cherche tes serveurs…'), findsOneWidget);
+      expect(find.text('En attente de Plex…'), findsNothing);
+      expect(find.text('Le code marche 15 minutes.'), findsNothing);
+      // the server answers late (identity, then its libraries): saved, the screen closes
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 4));
+        await settle(tester);
+      }
+      await tester.pump(const Duration(milliseconds: 600));
+      await settle(tester);
+      expect(find.byType(PlexLinkScreen), findsNothing);
+    },
+  );
 }

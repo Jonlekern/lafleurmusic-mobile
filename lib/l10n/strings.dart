@@ -369,6 +369,16 @@ class Strings {
     "Ce serveur n'est plus sur ce compte Plex.",
     'This server is no longer on this Plex account.',
   );
+  String get plexSearching =>
+      _t('Je cherche tes serveurs…', 'Looking for your servers…');
+  String get plexNoAddress => _t(
+    'Ce serveur ne donne aucune adresse.',
+    'This server gives no address.',
+  );
+  String get plexOtherAccount => _t(
+    "Ce code vient d'un autre compte Plex. Rien n'a changé.",
+    'This code comes from another Plex account. Nothing changed.',
+  );
   String get plexRelink => _t('À reconnecter', 'Sign in again');
   String get plexKeptStillPlays => _t(
     'Ta musique gardée sur le téléphone reste là et continue de jouer.',

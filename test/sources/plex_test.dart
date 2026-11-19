@@ -22,15 +22,17 @@ PlexSource plexSource(
   FakeSecretStore? secrets,
   String? token = 'server-token-home',
   Map<String, String> headers = const {},
+  PlexServer? server,
+  FakePlexTv? tv,
 }) {
   final s = secrets ?? FakeSecretStore();
   if (token != null) s.data[PlexSource.tokenKey('acc1')] = token;
   return PlexSource(
     accountId: 'acc1',
-    server: home,
+    server: server ?? home,
     clientId: 'client-abc',
     headers: headers,
-    client: pms.client(),
+    client: tv?.client() ?? pms.client(),
     secrets: s,
     deviceName: 'iPhone',
     platform: 'iOS',
@@ -86,6 +88,98 @@ void main() {
       pms.down = {};
       expect(await s.test(), TestResult.ok);
       expect(s.base?.host, homeLocal);
+    });
+  });
+
+  group('stale addresses: the list is read again from plex.tv', () {
+    // the list saved before the public IP changed: the old remote address is gone
+    const oldRemote = '198-51-100-99.hash.plex.direct';
+    final stale = PlexServer.fromResource(
+      resourceJson(
+        homeResource
+            .replaceAll(homeRemote, oldRemote)
+            .replaceAll(homeRelay, 'old-relay.plex.direct'),
+      ),
+    )!;
+
+    FakeSecretStore withAccountToken() =>
+        FakeSecretStore()
+          ..data[PlexSource.accountTokenKey('acc1')] = 'user-token-1';
+
+    test(
+      'away, old remote silent: the refreshed list works and is saved',
+      () async {
+        final tv = FakePlexTv();
+        tv.pms.down = {homeLocal};
+        final secrets = withAccountToken();
+        final s = plexSource(tv.pms, secrets: secrets, server: stale, tv: tv);
+        expect(await s.test(), TestResult.ok);
+        expect(s.base?.host, homeRemote);
+        final saved = PlexServer.fromJson(
+          jsonDecode(secrets.data[PlexSource.serverKey('acc1')]!),
+        );
+        expect([
+          for (final c in saved.connections) c.uri.host,
+        ], contains(homeRemote));
+        expect(saved.machineId, 'mach-home');
+        expect(jsonEncode(saved.toJson()), isNot(contains('token')));
+        // the plex.tv token goes to plex.tv only, never to the media server
+        for (final r in tv.pms.log) {
+          expect(r.headers.values, isNot(contains('user-token-1')));
+        }
+        expect(
+          tv.log.where((r) => r.url.path == '/api/v2/resources'),
+          hasLength(1),
+        );
+        // next check: the new list straight away, plex.tv not asked again
+        expect(await s.test(), TestResult.ok);
+        expect(
+          tv.log.where((r) => r.url.path == '/api/v2/resources'),
+          hasLength(1),
+        );
+      },
+    );
+
+    test(
+      'plex.tv unreachable: stays unreachable, no crash, nothing saved',
+      () async {
+        final tv = FakePlexTv()..down = true;
+        tv.pms.down = {homeLocal};
+        final secrets = withAccountToken();
+        final s = plexSource(tv.pms, secrets: secrets, server: stale, tv: tv);
+        expect(await s.test(), TestResult.unreachable);
+        expect(secrets.data.containsKey(PlexSource.serverKey('acc1')), isFalse);
+        await expectLater(s.prepare(), throwsA(isA<PlexException>()));
+      },
+    );
+
+    test('an address that answers: plex.tv is not asked', () async {
+      final tv = FakePlexTv();
+      final s = plexSource(
+        tv.pms,
+        secrets: withAccountToken(),
+        server: stale,
+        tv: tv,
+      );
+      expect(await s.test(), TestResult.ok);
+      expect(tv.log, isEmpty);
+    });
+
+    test('same list from plex.tv (server off): nothing rewritten', () async {
+      final tv = FakePlexTv();
+      tv.pms.down = {homeLocal, homeRemote, homeRelay};
+      final secrets = withAccountToken();
+      final s = plexSource(tv.pms, secrets: secrets, tv: tv);
+      expect(await s.test(), TestResult.unreachable);
+      expect(secrets.data.containsKey(PlexSource.serverKey('acc1')), isFalse);
+    });
+
+    test('no plex.tv token kept: no refresh, unreachable', () async {
+      final tv = FakePlexTv();
+      tv.pms.down = {homeLocal};
+      final s = plexSource(tv.pms, server: stale, tv: tv);
+      expect(await s.test(), TestResult.unreachable);
+      expect(tv.log, isEmpty);
     });
   });
 
@@ -173,7 +267,11 @@ void main() {
           server: home,
           token: 'server-token-home',
           base: Uri.parse('https://$homeLocal:32400'),
+          accountToken: 'user-token-1',
+          plexUser: 'user-uuid-1',
         );
+        expect(secrets.data[PlexSource.accountTokenKey(a.id)], 'user-token-1');
+        expect(await accounts.plexUser(a.id), 'user-uuid-1');
         expect(a.type, AccountType.plex);
         expect(a.base.host, homeLocal);
         expect(secrets.data[PlexSource.tokenKey(a.id)], 'server-token-home');
@@ -202,7 +300,9 @@ void main() {
         server: home,
         token: 'server-token-home',
         base: Uri.parse('https://$homeRemote:32400'),
+        accountToken: 'user-token-2',
       );
+      expect(secrets.data[PlexSource.accountTokenKey(a.id)], 'user-token-2');
       final list = await accounts.watch().first;
       expect(list.single.id, a.id);
       expect(list.single.name, 'Plex maison');

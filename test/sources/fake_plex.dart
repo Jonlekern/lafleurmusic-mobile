@@ -112,6 +112,13 @@ class FakePlexTv {
   /// The next polls fail with a network error.
   int failPolls = 0;
   String userToken = 'user-token-1';
+
+  /// Who owns [userToken] on plex.tv (`GET /api/v2/user`).
+  String userUuid = 'user-uuid-1';
+  int userStatus = 200;
+
+  /// plex.tv does not answer at all.
+  bool down = false;
   List<String> resources = [homeResource, officeResource, playerResource];
   int _polls = 0;
   int pinsMade = 0;
@@ -122,6 +129,7 @@ class FakePlexTv {
   Future<http.Response> handle(http.Request r) async {
     if (r.url.host != 'plex.tv') return pms.handle(r);
     log.add(r);
+    if (down) throw const SocketException('plex.tv down');
     final path = r.url.path;
     if (r.method == 'POST' && path == '/api/v2/pins') {
       if (pinStatus >= 300) return http.Response('', pinStatus);
@@ -146,6 +154,15 @@ class FakePlexTv {
       final token = v != null && _polls >= v ? '"$userToken"' : 'null';
       return jsonResponse(
         '{"id":${path.split('/').last},"code":"K7QX","authToken":$token}',
+      );
+    }
+    if (r.method == 'GET' && path == '/api/v2/user') {
+      if (userStatus != 200) return http.Response('', userStatus);
+      if (r.headers['X-Plex-Token'] != userToken) {
+        return http.Response('', 401);
+      }
+      return jsonResponse(
+        '{"id":42,"uuid":"$userUuid","username":"max","title":"max"}',
       );
     }
     if (r.method == 'GET' && path == '/api/v2/resources') {

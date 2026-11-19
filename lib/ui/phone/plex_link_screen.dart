@@ -56,6 +56,7 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
   PinWait? _wait;
   String? _error;
   String? _token; // jeton du compte plex.tv : jamais affiché ni journalisé
+  String? _user; // qui est ce compte sur plex.tv (uuid)
   List<(PlexServer, PlexProbe)> _servers = const [];
   int _chosen = 0;
   bool _started = false;
@@ -147,6 +148,7 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
     setState(() => _step = _Step.finding);
     final List<PlexServer> servers;
     try {
+      _user = await link.user(token);
       servers = await link.servers(token);
     } on Object {
       _fail(s.plexTvUnreachable);
@@ -155,6 +157,18 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
     if (!mounted) return;
     final relink = widget.relink;
     if (relink != null) {
+      // un code d'un autre compte Plex ne remplace rien
+      String? before;
+      try {
+        before = await app.accounts?.plexUser(relink.id);
+      } on Object {
+        before = null;
+      }
+      if (!mounted) return;
+      if (before != null && before != _user) {
+        _fail(s.plexOtherAccount);
+        return;
+      }
       // le même serveur, sinon ses morceaux ne seraient plus les mêmes
       PlexServer? same;
       try {
@@ -204,8 +218,12 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
     final base =
         probe.connection?.uri ??
         orderConnections(server.connections).firstOrNull?.uri;
-    if (service == null || userToken == null || base == null) {
-      _fail(s.plexNoServer);
+    if (base == null) {
+      _fail(s.plexNoAddress);
+      return;
+    }
+    if (service == null || userToken == null) {
+      _fail(s.saveFailed);
       return;
     }
     setState(() => _step = _Step.saving);
@@ -219,6 +237,8 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
           server: server,
           token: token,
           base: base,
+          accountToken: userToken,
+          plexUser: _user,
         );
       } else {
         await service.addPlex(
@@ -228,6 +248,8 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
           server: server,
           token: token,
           base: base,
+          accountToken: userToken,
+          plexUser: _user,
         );
       }
     } on Object {
@@ -348,7 +370,7 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                s.plexWaiting,
+                found ? s.plexSearching : s.plexWaiting,
                 style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 14),
               ),
             ],

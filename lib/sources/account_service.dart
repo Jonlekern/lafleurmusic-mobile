@@ -473,12 +473,16 @@ class AccountService extends ChangeNotifier {
     required PlexServer server,
     required String token,
     required Uri base,
+    String? accountToken,
+    String? plexUser,
   }) async {
     final a = await accounts.addPlex(
       name: name,
       server: server,
       token: token,
       base: base,
+      accountToken: accountToken,
+      plexUser: plexUser,
     );
     unawaited(_syncAfterSave(a.id));
     return a;
@@ -491,8 +495,17 @@ class AccountService extends ChangeNotifier {
     required PlexServer server,
     required String token,
     required Uri base,
+    String? accountToken,
+    String? plexUser,
   }) async {
-    await accounts.relinkPlex(id, server: server, token: token, base: base);
+    await accounts.relinkPlex(
+      id,
+      server: server,
+      token: token,
+      base: base,
+      accountToken: accountToken,
+      plexUser: plexUser,
+    );
     resolver?.invalidate(id);
     _bump(id);
     _results.remove(id);

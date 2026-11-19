@@ -49,6 +49,8 @@ class Accounts {
   static List<String> _plexKeys(String id) => [
     PlexSource.tokenKey(id),
     PlexSource.serverKey(id),
+    PlexSource.accountTokenKey(id),
+    PlexSource.userKey(id),
   ];
 
   /// `X-Plex-Client-Identifier`: one per install, kept when accounts go.
@@ -119,11 +121,15 @@ class Accounts {
 
   /// A Plex account found by a code: [token] and [server] (its addresses) in the store; the
   /// row's address is [base], the best one when it was added (shown in the list).
+  /// [accountToken]: the plex.tv token (reads the addresses again when they go stale);
+  /// [plexUser]: who the account is on plex.tv (a later new code must be the same).
   Future<Account> addPlex({
     required String name,
     required PlexServer server,
     required String token,
     required Uri base,
+    String? accountToken,
+    String? plexUser,
   }) => add(
     type: AccountType.plex,
     name: name,
@@ -133,6 +139,8 @@ class Accounts {
     moreSecrets: (id) => {
       PlexSource.tokenKey(id): token,
       PlexSource.serverKey(id): jsonEncode(server.toJson()),
+      PlexSource.accountTokenKey(id): ?accountToken,
+      PlexSource.userKey(id): ?plexUser,
     },
   );
 
@@ -142,6 +150,8 @@ class Accounts {
     required PlexServer server,
     required String token,
     required Uri base,
+    String? accountToken,
+    String? plexUser,
   }) async {
     final row = await (_db.select(
       _db.accountRows,
@@ -151,6 +161,12 @@ class Accounts {
     }
     await _secrets.write(PlexSource.tokenKey(id), token);
     await _secrets.write(PlexSource.serverKey(id), jsonEncode(server.toJson()));
+    if (accountToken != null) {
+      await _secrets.write(PlexSource.accountTokenKey(id), accountToken);
+    }
+    if (plexUser != null) {
+      await _secrets.write(PlexSource.userKey(id), plexUser);
+    }
     await (_db.update(_db.accountRows)..where((t) => t.id.equals(id))).write(
       AccountRowsCompanion(base: Value(base.toString())),
     );
@@ -161,6 +177,9 @@ class Accounts {
     final j = await _secrets.read(PlexSource.serverKey(id));
     return j == null ? null : PlexServer.fromJson(jsonDecode(j));
   }
+
+  /// Who account [id] is on plex.tv (its `uuid`), or null when not known.
+  Future<String?> plexUser(String id) => _secrets.read(PlexSource.userKey(id));
 
   /// This install's `X-Plex-Client-Identifier`, made on first use.
   Future<String> plexClientId() async {

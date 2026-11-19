@@ -221,6 +221,17 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     }
   }
 
+  /// Plex, modification : « Nouveau code » remplace le jeton sur place (même compte).
+  Future<void> _plexRelink() async {
+    if (_locked) return;
+    final ok = await Navigator.of(context).push<bool>(
+      CupertinoPageRoute(
+        builder: (_) => PlexLinkScreen(relink: widget.editing),
+      ),
+    );
+    if (ok == true && mounted) Navigator.of(context).maybePop();
+  }
+
   /// Plex, modification : seul le nom change (le jeton et les adresses viennent du code).
   Future<void> _savePlexName() async {
     if (_locked) return;
@@ -290,6 +301,15 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
               onPressed: _locked ? null : _savePlexName,
             ),
           ],
+        ),
+        // le même compte Plex, un jeton neuf (comme « Nouveau code » de la liste)
+        Padding(
+          padding: const EdgeInsets.only(top: 22),
+          child: BigButton(
+            label: s.plexNewCode,
+            outline: true,
+            onTap: _locked ? null : _plexRelink,
+          ),
         ),
       ],
     ];

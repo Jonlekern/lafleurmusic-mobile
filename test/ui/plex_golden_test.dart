@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/sources/accounts.dart';
 import 'package:lafleurmusic/sources/plex.dart';
 import 'package:lafleurmusic/sources/plex_link.dart';
 import 'package:lafleurmusic/sources/source.dart';
@@ -111,6 +112,96 @@ void main() {
     await expectLater(
       find.byType(AccountsScreen),
       matchesGoldenFile('goldens/phone-14d.png'),
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  // états hors maquette, montrés à Johnny pour accord (correction 1)
+  testWidgets('14 E code expiré', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await precacheLogo(tester);
+    await pumpWithPlex(
+      tester,
+      FakePlexTv()
+        ..validateAfter = null
+        ..expiresIn = 60,
+      home: () => const PlexLinkScreen(),
+    );
+    await tester.pump(const Duration(seconds: 61));
+    await settle(tester);
+    await expectLater(
+      find.byType(PlexLinkScreen),
+      matchesGoldenFile('goldens/phone-14e.png'),
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('14 F plex.tv ne répond pas', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await precacheLogo(tester);
+    await pumpWithPlex(
+      tester,
+      FakePlexTv()..down = true,
+      home: () => const PlexLinkScreen(),
+    );
+    await settle(tester);
+    await expectLater(
+      find.byType(PlexLinkScreen),
+      matchesGoldenFile('goldens/phone-14f.png'),
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('14 G C\'est bon ✓, je cherche tes serveurs', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await precacheLogo(tester);
+    final tv = FakePlexTv()..resources = [homeResource];
+    tv.pms.delay = {homeLocal: const Duration(seconds: 3)};
+    await pumpWithPlex(tester, tv, home: () => const PlexLinkScreen());
+    await tester.pump(const Duration(milliseconds: 300));
+    await expectLater(
+      find.byType(PlexLinkScreen),
+      matchesGoldenFile('goldens/phone-14g.png'),
+    );
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(seconds: 4));
+      await settle(tester);
+    }
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('14 H un serveur ne répond pas', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await precacheLogo(tester);
+    final tv = FakePlexTv();
+    tv.pms.down = {officeRemote};
+    await pumpWithPlex(tester, tv, home: () => const PlexLinkScreen());
+    await settle(tester);
+    await expectLater(
+      find.byType(PlexLinkScreen),
+      matchesGoldenFile('goldens/phone-14h.png'),
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('14 I fiche du compte Plex', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await precacheLogo(tester);
+    late Account acc;
+    await pumpWithPlex(
+      tester,
+      FakePlexTv(),
+      seed: plexSeed,
+      results: (l) {
+        acc = l.single;
+        return const {};
+      },
+      home: () => AccountFormScreen(editing: acc),
+    );
+    await settle(tester);
+    await expectLater(
+      find.byType(AccountFormScreen),
+      matchesGoldenFile('goldens/phone-14i.png'),
     );
     debugDefaultTargetPlatformOverride = null;
   });

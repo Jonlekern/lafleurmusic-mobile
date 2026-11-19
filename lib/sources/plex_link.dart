@@ -206,8 +206,8 @@ Uri _join(Uri base, String path, [Map<String, String>? query]) => base.replace(
 Uri plexUrl(Uri base, String path, [Map<String, String>? query]) =>
     _join(base, path, query);
 
-/// How long one address may take to answer `/identity`.
-const plexProbeTimeout = Duration(seconds: 5);
+/// How long one address may take to answer `/identity` (the app's connection rule).
+const plexProbeTimeout = connectTimeout;
 
 /// The best address of [server] that answers as that server: local first, then remote, then
 /// relay. All are tried at once; the first in that order that answers wins. Null: none.
@@ -407,6 +407,32 @@ class PlexLink {
 
   /// `GET https://plex.tv/api/v2/pins/{id}` every [pollEvery] until the code is typed or expires.
   PinWait poll(PlexPin pin) => PinWait._(this, pin);
+
+  /// `GET https://plex.tv/api/v2/user`: who [token] belongs to (its `uuid`). A new code for
+  /// an account must come from the same Plex account.
+  Future<String> user(String token) async {
+    final res = await _send(
+      'GET',
+      plexTv.replace(path: '/api/v2/user'),
+      _headers(token),
+    );
+    if (res.statusCode == 401) {
+      throw PlexException(
+        'plex.tv refused the token',
+        statusCode: 401,
+        tokenRefused: true,
+      );
+    }
+    if (res.statusCode != 200) {
+      throw PlexException('user refused', statusCode: res.statusCode);
+    }
+    final d = _json(res);
+    final uuid = d is Map ? d['uuid'] : null;
+    if (uuid is String && uuid.isNotEmpty) return uuid;
+    final id = d is Map ? d['id'] : null;
+    if (id is int) return '$id';
+    throw PlexException('not a plex.tv user answer');
+  }
 
   /// `GET https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1`: the servers only.
   Future<List<PlexServer>> servers(String token) async {

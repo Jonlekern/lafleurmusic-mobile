@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
@@ -37,12 +38,19 @@ class PlexSource
   /// The server's id, name and addresses (JSON of [PlexServer.toJson], no token).
   static String serverKey(String id) => 'account.$id.plex.server';
 
+  /// The plex.tv account token: only to read the server's addresses again from plex.tv when
+  /// none of the saved ones answers. Never sent to the media server.
+  static String accountTokenKey(String id) => 'account.$id.plex.accountToken';
+
+  /// Who the account is on plex.tv (`uuid`): a new code must come from the same one.
+  static String userKey(String id) => 'account.$id.plex.user';
+
   @override
   final String accountId;
   final String clientId;
   final SecretStore? secrets;
   final Duration timeout, probeTimeout;
-  final PlexServer _server;
+  PlexServer _server;
   final Map<String, String> _custom;
   final http.Client _client;
   final String _deviceName, _platform;
@@ -83,13 +91,75 @@ class PlexSource
 
   /// Tries every address again, best first; keeps the one that answers (or none).
   Future<Uri?> _pick() async {
-    final c = await bestConnection(
+    var c = await bestConnection(
       _client,
       _server,
       headers: _headersWith(null),
       timeout: probeTimeout,
     );
+    // none answers: the addresses may be stale (a new public IP); plex.tv knows the new ones
+    if (c == null && await _refreshConnections()) {
+      c = await bestConnection(
+        _client,
+        _server,
+        headers: _headersWith(null),
+        timeout: probeTimeout,
+      );
+    }
     return _base = c?.uri;
+  }
+
+  static bool _sameConnections(List<PlexConnection> a, List<PlexConnection> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].uri != b[i].uri ||
+          a[i].local != b[i].local ||
+          a[i].relay != b[i].relay) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Reads this server's addresses from plex.tv (`/api/v2/resources`, with the plex.tv
+  /// token, which goes to plex.tv only). True when the list changed (then saved). Any
+  /// failure (no token kept, plex.tv down, server gone) is false: the account stays absent.
+  Future<bool> _refreshConnections() async {
+    try {
+      final accountToken = await secrets?.read(accountTokenKey(accountId));
+      if (accountToken == null || accountToken.isEmpty) return false;
+      final link = PlexLink(
+        clientId: clientId,
+        client: _client, // shared: never closed here
+        deviceName: _deviceName,
+        platform: _platform,
+        timeout: timeout,
+      );
+      final fresh = (await link.servers(accountToken))
+          .where((s) => s.machineId == _server.machineId)
+          .firstOrNull;
+      if (fresh == null ||
+          fresh.connections.isEmpty ||
+          _sameConnections(fresh.connections, _server.connections)) {
+        return false;
+      }
+      _server = PlexServer(
+        machineId: _server.machineId,
+        name: fresh.name.isNotEmpty ? fresh.name : _server.name,
+        connections: fresh.connections,
+      );
+      try {
+        await secrets?.write(
+          serverKey(accountId),
+          jsonEncode(_server.toJson()),
+        );
+      } on Object {
+        // kept in memory; the next refresh writes it again
+      }
+      return true;
+    } on Object {
+      return false;
+    }
   }
 
   Future<http.Response> _send(http.Request req) async {

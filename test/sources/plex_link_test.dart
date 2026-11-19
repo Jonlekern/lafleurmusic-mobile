@@ -250,6 +250,30 @@ void main() {
     });
   });
 
+  group('plex.tv user', () {
+    test('GET https://plex.tv/api/v2/user: the account uuid', () async {
+      final tv = FakePlexTv();
+      expect(await tv.link().user('user-token-1'), 'user-uuid-1');
+      final r = tv.log.single;
+      expect(r.url.toString(), 'https://plex.tv/api/v2/user');
+      expect(r.headers['X-Plex-Token'], 'user-token-1');
+    });
+
+    test('refused: PlexException without the token', () async {
+      final tv = FakePlexTv()..userStatus = 401;
+      final e = await tv
+          .link()
+          .user('user-token-1')
+          .then<Object?>((_) => null, onError: (Object e) => e);
+      expect(e, isA<PlexException>());
+      expect('$e', isNot(contains('user-token-1')));
+    });
+  });
+
+  test('the address probe waits 8 s (plan rule)', () {
+    expect(plexProbeTimeout, const Duration(seconds: 8));
+  });
+
   group('Focus 2: best address (GET /identity)', () {
     final server = PlexServer.fromResource(jsonDecode(homeResource) as Map)!;
 
