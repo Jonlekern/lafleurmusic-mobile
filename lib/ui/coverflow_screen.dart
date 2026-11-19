@@ -155,12 +155,12 @@ class _CoverflowScreenState extends State<CoverflowScreen>
     final s = AppScope.of(context).strings;
     final size = MediaQuery.sizeOf(context);
     final cover = widget.phone
-        ? size.height * 0.40
+        ? size.height * 0.38
         : (size.height * 0.44).clamp(180.0, 400.0);
     final k = cover / 400;
     final album = _count == 0 ? null : widget.albums[_current];
     return Focus(
-      autofocus: true,
+      autofocus: !widget.phone, // sur le téléphone, ne pas prendre le clavier (champ de recherche dessous)
       onKeyEvent: _onKey,
       child: Scaffold(
         body: Listener(
@@ -313,10 +313,10 @@ class _CoverflowScreenState extends State<CoverflowScreen>
             child: Image.asset('assets/logo-texte-grand.png', height: 16),
           ),
         ),
-        _stage(size, cover, k, h * 0.13 + pad.top),
+        _stage(size, cover, k, h * 0.12 + pad.top),
         if (album != null)
           Positioned(
-            bottom: h * 0.06 + pad.bottom,
+            bottom: h * 0.04 + pad.bottom,
             left: 0,
             right: 0,
             child: Column(
@@ -380,7 +380,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
           ),
         Positioned(
           right: 20 + pad.right,
-          bottom: h * 0.06 + pad.bottom,
+          bottom: h * 0.04 + pad.bottom,
           width: 150,
           child: Text(
             s.coverFlowHelpPhone,
@@ -390,6 +390,14 @@ class _CoverflowScreenState extends State<CoverflowScreen>
         ),
       ],
     );
+  }
+
+  /// Téléphone (maquette 2, écran 5) : les voisines plus loin du centre, et les suivantes bien espacées
+  /// (l'éventail de trois pochettes de chaque côté ne s'entasse pas).
+  double _dx(CoverSlot slot) {
+    if (!widget.phone) return slot.dx;
+    final a = slot.dx.abs();
+    return slot.dx.sign * (a <= 270 ? a * 1.35 : 270 * 1.35 + (a - 270) * 1.9);
   }
 
   Widget _cover(int i, double size, double k) {
@@ -405,15 +413,10 @@ class _CoverflowScreenState extends State<CoverflowScreen>
       alignment: Alignment.topCenter,
       origin: Offset(0, size / 2), // pivote autour du milieu de la pochette
       // décalage à plat, puis réduction (côtés plus petits que le centre, maquette 3), puis inclinaison en perspective
-      transform:
-          Matrix4.translationValues(
-              slot.dx * k * (widget.phone ? 1.35 : 1),
-              0,
-              0,
-            )
-            ..multiply(Matrix4.diagonal3Values(slot.scale, slot.scale, 1))
-            ..multiply(Matrix4.identity()..setEntry(3, 2, 0.0006))
-            ..rotateY(slot.angle),
+      transform: Matrix4.translationValues(_dx(slot) * k, 0, 0)
+        ..multiply(Matrix4.diagonal3Values(slot.scale, slot.scale, 1))
+        ..multiply(Matrix4.identity()..setEntry(3, 2, 0.0006))
+        ..rotateY(slot.angle),
       child: GestureDetector(
         onTap: () => i == _current ? _play() : _goTo(i.toDouble()),
         child: ColorFiltered(
@@ -448,7 +451,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
               ClipRect(
                 child: Align(
                   alignment: Alignment.topCenter,
-                  heightFactor: widget.phone ? 0.25 : 0.42,
+                  heightFactor: widget.phone ? 0.2 : 0.42,
                   child: ShaderMask(
                     shaderCallback: (r) => const LinearGradient(
                       begin: Alignment.topCenter,

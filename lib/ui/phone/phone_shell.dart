@@ -72,7 +72,7 @@ class _PhoneShellState extends State<PhoneShell> {
   static bool get _mobile => isMobilePlatform(defaultTargetPlatform);
 
   void _routesChanged() {
-    final top = _routes.top?.settings;
+    final top = _routes.topNamed;
     final key = top?.name == 'album' ? top?.arguments : null;
     if (key is String) _lastAlbumKey = key;
     if (_suppressFlow && _routes.depth < _suppressDepth) _suppressFlow = false;
@@ -122,11 +122,6 @@ class _PhoneShellState extends State<PhoneShell> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final app = AppScope.of(context);
-    if (_mobile) {
-      _albumsSub ??= app.library.albums().listen((a) {
-        if (mounted) setState(() => _albums = a);
-      });
-    }
     // même message que sur le Mac quand un morceau illisible est passé
     _skipped ??= app.player.skipped.listen((path) {
       if (!mounted) return;
@@ -170,8 +165,25 @@ class _PhoneShellState extends State<PhoneShell> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final landscape = _mobile && size.width > size.height;
+    // les albums ne sont suivis qu'à partir du premier passage couché
+    if (landscape) {
+      _albumsSub ??= AppScope.of(context).library.albums().listen((a) {
+        if (mounted) setState(() => _albums = a);
+      });
+    }
+    if (!landscape) _suppressFlow = false;
+    final onNow = _routes.topNamed?.name == 'now';
+    final flow = landscape && !onNow && !_suppressFlow && _albums.isNotEmpty;
     final nav = NavigatorPopHandler<Object?>(
-      onPopWithResult: (_) => _nav.currentState?.maybePop(),
+      // le Cover Flow est posé sur les écrans cachés : retour ne doit pas les défaire sans qu'on le voie
+      // (au pied de la pile, retour quitte l'appli comme d'habitude)
+      enabled: !flow,
+      onPopWithResult: (_) {
+        // (le Cover Flow couvre les écrans : on ne les défait pas sans qu'on le voie)
+        if (!flow) _nav.currentState?.maybePop();
+      },
       child: Navigator(
         key: _nav,
         observers: [_routes],
@@ -179,29 +191,27 @@ class _PhoneShellState extends State<PhoneShell> {
             CupertinoPageRoute<void>(builder: (_) => const _Start()),
       ),
     );
-    if (!_mobile) return nav;
-    final size = MediaQuery.sizeOf(context);
-    final landscape = size.width > size.height;
-    if (!landscape) _suppressFlow = false;
-    final onNow = _routes.top?.settings.name == 'now';
-    if (!landscape || onNow || _suppressFlow || _albums.isEmpty) return nav;
     final app = AppScope.of(context);
     final now = app.player.current.track;
     final key = now != null ? albumKeyOf(now) : _lastAlbumKey;
     final i = _albums.indexWhere((a) => a.key == key);
     // le Cover Flow se pose sur l'écran ; dessous, le navigateur reste où il était
-    return Stack(
-      children: [
-        Positioned.fill(child: nav),
-        Positioned.fill(
-          child: CoverflowScreen(
-            phone: true,
-            albums: _albums,
-            initial: i < 0 ? 0 : i,
-            onOpen: _openFromFlow,
-          ),
-        ),
-      ],
+    return PopScope(
+      canPop: !flow || _routes.depth <= 1,
+      child: Stack(
+        children: [
+          Positioned.fill(child: nav),
+          if (flow)
+            Positioned.fill(
+              child: CoverflowScreen(
+                phone: true,
+                albums: _albums,
+                initial: i < 0 ? 0 : i,
+                onOpen: _openFromFlow,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -214,37 +224,45 @@ const mobileOrientations = [
 ];
 const uprightOnly = [DeviceOrientation.portraitUp];
 
-/// Suit les écrans empilés : celui du dessus et leur nombre.
+/// Suit les écrans empilés : leur nombre, et le premier écran nommé en partant du dessus (les feuilles et
+/// boîtes de dialogue n'ont pas de nom : En cours reste En cours dessous).
 class _RouteWatcher extends NavigatorObserver {
   _RouteWatcher(this._changed);
   final VoidCallback _changed;
-  Route<dynamic>? top;
-  int depth = 0;
+  final _stack = <Route<dynamic>>[];
+
+  int get depth => _stack.length;
+  RouteSettings? get topNamed => _stack.reversed
+      .map((r) => r.settings)
+      .where((r) => r.name != null)
+      .firstOrNull;
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    top = route;
-    depth++;
+    _stack.add(route);
     _changed();
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    top = previousRoute;
-    depth--;
+    _stack.remove(route);
     _changed();
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    top = newRoute;
+    final i = oldRoute == null ? -1 : _stack.indexOf(oldRoute);
+    if (i >= 0 && newRoute != null) {
+      _stack[i] = newRoute;
+    } else if (newRoute != null) {
+      _stack.add(newRoute);
+    }
     _changed();
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    depth--;
-    if (route == top) top = previousRoute;
+    _stack.remove(route);
     _changed();
   }
 }

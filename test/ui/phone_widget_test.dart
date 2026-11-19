@@ -455,6 +455,99 @@ void main() {
     );
 
     testWidgets(
+      'retour d’Android sous le Cover Flow ne défait pas les écrans cachés',
+      (tester) async {
+        await pumpPhone(tester);
+        await openStudio(tester);
+        await turn(tester, landscape: true);
+        expect(find.byType(CoverflowScreen), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.byType(CoverflowScreen), findsOneWidget);
+        await turn(tester, landscape: false);
+        expect(
+          find.byType(AlbumScreen),
+          findsOneWidget,
+        ); // l'album est toujours là
+        await tester.binding
+            .handlePopRoute(); // debout : retour fonctionne comme avant
+        await tester.pumpAndSettle();
+        expect(find.byType(AlbumScreen), findsNothing);
+        expect(find.byType(HomeScreen), findsOneWidget);
+      },
+    );
+
+    testWidgets('le Cover Flow ne prend pas le focus d’un champ de recherche', (
+      tester,
+    ) async {
+      await pumpPhone(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      bool onField() =>
+          FocusManager.instance.primaryFocus?.context
+              ?.findAncestorWidgetOfExactType<EditableText>() !=
+          null;
+      expect(onField(), isTrue);
+      await turn(tester, landscape: true);
+      expect(find.byType(CoverflowScreen), findsOneWidget);
+      expect(onField(), isTrue);
+      await turn(tester, landscape: false);
+      expect(onField(), isTrue);
+    });
+
+    testWidgets(
+      'En cours avec une boîte de dialogue : couché, rien ne bascule',
+      (tester) async {
+        final orientations = <Object?>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'SystemChrome.setPreferredOrientations') {
+              orientations.add(call.arguments);
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        await pumpPhone(tester);
+        await tester.tap(find.byType(MiniPlayer));
+        await tester.pumpAndSettle();
+        final calls = orientations.length;
+        showDialog<void>(
+          context: tester.element(find.byType(NowScreen)),
+          builder: (_) => const AlertDialog(title: Text('Menu')),
+        );
+        await tester.pumpAndSettle();
+        await turn(tester, landscape: true);
+        expect(find.text('Menu'), findsOneWidget);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        expect(orientations.length, calls); // le verrou debout n'a pas été levé
+      },
+    );
+
+    testWidgets(
+      'une feuille ouverte sur l’Accueil pendant la rotation : retrouvée',
+      (tester) async {
+        await pumpPhone(tester);
+        showModalBottomSheet<void>(
+          context: tester.element(find.byType(HomeScreen)),
+          builder: (_) => const Text('Feuille'),
+        );
+        await tester.pumpAndSettle();
+        await turn(tester, landscape: true);
+        expect(find.byType(CoverflowScreen), findsOneWidget);
+        await turn(tester, landscape: false);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        expect(find.text('Feuille'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'sur Mac, fenêtre large et basse : pas de Cover Flow du téléphone',
       (tester) async {
         debugDefaultTargetPlatformOverride = TargetPlatform.macOS;

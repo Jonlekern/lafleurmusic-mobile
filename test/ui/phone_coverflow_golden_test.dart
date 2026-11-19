@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/ui/coverflow_screen.dart';
 
 import 'package:lafleurmusic/demo/demo_library.dart';
@@ -14,6 +15,21 @@ import 'package:lafleurmusic/demo/demo_offline.dart';
 import 'fonts.dart';
 import 'keep_fixture.dart';
 import 'phone_fixture.dart';
+
+Track _album(String name) => Track(
+  path: 'subsonic://demo/$name/1',
+  folderId: 0,
+  accountId: 'demo',
+  remoteId: '$name/1',
+  title: name,
+  artist: 'Demo',
+  album: name,
+  trackNo: 1,
+  durationMs: 200000,
+  hasCover: false,
+  mtime: 1,
+  size: 1,
+);
 
 /// Maquette 2, écran 5 : téléphone couché = Cover Flow, 844 × 390, sur un iPhone.
 void main() {
@@ -29,6 +45,9 @@ void main() {
     await pumpKeep(
       tester,
       images: true,
+      extra: [
+        for (final n in ['Palm', 'Tools']) _album(n),
+      ],
       seed: (db) async {
         await seedKeepDemo(db);
         // Studio Lafleur est gardé en entier (maquette : « ⬇ sur l'iPhone »)
