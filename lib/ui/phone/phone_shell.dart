@@ -11,6 +11,7 @@ import '../../library/merge.dart';
 import '../../library/models.dart';
 import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
+import '../classic/classic_shell.dart';
 import '../coverflow_screen.dart';
 import '../library_screen.dart';
 import '../tablet.dart';
@@ -64,19 +65,36 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
         }
       }
     }
-    return AdaptiveHome.isPhone(size)
-        ? PhoneShell(
-            debugStart: widget.debugStart,
-            debugScreens: widget.debugScreens,
-          )
-        : const LibraryScreen();
+    if (!AdaptiveHome.isPhone(size)) return const LibraryScreen();
+    // le réglage Mode Classic remplace la vue téléphone, à chaud (le lecteur ne change pas)
+    final classic = AppScope.of(context).classicMode ?? _normalMode;
+    return ValueListenableBuilder<bool>(
+      valueListenable: classic,
+      builder: (_, on, _) => on
+          ? ClassicShell(
+              debugStart: widget.debugStart,
+              debugScreens: widget.debugScreens,
+            )
+          : PhoneShell(
+              debugStart: widget.debugStart,
+              debugScreens: widget.debugScreens,
+            ),
+    );
   }
 }
 
 /// Téléphone debout (maquette 1) : les colonnes du Mac empilées. Accueil → Album / Morceaux / Artistes /
 /// Genres / Top 100 → En cours. Retour : glisser depuis le bord gauche, ou le bouton retour d'Android.
 class PhoneShell extends StatefulWidget {
-  const PhoneShell({super.key, this.debugStart, this.debugScreens});
+  const PhoneShell({
+    super.key,
+    this.debugStart,
+    this.debugScreens,
+    this.home = const HomeScreen(),
+  });
+
+  /// Le premier écran : l'Accueil, ou le menu du Mode Classic.
+  final Widget home;
 
   /// Mode démo (debug) : écran ouvert au lancement, « album » ou « now ».
   final String? debugStart;
@@ -221,7 +239,7 @@ class _PhoneShellState extends State<PhoneShell> {
         key: _nav,
         observers: [_routes],
         onGenerateRoute: (_) =>
-            CupertinoPageRoute<void>(builder: (_) => const _Start()),
+            CupertinoPageRoute<void>(builder: (_) => _Start(home: widget.home)),
       ),
     );
     final app = AppScope.of(context);
@@ -248,6 +266,9 @@ class _PhoneShellState extends State<PhoneShell> {
     );
   }
 }
+
+/// Sans réglage (tests, démo) : le mode normal.
+final _normalMode = ValueNotifier<bool>(false);
 
 /// Suit les écrans empilés : leur nombre, et le premier écran nommé en partant du dessus (les feuilles et
 /// boîtes de dialogue n'ont pas de nom : En cours reste En cours dessous).
@@ -295,7 +316,8 @@ class _RouteWatcher extends NavigatorObserver {
 /// Premier écran : l'Accueil ; sur un téléphone sans aucun compte, « Ajouter un compte » (premier lancement),
 /// remplacé par l'Accueil dès que le compte est enregistré.
 class _Start extends StatefulWidget {
-  const _Start();
+  const _Start({required this.home});
+  final Widget home;
 
   @override
   State<_Start> createState() => _StartState();
@@ -321,7 +343,7 @@ class _StartState extends State<_Start> {
   @override
   Widget build(BuildContext context) {
     final stream = _accounts;
-    if (stream == null) return const HomeScreen();
+    if (stream == null) return widget.home;
     return StreamBuilder<List<Account>>(
       stream: stream,
       builder: (_, snap) {
@@ -329,7 +351,7 @@ class _StartState extends State<_Start> {
         if (list == null) return const ColoredBox(color: LafleurColors.bg);
         return list.isEmpty
             ? const AccountFormScreen(first: true)
-            : const HomeScreen();
+            : widget.home;
       },
     );
   }

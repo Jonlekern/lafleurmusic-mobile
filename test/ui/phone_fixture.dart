@@ -63,6 +63,7 @@ Future<PhoneFixture> pumpPhone(
   WidgetTester tester, {
   bool images = false,
   Widget home = const PhoneShell(),
+  ValueNotifier<bool>? classicMode,
 }) async {
   phoneSize(tester);
   final dir = Directory.systemTemp.createTempSync('phone');
@@ -111,6 +112,7 @@ Future<PhoneFixture> pumpPhone(
       covers: ReadyCovers(files),
       strings: Strings.of(const Locale('fr')),
       equalizer: ValueNotifier(Equalizer.named('flat')),
+      classicMode: classicMode,
       settings: AppSettings(),
       saveSettings: () {},
       accounts: accounts,

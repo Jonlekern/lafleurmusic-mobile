@@ -1,0 +1,472 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/demo/demo_library.dart';
+import 'package:lafleurmusic/library/models.dart';
+import 'package:lafleurmusic/ui/classic/classic_menu.dart';
+import 'package:lafleurmusic/ui/classic/classic_shell.dart';
+import 'package:lafleurmusic/ui/classic/click_wheel.dart';
+import 'package:lafleurmusic/ui/coverflow_screen.dart';
+import 'package:lafleurmusic/ui/phone/accounts_screen.dart';
+import 'package:lafleurmusic/ui/phone/home_screen.dart';
+import 'package:lafleurmusic/ui/phone/mini_player.dart';
+import 'package:lafleurmusic/ui/phone/now_screen.dart';
+import 'package:lafleurmusic/ui/phone/phone_shell.dart';
+
+import '../fonts.dart';
+import '../phone_fixture.dart';
+
+/// La ligne choisie (rose) de la liste affichée.
+String selected(WidgetTester tester) => tester
+    .widgetList<ClassicRow>(find.byType(ClassicRow))
+    .singleWhere((r) => r.selected)
+    .label;
+
+ClickWheel wheel(WidgetTester tester) =>
+    tester.widget<ClickWheel>(find.byType(ClickWheel));
+
+/// [n] crans de molette (+ = descendre), puis une image.
+Future<void> rotate(WidgetTester tester, int n) async {
+  for (var i = 0; i < n.abs(); i++) {
+    wheel(tester).onRotate(n.sign);
+  }
+  await tester.pump();
+}
+
+/// Appuie sur une zone de la molette, au doigt.
+Future<void> press(WidgetTester tester, String zone) async {
+  final box = tester.getRect(find.byType(ClickWheel));
+  final c = box.center, r = box.width / 2;
+  final at = switch (zone) {
+    'select' => c,
+    'menu' => c + Offset(0, -r * .8),
+    'next' => c + Offset(r * .8, 0),
+    'previous' => c + Offset(-r * .8, 0),
+    'play' => c + Offset(0, r * .8),
+    _ => throw ArgumentError(zone),
+  };
+  await tester.tapAt(at);
+  await settle(tester);
+}
+
+/// Descend ou monte à la molette jusqu'à la ligne [label].
+Future<void> rotateTo(WidgetTester tester, String label) async {
+  for (var i = 0; i < 50 && selected(tester) != label; i++) {
+    await rotate(tester, 1);
+  }
+  for (var i = 0; i < 50 && selected(tester) != label; i++) {
+    await rotate(tester, -1);
+  }
+  expect(selected(tester), label);
+}
+
+Track _big(int i) => Track(
+  path: 'demo://Big/$i',
+  folderId: 1,
+  title: 'Song ${i.toString().padLeft(4, '0')}',
+  artist: 'Big',
+  album: 'Big',
+  trackNo: i + 1,
+  durationMs: 200000,
+  hasCover: false,
+  mtime: 1,
+  size: 1,
+);
+
+void main() {
+  setUpAll(loadFonts);
+
+  testWidgets('le menu, dans l\'ordre, la première ligne choisie', (
+    tester,
+  ) async {
+    await pumpPhone(tester, home: const ClassicShell());
+    expect(find.text('MUSIQUE'), findsOneWidget);
+    expect(selected(tester), 'Cover Flow');
+    // chaque cran descend d'une ligne, dans l'ordre du menu
+    final order = [selected(tester)];
+    for (var i = 0; i < 8; i++) {
+      await rotate(tester, 1);
+      order.add(selected(tester));
+    }
+    expect(order, [
+      'Cover Flow',
+      'Artistes',
+      'Albums',
+      'Morceaux',
+      'Playlists',
+      'Top 100',
+      'Sur mon téléphone', // Android dans les tests
+      'En cours',
+      'Réglages',
+    ]);
+    // maquette : pas de mini-lecteur ; le même cadre que le mode normal
+    expect(find.byType(MiniPlayer), findsNothing);
+    expect(find.byType(PhoneShell), findsOneWidget);
+  });
+
+  testWidgets('sur iPhone : « Sur mon iPhone »', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await pumpPhone(tester, home: const ClassicShell());
+    expect(find.text('Sur mon iPhone'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets(
+    'à la molette : Albums → album → morceau joué ; MENU remonte, rien à la racine',
+    (tester) async {
+      final fx = await pumpPhone(tester, home: const ClassicShell());
+      await rotate(tester, 2);
+      expect(selected(tester), 'Albums');
+      await press(tester, 'select');
+      expect(find.text('ALBUMS'), findsOneWidget);
+      expect(selected(tester), 'Lafleur Surf'); // la première
+      await rotateTo(tester, 'Studio Lafleur');
+      await press(tester, 'select');
+      expect(find.text('STUDIO LAFLEUR'), findsOneWidget);
+      expect(selected(tester), 'Ocean Drive');
+      await rotate(tester, 2);
+      expect(selected(tester), 'Golden Hour');
+      await press(tester, 'select');
+      expect(fx.player.calls, ['play']);
+      expect(
+        fx.player.lastTracks!.map((t) => t.title),
+        DemoLibrary.studio.map((t) => t.title),
+      );
+      expect(fx.player.lastIndex, 2);
+      // on reste sur la liste, comme le mode normal
+      expect(find.text('STUDIO LAFLEUR'), findsOneWidget);
+
+      await press(tester, 'menu');
+      expect(find.text('ALBUMS'), findsOneWidget);
+      expect(selected(tester), 'Studio Lafleur'); // la ligne retrouvée
+      await press(tester, 'menu');
+      expect(find.text('MUSIQUE'), findsOneWidget);
+      expect(selected(tester), 'Albums');
+      await press(tester, 'menu'); // à la racine : rien
+      expect(find.text('MUSIQUE'), findsOneWidget);
+      expect(selected(tester), 'Albums');
+      expect(fx.player.calls, ['play']);
+    },
+  );
+
+  testWidgets('tourner le doigt sur l\'anneau déplace la ligne choisie', (
+    tester,
+  ) async {
+    await pumpPhone(tester, home: const ClassicShell());
+    final box = tester.getRect(find.byType(ClickWheel));
+    final c = box.center, r = box.width / 2 * .75;
+    Offset at(double deg) =>
+        c +
+        Offset(math.cos(deg * math.pi / 180), math.sin(deg * math.pi / 180)) *
+            r;
+    // 45° dans le sens des aiguilles (3 crans), par pas de 5°
+    final g = await tester.startGesture(at(-90));
+    for (var d = -85.0; d <= -45; d += 5) {
+      await g.moveTo(at(d));
+    }
+    await g.up();
+    await tester.pump();
+    expect(selected(tester), 'Morceaux');
+    // 15° dans l'autre sens : un cran vers le haut
+    final g2 = await tester.startGesture(at(0));
+    for (var d = -5.0; d >= -15; d -= 5) {
+      await g2.moveTo(at(d));
+    }
+    await g2.up();
+    await tester.pump();
+    expect(selected(tester), 'Albums');
+  });
+
+  testWidgets(
+    'la molette ne sort pas de la liste (ni avant le début, ni après la fin)',
+    (tester) async {
+      await pumpPhone(tester, home: const ClassicShell());
+      await rotate(tester, -3);
+      expect(selected(tester), 'Cover Flow');
+      await rotate(tester, 30);
+      expect(selected(tester), 'Réglages');
+    },
+  );
+
+  testWidgets('un toucher sur une ligne la choisit et l\'ouvre', (
+    tester,
+  ) async {
+    final fx = await pumpPhone(tester, home: const ClassicShell());
+    await tester.tap(find.text('Morceaux'));
+    await settle(tester);
+    expect(find.text('MORCEAUX'), findsOneWidget);
+    await tester.tap(find.text('Heatwave'));
+    await settle(tester);
+    expect(selected(tester), 'Heatwave');
+    expect(fx.player.calls, ['play']);
+    expect(fx.player.lastTracks![fx.player.lastIndex!].title, 'Heatwave');
+  });
+
+  testWidgets(
+    'VoiceOver / TalkBack : chaque ligne est un bouton, la choisie le dit',
+    (tester) async {
+      final h = tester.ensureSemantics();
+      await pumpPhone(tester, home: const ClassicShell());
+      await rotate(tester, 2);
+      expect(
+        tester.getSemantics(find.text('Albums')),
+        isSemantics(
+          label: 'Albums',
+          isButton: true,
+          isSelected: true,
+          hasTapAction: true,
+        ),
+      );
+      expect(
+        tester.getSemantics(find.text('Morceaux')),
+        isSemantics(
+          label: 'Morceaux',
+          isButton: true,
+          isSelected: false,
+          hasTapAction: true,
+        ),
+      );
+      h.dispose();
+    },
+  );
+
+  testWidgets('Artistes → un artiste → ses morceaux', (tester) async {
+    final fx = await pumpPhone(tester, home: const ClassicShell());
+    await tester.tap(find.text('Artistes'));
+    await settle(tester);
+    expect(find.text('ARTISTES'), findsOneWidget);
+    await rotateTo(tester, 'Kavinsky');
+    await press(tester, 'select');
+    expect(find.text('KAVINSKY'), findsOneWidget);
+    expect(selected(tester), 'Night Swim');
+    await press(tester, 'select');
+    expect(fx.player.lastTracks!.single.title, 'Night Swim');
+  });
+
+  testWidgets('Top 100 vide : le texte du mode normal', (tester) async {
+    await pumpPhone(tester, home: const ClassicShell());
+    await tester.tap(find.text('Top 100'));
+    await settle(tester);
+    expect(find.text('TOP 100'), findsOneWidget);
+    expect(
+      find.text('Rien encore : écoute un peu de musique.'),
+      findsOneWidget,
+    );
+    await press(tester, 'select'); // rien à choisir : rien ne casse
+    await press(tester, 'menu');
+    expect(find.text('MUSIQUE'), findsOneWidget);
+  });
+
+  testWidgets(
+    '⏮ ⏭ ▶︎❙❙ commandent le lecteur, à la racine comme dans une liste',
+    (tester) async {
+      final fx = await pumpPhone(tester, home: const ClassicShell());
+      await press(tester, 'play');
+      await press(tester, 'next');
+      await tester.tap(find.text('Albums'));
+      await settle(tester);
+      await press(tester, 'previous');
+      expect(fx.player.calls, ['toggle', 'next', 'previous']);
+      expect(find.text('ALBUMS'), findsOneWidget); // la liste n'a pas bougé
+    },
+  );
+
+  testWidgets('En cours, Réglages, Cover Flow : les écrans du mode normal', (
+    tester,
+  ) async {
+    await pumpPhone(tester, home: const ClassicShell());
+    await rotateTo(tester, 'En cours');
+    await press(tester, 'select');
+    await tester.pumpAndSettle();
+    expect(find.byType(NowScreen), findsOneWidget);
+    Navigator.of(tester.element(find.byType(NowScreen))).pop();
+    await tester.pumpAndSettle();
+
+    await rotateTo(tester, 'Réglages');
+    await press(tester, 'select');
+    await tester.pumpAndSettle();
+    expect(find.byType(AccountsScreen), findsOneWidget);
+    Navigator.of(tester.element(find.byType(AccountsScreen))).pop();
+    await tester.pumpAndSettle();
+
+    await rotateTo(tester, 'Cover Flow');
+    await press(tester, 'select');
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CoverflowScreen), findsOneWidget);
+  });
+
+  testWidgets('Android : retour remonte d\'un niveau', (tester) async {
+    await pumpPhone(tester, home: const ClassicShell());
+    await tester.tap(find.text('Albums'));
+    await settle(tester);
+    expect(find.text('ALBUMS'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('MUSIQUE'), findsOneWidget);
+    expect(selected(tester), 'Albums');
+  });
+
+  group('point 3 : 5 000 morceaux', () {
+    testWidgets(
+      'la ligne choisie suit la molette et reste visible ; la liste ne construit que l\'écran',
+      (tester) async {
+        final fx = await pumpPhone(tester, home: const ClassicShell());
+        await tester.runAsync(
+          () => fx.db.upsertTracks([for (var i = 0; i < 5000; i++) _big(i)]),
+        );
+        await settle(tester);
+        await tester.tap(find.text('Morceaux'));
+        await settle(tester);
+        expect(find.text('MORCEAUX'), findsOneWidget);
+
+        final list = find.descendant(
+          of: find.byType(ClassicMenu),
+          matching: find.byType(ListView),
+        );
+        Rect visible() {
+          final view = tester.getRect(list);
+          final row = tester.getRect(
+            find.byWidgetPredicate((w) => w is ClassicRow && w.selected),
+          );
+          expect(row.top, greaterThanOrEqualTo(view.top - .5));
+          expect(row.bottom, lessThanOrEqualTo(view.bottom + .5));
+          // seulement les lignes à l'écran (et un peu autour), jamais les 5 013
+          expect(
+            find.byType(ClassicRow, skipOffstage: false).evaluate().length,
+            lessThan(40),
+          );
+          return row;
+        }
+
+        // la liste du mode normal (mêmes requêtes), pour savoir quelle ligne attendre
+        final all = (await tester.runAsync(
+          () => fx.db.watchAllTracks().first,
+        ))!;
+        expect(all.length, 5013);
+        // un cran, une image : 300 fois ; chaque cran choisit la ligne suivante
+        for (var i = 1; i <= 300; i++) {
+          await rotate(tester, 1);
+          visible();
+          expect(selected(tester), all[i].title);
+        }
+        // un tour très rapide : beaucoup de crans entre deux images
+        for (var i = 0; i < 15; i++) {
+          await rotate(tester, 240);
+          visible();
+          expect(selected(tester), all[300 + 240 * (i + 1)].title);
+        }
+        // la fin de la liste, puis tout en haut
+        await rotate(tester, 5000);
+        expect(selected(tester), all.last.title);
+        expect(visible().bottom, closeTo(tester.getRect(list).bottom, .5));
+        await rotate(tester, -6000);
+        expect(selected(tester), all.first.title);
+        expect(visible().top, closeTo(tester.getRect(list).top, .5));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  });
+
+  group('point 5 : téléphone couché', () {
+    Future<void> turn(WidgetTester tester, {required bool landscape}) async {
+      if (landscape) {
+        landscapeSize(tester);
+      } else {
+        phoneSize(tester);
+      }
+      await tester.pump();
+      await settle(tester);
+    }
+
+    testWidgets(
+      'couché : le Cover Flow du mode normal ; relevé : le menu, au même endroit',
+      (tester) async {
+        await pumpPhone(tester, home: const ClassicShell());
+        await tester.tap(find.text('Albums'));
+        await settle(tester);
+        await rotate(tester, 1);
+        await turn(tester, landscape: true);
+        final flow = tester.widget<CoverflowScreen>(
+          find.byType(CoverflowScreen),
+        );
+        expect(flow.phone, isTrue);
+        expect(flow.albums.map((a) => a.name), [
+          'Lafleur Surf',
+          'Studio Lafleur',
+          'Summer Mix',
+        ]);
+        expect(flow.initial, 1); // l'album en cours, comme le mode normal
+        await turn(tester, landscape: false);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        expect(find.text('ALBUMS'), findsOneWidget);
+        expect(selected(tester), 'Studio Lafleur');
+      },
+    );
+
+    testWidgets('en passant par AdaptiveHome (le réglage sur Classic)', (
+      tester,
+    ) async {
+      await pumpPhone(
+        tester,
+        home: const AdaptiveHome(),
+        classicMode: ValueNotifier(true),
+      );
+      expect(find.byType(ClassicMenu), findsOneWidget);
+      await turn(tester, landscape: true);
+      expect(find.byType(CoverflowScreen), findsOneWidget);
+      await turn(tester, landscape: false);
+      expect(find.byType(CoverflowScreen), findsNothing);
+      expect(find.byType(ClassicMenu), findsOneWidget);
+    });
+  });
+
+  testWidgets('le réglage change l\'écran à chaud, sans toucher au lecteur', (
+    tester,
+  ) async {
+    final mode = ValueNotifier(false);
+    final fx = await pumpPhone(
+      tester,
+      home: const AdaptiveHome(),
+      classicMode: mode,
+    );
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byType(ClassicMenu), findsNothing);
+    mode.value = true;
+    await settle(tester);
+    expect(find.byType(ClassicMenu), findsOneWidget);
+    expect(find.byType(HomeScreen), findsNothing);
+    mode.value = false;
+    await settle(tester);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(fx.player.calls, isEmpty);
+  });
+
+  testWidgets(
+    'petit téléphone (320 × 568) : rien ne déborde, la molette entière',
+    (tester) async {
+      await pumpPhone(tester, home: const ClassicShell());
+      tester.view.physicalSize = const Size(320, 568);
+      const pad = FakeViewPadding(top: 20);
+      tester.view.padding = pad;
+      tester.view.viewPadding = pad;
+      await tester.pump();
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      final w = tester.getRect(find.byType(ClickWheel));
+      expect(w.bottom, lessThanOrEqualTo(568));
+      expect(w.left, greaterThanOrEqualTo(0));
+      expect(w.right, lessThanOrEqualTo(320));
+      expect(w.width, greaterThan(150)); // encore une vraie molette
+      // la liste montre toujours plusieurs lignes, et la molette marche
+      expect(find.text('Albums').hitTestable(), findsOneWidget);
+      await press(tester, 'select');
+      expect(find.byType(CoverflowScreen), findsOneWidget);
+    },
+  );
+}

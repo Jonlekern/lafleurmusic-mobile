@@ -196,6 +196,12 @@ Future<LafleurApp> buildLafleurApp({
     settings.artistGrid = artistGrid.value;
     settings.save(settingsFile);
   });
+  // Mode Classic ou normal (téléphone) : retenu ; changer remplace l'écran, pas le lecteur
+  final classicMode = ValueNotifier<bool>(settings.classicMode);
+  classicMode.addListener(() {
+    settings.classicMode = classicMode.value;
+    settings.save(settingsFile);
+  });
   // Volume égal : mesures gardées dans la base, allumé si on l'avait laissé allumé
   final loudness = LoudnessService(
     db,
@@ -222,6 +228,7 @@ Future<LafleurApp> buildLafleurApp({
     player: player,
     equalizer: equalizer,
     artistGrid: artistGrid,
+    classicMode: classicMode,
     settings: settings,
     saveSettings: () => settings.save(settingsFile),
     strings: Strings.of(PlatformDispatcher.instance.locale),
@@ -238,6 +245,7 @@ class LafleurApp extends StatefulWidget {
     required this.strings,
     required this.equalizer,
     required this.artistGrid,
+    required this.classicMode,
     required this.settings,
     required this.saveSettings,
     required this.loudness,
@@ -265,6 +273,7 @@ class LafleurApp extends StatefulWidget {
   final AppSettings settings;
   final VoidCallback saveSettings;
   final ValueNotifier<bool> artistGrid;
+  final ValueNotifier<bool> classicMode;
   final LibraryDb db;
   final LibraryView library;
   final Covers covers;
@@ -325,6 +334,7 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
     strings: widget.strings,
     equalizer: widget.equalizer,
     artistGrid: widget.artistGrid,
+    classicMode: widget.classicMode,
     settings: widget.settings,
     saveSettings: widget.saveSettings,
     loudness: widget.loudness,

@@ -568,6 +568,11 @@ class Strings {
   String get nextTrack => _t('Morceau suivant', 'Next track');
   String get playPause => _t('Lecture / pause', 'Play / pause');
   String get wheelSelect => _t('Choisir', 'Select');
+  // plan 6 : Mode Classic, le menu (maquette 6 A)
+  String get classicMusic => _t('MUSIQUE', 'MUSIC');
+  String get classicPlaylists => 'Playlists';
+  String get classicNowPlaying => _t('En cours', 'Now Playing');
+  String get classicSettings => _t('Réglages', 'Settings');
 
   /// Taille lisible : Mo en dessous d'un Go, sinon Go à une décimale (virgule en français).
   String size(int bytes) {
