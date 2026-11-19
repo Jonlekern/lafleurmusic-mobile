@@ -1066,6 +1066,36 @@ void playbackTests() {
     ..data[JellyfinSource.userIdKey('acc1')] = 'user-1';
 
   group('JellyfinSource playback', () {
+    test(
+      'streamHeaders: no comma; with a proxy Authorization the token goes to '
+      'X-Emby-Authorization and the proxy one is kept',
+      () async {
+        final plain = source(server(), secrets: stored());
+        await plain.prepare();
+        expect(plain.streamHeaders, {
+          'Authorization': 'MediaBrowser Token="tok-secret-1"',
+        });
+
+        final proxied = source(
+          server(),
+          secrets: stored(),
+          headers: const {
+            'Authorization': 'Basic cHJveHk6cHc=',
+            'X-Proxy': 'a',
+          },
+        );
+        await proxied.prepare();
+        expect(proxied.streamHeaders, {
+          'Authorization': 'Basic cHJveHk6cHc=',
+          'X-Proxy': 'a',
+          'X-Emby-Authorization': 'MediaBrowser Token="tok-secret-1"',
+        });
+        for (final v in proxied.streamHeaders.values) {
+          expect(v, isNot(contains(',')));
+        }
+      },
+    );
+
     test('streamUri: universal endpoint, formats, token in the URL', () async {
       final s = source(server(), secrets: stored());
       await s.prepare();

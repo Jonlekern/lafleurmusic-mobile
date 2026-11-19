@@ -48,7 +48,9 @@ auth() {
 }
 
 # api METHOD PATH [JSON]: the answer on stdout. Anything but a 2xx prints the status and the
-# answer (never the request: it may carry the password) and fails.
+# answer (never the request: it may carry the password) and fails; QUIET=1 fails without a word
+# (a try that will be made again). LAST_CODE: the status (when not called in a subshell).
+LAST_CODE=""
 api() {
   local method="$1" path="$2" data="${3:-}" out code
   out="$(mktemp)"
@@ -58,15 +60,38 @@ api() {
     args+=(-H 'Content-Type: application/json' --data "${data}")
   fi
   code="$(curl "${args[@]}" "${URL}${path}")" || code="000"
+  LAST_CODE="${code}"
   if [[ "${code}" != 2* ]]; then
-    echo "::error::${method} ${path%%\?*} → HTTP ${code}" >&2
-    head -c 2000 "${out}" >&2 || true
-    echo >&2
+    if [ "${QUIET:-0}" != 1 ]; then
+      echo "::error::${method} ${path%%\?*} → HTTP ${code}" >&2
+      head -c 2000 "${out}" >&2 || true
+      echo >&2
+    else
+      echo "    ${method} ${path%%\?*} → HTTP ${code}, trying again" >&2
+    fi
     rm -f "${out}"
     return 1
   fi
   cat "${out}"
   rm -f "${out}"
+}
+
+# wizard METHOD PATH [JSON]: [api] tried 3 times while the server answers 5xx or not at all
+# (it may still be settling after the start); only the last failure is an error.
+wizard() {
+  local try
+  for try in 1 2 3; do
+    if [ "${try}" -lt 3 ]; then
+      if QUIET=1 api "$@" >/dev/null; then return 0; fi
+      case "${LAST_CODE}" in
+        000 | 5*) sleep 3 ;;
+        *) api "$@" >/dev/null; return ;; # a 4xx won't change: say it once, loudly
+      esac
+    else
+      api "$@" >/dev/null
+      return
+    fi
+  done
 }
 
 step "Making the music library in ${MUSIC} from test/fixtures/tone-20.wav"
@@ -111,28 +136,32 @@ echo "${info}" | jq -e '.ProductName' >/dev/null 2>&1 || {
 echo "${info}" | jq -c '{ProductName, Version, StartupWizardCompleted}'
 
 step "Startup wizard: language"
-api GET /Startup/Configuration >/dev/null
-api POST /Startup/Configuration \
-  '{"UICulture":"en-US","MetadataCountryCode":"US","PreferredMetadataLanguage":"en"}' >/dev/null
+wizard GET /Startup/Configuration
+wizard POST /Startup/Configuration \
+  '{"UICulture":"en-US","MetadataCountryCode":"US","PreferredMetadataLanguage":"en"}'
 
 step "Startup wizard: the admin"
 # GET first: it creates the default user that POST then renames
-api GET /Startup/User >/dev/null
-api POST /Startup/User \
-  "$(jq -nc --arg n "${JELLYFIN_USER}" --arg p "${JELLYFIN_PASSWORD}" '{Name: $n, Password: $p}')" >/dev/null
+wizard GET /Startup/User
+wizard POST /Startup/User \
+  "$(jq -nc --arg n "${JELLYFIN_USER}" --arg p "${JELLYFIN_PASSWORD}" '{Name: $n, Password: $p}')"
 
 step "Startup wizard: remote access, then done"
-api POST /Startup/RemoteAccess '{"EnableRemoteAccess":true,"EnableAutomaticPortMapping":false}' >/dev/null
-api POST /Startup/Complete >/dev/null
+wizard POST /Startup/RemoteAccess '{"EnableRemoteAccess":true,"EnableAutomaticPortMapping":false}'
+wizard POST /Startup/Complete
 
 step "Signing in as the admin"
 signin=""
-for _ in $(seq 1 15); do
-  # right after the wizard the server may still be saving the user: a few tries
-  if signin="$(api POST /Users/AuthenticateByName \
-    "$(jq -nc --arg n "${JELLYFIN_USER}" --arg p "${JELLYFIN_PASSWORD}" '{Username: $n, Pw: $p}')")"; then
+credentials="$(jq -nc --arg n "${JELLYFIN_USER}" --arg p "${JELLYFIN_PASSWORD}" '{Username: $n, Pw: $p}')"
+for try in $(seq 1 15); do
+  # right after the wizard the server may still be saving the user: a few quiet tries, the
+  # last one says why it failed
+  quiet=1
+  if [ "${try}" -eq 15 ]; then quiet=0; fi
+  if signin="$(QUIET="${quiet}" api POST /Users/AuthenticateByName "${credentials}")"; then
     break
   fi
+  signin=""
   sleep 2
 done
 TOKEN="$(echo "${signin}" | jq -r '.AccessToken // empty')"
