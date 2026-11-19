@@ -114,6 +114,16 @@ class JellyfinSource
   @override
   Map<String, String> get headers => _headersWith(_token);
 
+  /// What mpv sends with [streamUri]: the account's headers and the token alone
+  /// (`MediaBrowser Token="…"`). mpv refuses a comma in a header value (its option list splits
+  /// on them), and the full [headers] value has several; the token also travels as `api_key`.
+  Map<String, String> get streamHeaders => {
+    ..._custom,
+    if (_token case final t?)
+      _customHasAuthorization ? 'X-Emby-Authorization' : 'Authorization':
+          'MediaBrowser Token="$t"',
+  };
+
   Uri _url(String path, [Map<String, String>? query]) => _root.replace(
     pathSegments: [
       ..._root.pathSegments.where((s) => s.isNotEmpty),

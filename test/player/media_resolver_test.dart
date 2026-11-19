@@ -10,6 +10,7 @@ import 'package:lafleurmusic/library/covers.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
+import 'package:lafleurmusic/sources/jellyfin.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/sources/subsonic.dart';
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' hide Track;
@@ -539,6 +540,36 @@ class _Prep implements MusicSource, AuthRenewable {
 }
 
 void preparedSourceTests() {
+  test('jellyfin:// → stream with headers mpv accepts (no comma: it splits on them), '
+      'the account headers and the token', () async {
+    final jf = JellyfinSource(
+      accountId: 'acc1',
+      base: Uri.parse('https://jf.example.com'),
+      user: 'johnny',
+      password: 'pw',
+      headers: const {'CF-Access-Client-Id': 'id1'},
+      deviceName: 'iPhone',
+      client: MockClient(
+        (r) async => r.url.path == '/Users/AuthenticateByName'
+            ? http.Response(
+                '{"User":{"Id":"u1"},"AccessToken":"tok1"}',
+                200,
+                headers: {'content-type': 'application/json'},
+              )
+            : http.Response('', 500),
+      ),
+    );
+    final m = await MediaResolver((_) async => jf).media('jellyfin://acc1/s1');
+    expect(Uri.parse(m.uri).queryParameters['api_key'], 'tok1');
+    final h = m.httpHeaders!;
+    expect(h['CF-Access-Client-Id'], 'id1');
+    expect(h.values.any((v) => v.contains('tok1')), isTrue);
+    for (final e in h.entries) {
+      expect(e.key, isNot(matches(RegExp('[\\r\\n,\\x00:]'))));
+      expect(e.value, isNot(matches(RegExp('[\\r\\n,\\x00]'))));
+    }
+  });
+
   test(
     'a hanging or failing prepare() or a StateError never reaches the player',
     () async {

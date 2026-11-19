@@ -176,9 +176,11 @@ class MediaResolver {
       if (s is AuthRenewable) {
         await (s as AuthRenewable).prepare().timeout(sourceTimeout);
       }
+      // Jellyfin: its sign-in header has commas, which mpv refuses (see streamHeaders)
+      final headers = s is JellyfinSource ? s.streamHeaders : s.headers;
       return Media(
         s.streamUri(id.$2).toString(),
-        httpHeaders: s.headers.isEmpty ? null : s.headers,
+        httpHeaders: headers.isEmpty ? null : headers,
       );
     } on Object {
       // account gone, unusable or too slow: mpv fails on the raw key and the track is skipped like an unreadable file
