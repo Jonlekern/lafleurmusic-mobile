@@ -28,6 +28,7 @@ import 'player/player.dart';
 import 'settings.dart';
 import 'sources/account_service.dart';
 import 'sources/accounts.dart';
+import 'sources/plex_link.dart' show PlexLink;
 import 'sources/secret_store.dart';
 import 'tags/tag_reader.dart';
 import 'theme/lafleur_theme.dart';
@@ -60,6 +61,7 @@ Future<void> main() async {
 Future<LafleurApp> buildLafleurApp({
   required Directory support,
   required SecretStore secrets,
+  PlexLink Function(String clientId)? plexLink, // tests: a fake plex.tv
 }) async {
   // réglages (égaliseur) : rechargés, appliqués tout de suite, enregistrés à chaque changement
   final settingsFile = File(p.join(support.path, 'settings.json'));
@@ -97,6 +99,7 @@ Future<LafleurApp> buildLafleurApp({
     resolver: resolver,
     forgetCovers: covers.forgetAccount, // compte retiré : ses pochettes aussi
     device: device, // …mais ses copies gardées restent, en morceaux locaux
+    plexLink: plexLink,
   );
   await accountService.watchOffline();
   // à la maison : Wi-Fi et un serveur qui répond ; le Top 100 ne se garde que là

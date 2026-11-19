@@ -309,15 +309,20 @@ class PlexLink {
     String? deviceName,
     String? platform,
     DateTime Function()? now,
+    Uri? plexTv,
     this.pollEvery = const Duration(seconds: 2),
     this.timeout = requestTimeout,
     this.probeTimeout = plexProbeTimeout,
   }) : _client = client ?? newServerClient(),
        deviceName = deviceName ?? defaultPlexDeviceName,
        platform = platform ?? defaultPlexPlatform,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       plexTv = plexTv ?? defaultPlexTv;
 
-  static final plexTv = Uri.parse('https://plex.tv');
+  static final defaultPlexTv = Uri.parse('https://plex.tv');
+
+  /// plex.tv's address (the end-to-end run points it at a fake one).
+  final Uri plexTv;
 
   final String clientId, deviceName, platform;
   final http.Client _client;

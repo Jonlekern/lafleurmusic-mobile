@@ -11,6 +11,26 @@ import 'fake_plex.dart';
 
 void main() {
   group('PIN code', () {
+    test('plex.tv can be pointed elsewhere (the end-to-end run)', () async {
+      final seen = <Uri>[];
+      final link = PlexLink(
+        clientId: 'client-abc',
+        plexTv: Uri.parse('http://127.0.0.1:4321'),
+        client: MockClient((r) async {
+          seen.add(r.url);
+          return jsonResponse(
+            '{"id":1,"code":"K7QX","expiresIn":900,"authToken":null}',
+            201,
+          );
+        }),
+      );
+      await link.requestPin();
+      expect(
+        seen.single.toString(),
+        'http://127.0.0.1:4321/api/v2/pins?strong=false',
+      );
+    });
+
     test(
       'POST plex.tv/api/v2/pins?strong=false, Plex headers, no token',
       () async {
