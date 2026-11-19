@@ -2380,6 +2380,40 @@ void main() {
       expect(theirs.readAsStringSync(), '#EXTM3U\nmine\n');
     });
 
+    test('the new .m3u8 could not be written (renamed): a file of the '
+        'user\'s at that name later is never written over', () async {
+      for (var i = 1; i <= 2; i++) {
+        await add(_t('$i', no: i));
+      }
+      final store = PlaylistStore(db);
+      final ref = await store.create(
+        'Road',
+        songs: ['subsonic://acc/1'],
+      ) as PhonePlaylistRef;
+      final d = make();
+      await d.keepPlaylist(phonePlaylistAccount, '${ref.id}');
+      await d.whenIdle();
+      final folder = Directory('${root.path}/Playlists');
+      await store.rename(ref, 'Trip');
+      // the folder refuses writes: the new file is not made
+      await Process.run('chmod', ['a-w', folder.path]);
+      addTearDown(() => Process.run('chmod', ['u+w', folder.path]));
+      await d.syncPlaylists();
+      await Process.run('chmod', ['u+w', folder.path]);
+      expect(m3u(root, 'Trip.m3u8').existsSync(), isFalse);
+      // the user puts their own file there
+      final theirs = m3u(root, 'Trip.m3u8')
+        ..writeAsStringSync('#EXTM3U\nmine\n');
+      await d.syncPlaylists();
+      expect(theirs.readAsStringSync(), '#EXTM3U\nmine\n');
+      expect(songs(m3u(root, 'Trip (2).m3u8')), ['../Art/Alb/01 Song 1.mp3']);
+      expect(m3u(root, 'Road.m3u8').existsSync(), isFalse);
+      expect(
+        [for (final k in await db.keptPlaylistRows()) k.fileName],
+        ['Trip (2).m3u8'],
+      );
+    });
+
     test('a server playlist renamed on its server to the name of a file of '
         'the user\'s: theirs untouched, ours « Trip (2).m3u8 »', () async {
       await seedLists();

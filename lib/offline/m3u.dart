@@ -136,15 +136,6 @@ class PlaylistFiles {
         );
         ours.add(fileName.toLowerCase());
       }
-      // noted first (then written): a crash between the two never leaves a file of ours
-      // that nothing names; the old name's file goes before
-      if (renamedFrom != null) {
-        await _delete(root, renamedFrom);
-        ours.remove(renamedFrom.toLowerCase());
-      }
-      if (fileName != k.fileName) {
-        await db.setKeptPlaylist(k.accountId, k.playlistId, fileName);
-      }
       final file = File(p.join(dir.path, fileName));
       final text = buildM3u8(entries);
       final same = file.existsSync() && await file.readAsString() == text;
@@ -162,6 +153,16 @@ class PlaylistFiles {
           rethrow;
         }
         await _announce(file.path);
+      }
+      // written first, then noted, then the old one goes: a name is noted only once our
+      // file is there, so a file of the user's is never taken for ours (a crash in between
+      // leaves at worst a stray file of ours, never one of theirs written over)
+      if (fileName != k.fileName) {
+        await db.setKeptPlaylist(k.accountId, k.playlistId, fileName);
+      }
+      if (renamedFrom != null) {
+        await _delete(root, renamedFrom);
+        ours.remove(renamedFrom.toLowerCase());
       }
     }
   }
