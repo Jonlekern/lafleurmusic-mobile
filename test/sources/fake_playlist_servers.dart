@@ -27,6 +27,9 @@ class FakeNavidrome {
   /// Error 50 on the next this many writes only.
   int refuseNext = 0;
 
+  /// Error 50 on updatePlaylist only (a creation works, adding after it does not).
+  bool refuseUpdate = false;
+
   /// Writes answer HTTP 403 with no Subsonic body (a proxy refusing them).
   bool forbidden = false;
 
@@ -142,7 +145,9 @@ class FakeNavidrome {
     const writes = {'createPlaylist', 'updatePlaylist', 'deletePlaylist'};
     if (writes.contains(method)) {
       if (forbidden) return http.Response('Forbidden', 403);
-      if (readOnly) return _error(50, 'User not authorized');
+      if (readOnly || (refuseUpdate && method == 'updatePlaylist')) {
+        return _error(50, 'User not authorized');
+      }
       if (refuseNext > 0) {
         refuseNext--;
         return _error(50, 'User not authorized');

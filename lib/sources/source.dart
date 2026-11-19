@@ -237,6 +237,16 @@ class PlaylistWriteRefused implements Exception {
   String toString() => 'PlaylistWriteRefused: $message';
 }
 
+/// [PlaylistWriter.createPlaylist] made the playlist ([id], [name]) but adding its songs
+/// failed with [cause]: the playlist exists on the server (a retry must not create another).
+class PlaylistCreatedPartly implements Exception {
+  PlaylistCreatedPartly(this.id, this.name, this.cause);
+  final String id, name;
+  final Object cause;
+  @override
+  String toString() => 'PlaylistCreatedPartly($id)';
+}
+
 /// The playlist on the server is not the one the caller saw (changed elsewhere meanwhile):
 /// nothing was sent. Read it again and let the user try again.
 class PlaylistChanged implements Exception {

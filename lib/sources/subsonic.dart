@@ -417,7 +417,11 @@ class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
       id = await _newestNamed(name);
     }
     // the songs after: added in slices when many (createPlaylist can't be split)
-    await addToPlaylist(id, songIds);
+    try {
+      await addToPlaylist(id, songIds);
+    } on Exception catch (e) {
+      throw PlaylistCreatedPartly(id, name, e);
+    }
     return id;
   }
 

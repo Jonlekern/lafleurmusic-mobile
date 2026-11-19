@@ -660,7 +660,11 @@ class PlexSource
       'uri': _libraryUri(songIds.take(1).toList()),
     });
     final id = _newId(res);
-    await addToPlaylist(id, songIds.skip(1).toList());
+    try {
+      await addToPlaylist(id, songIds.skip(1).toList());
+    } on Exception catch (e) {
+      throw PlaylistCreatedPartly(id, name, e);
+    }
     return id;
   }
 

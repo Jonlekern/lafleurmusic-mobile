@@ -50,9 +50,12 @@ enum PlaylistProblem {
 /// (when the answer was lost or the playlist changed) the playlist read again. Never carries
 /// an address, a token or a password.
 class PlaylistWriteException implements Exception {
-  PlaylistWriteException(this.problem, this.accountId);
+  PlaylistWriteException(this.problem, this.accountId, {this.created});
   final PlaylistProblem problem;
   final String accountId;
+
+  /// A creation worked but adding its songs did not: the playlist that now exists (stored).
+  final PlaylistRef? created;
   @override
   String toString() => 'PlaylistWriteException(${problem.name}, $accountId)';
 }
@@ -110,6 +113,9 @@ class PlaylistStore {
     }
     return canEdit(ref);
   }
+
+  /// Playlists whose server refused a write (kept until a write on them works).
+  final _refused = <PlaylistRef>{};
 
   /// The last action asked for each server playlist (the next one waits for it).
   final _queues = <PlaylistRef, Future<void>>{};
@@ -414,21 +420,48 @@ class PlaylistStore {
     final T r;
     try {
       r = await write(s, w);
+    } on PlaylistCreatedPartly catch (e) {
+      // the creation worked (the account can write): keep the playlist, say what failed
+      if (ref == null) _markReadOnly(accountId, false);
+      try {
+        if (!await _reread(accountId, s, w, e.id)) {
+          await _storeServer(
+            accountId,
+            _typeOf(s),
+            SourcePlaylist(id: e.id, name: e.name, songIds: const []),
+          );
+        }
+      } on Object {
+        // the original error stays the one told
+      }
+      final c = e.cause;
+      throw PlaylistWriteException(
+        c is Exception ? _problemOf(c) : PlaylistProblem.failed,
+        accountId,
+        created: PlaylistRef.server(accountId, e.id),
+      );
     } on Exception catch (e) {
       final problem = _problemOf(e);
       if (problem == PlaylistProblem.refused) {
-        ref == null
-            ? _markReadOnly(accountId, true)
-            : _markList(ref, readOnly: true);
+        ref == null ? _markReadOnly(accountId, true) : _refuse(ref);
       } else if (ref != null &&
           (problem == PlaylistProblem.unreachable ||
               problem == PlaylistProblem.failed ||
               problem == PlaylistProblem.changed)) {
-        await _reread(accountId, s, w, ref.remoteId);
+        try {
+          await _reread(accountId, s, w, ref.remoteId);
+        } on Object {
+          // the original error stays the one told
+        }
       }
       throw PlaylistWriteException(problem, accountId);
     }
-    if (ref == null) _markReadOnly(accountId, false);
+    if (ref == null) {
+      _markReadOnly(accountId, false);
+    } else {
+      _refused.remove(ref);
+      _markList(ref, readOnly: false); // a write worked: rights are there
+    }
     return r;
   }
 
@@ -460,7 +493,10 @@ class PlaylistStore {
       return false;
     }
     await _storeServer(accountId, _typeOf(s), p);
-    _markList(PlaylistRef.server(accountId, id), readOnly: !p.editable);
+    // a refused write stays marked until a write on the playlist works ([_write]); what the
+    // server says when read follows the server
+    final r = PlaylistRef.server(accountId, id);
+    _markList(r, readOnly: !p.editable || _refused.contains(r));
     return true;
   }
 
@@ -488,6 +524,11 @@ class PlaylistStore {
     _readOnly.value = Set.unmodifiable(
       readOnly ? {...now, accountId} : ({...now}..remove(accountId)),
     );
+  }
+
+  void _refuse(ServerPlaylistRef ref) {
+    _refused.add(ref);
+    _markList(ref, readOnly: true);
   }
 
   void _markList(PlaylistRef ref, {required bool readOnly}) {

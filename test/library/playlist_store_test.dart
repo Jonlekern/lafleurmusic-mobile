@@ -449,6 +449,43 @@ void main() {
       expect(srv.readOnlyAccounts.value, isEmpty);
     });
 
+    test(
+      'create with songs, the add after the creation fails: the new playlist '
+      'is stored, the error names it, the account stays offered',
+      () async {
+        nav.refuseUpdate = true;
+        Object? err;
+        try {
+          await srv.create('Mix', accountId: acc, songs: [k('s1'), k('s2')]);
+        } on PlaylistWriteException catch (e) {
+          err = e;
+        }
+        expect(err, isA<PlaylistWriteException>());
+        final e = err as PlaylistWriteException;
+        expect(e.problem, PlaylistProblem.refused);
+        expect(e.created, PlaylistRef.server(acc, 'pl10'));
+        expect(nav.lists.keys.where((i) => nav.lists[i]!.name == 'Mix'), [
+          'pl10',
+        ]);
+        expect((await db.playlistsOf(acc)).map((l) => l.id), ['pl1', 'pl10']);
+        expect(srv.readOnlyAccounts.value, isEmpty);
+        expect(await srv.canWrite(acc), isTrue);
+      },
+    );
+
+    test('a refusal mark on a playlist stays after a re-read that says '
+        'editable, until a write on it works', () async {
+      nav.refuseNext = 1;
+      await expectLater(
+        srv.add(ref, [k('s4')]),
+        throwsA(isA<PlaylistWriteException>()),
+      );
+      expect(srv.canEdit(ref), isFalse);
+      expect(await srv.checkEditable(ref), isFalse);
+      await srv.add(ref, [k('s4')]);
+      expect(srv.canEdit(ref), isTrue);
+    });
+
     test('the answer to an add is lost after the server did it: the playlist '
         'is read again, so trying again does not add it twice', () async {
       nav.lostAnswers = 1;
