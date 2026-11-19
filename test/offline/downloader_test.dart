@@ -1738,6 +1738,102 @@ void main() {
       expect(Directory('${root.path}/Playlists').listSync(), hasLength(1));
     });
 
+    Future<void> settled(Downloader d) async {
+      await pumpEventQueue();
+      await d.whenPlaylistsSettled();
+      await d.whenIdle();
+    }
+
+    test('copies failed (folder adopted): still kept; « Réessayer » brings the '
+        '.m3u8 back in the new folder', () async {
+      await seedLists();
+      final d = make();
+      await d.keepPlaylist('acc', 'q');
+      await d.whenIdle();
+      final to = Directory('${tmp.path}/new');
+      final r = await d.adoptRoot(commit: () async => device.root = to);
+      expect(r.ok, isTrue);
+      await d.forget(const []); // a refresh while every copy is failed
+      expect(
+        [for (final k in await db.keptPlaylistRows()) k.playlistId],
+        ['q'],
+      );
+      // « Réessayer » = keep the failed songs again
+      await d.keep([_t('2', no: 2), _t('3', no: 3)]);
+      await d.whenIdle();
+      expect(songs(m3u(to, 'Running.m3u8')), [
+        '../Art/Alb/02 Song 2.mp3',
+        '../Art/Alb/03 Song 3.mp3',
+      ]);
+    });
+
+    test('Q10: a kept playlist gone from its server: our file and record go, '
+        'its songs stay kept', () async {
+      await seedLists();
+      final d = make()..followPlaylists();
+      await d.keepPlaylist('acc', 'q');
+      await d.whenIdle();
+      final f = m3u(root, 'Running.m3u8');
+      expect(f.existsSync(), isTrue);
+      await db.replacePlaylists('acc', [
+        (id: 'p', name: 'Soirée', paths: ['subsonic://acc/1']),
+      ]);
+      await settled(d);
+      expect(f.existsSync(), isFalse);
+      expect(await db.keptPlaylistRows(), isEmpty);
+      expect((await db.offlineOf('subsonic://acc/3'))!.state, 'done');
+    });
+
+    test('Q10: its account removed: our file and record go', () async {
+      await seedLists();
+      final d = make()..followPlaylists();
+      await d.keepPlaylist('acc', 'q');
+      await d.whenIdle();
+      await db.deleteAccountPlaylists('acc');
+      await settled(d);
+      expect(m3u(root, 'Running.m3u8').existsSync(), isFalse);
+      expect(await db.keptPlaylistRows(), isEmpty);
+    });
+
+    test(
+      'Q11: Retirer a playlist does not block its songs from the Top 100',
+      () async {
+        await seedLists();
+        final d = make();
+        await d.keepPlaylist('acc', 'q');
+        await d.whenIdle();
+        await d.forgetPlaylist('acc', 'q');
+        expect(await db.offlineOf('subsonic://acc/3'), isNull);
+        expect(await db.autoKeepBlockedFor('subsonic://acc/3'), isFalse);
+        final r = await d.keep([_t('3', no: 3)], reason: OfflineReason.top100);
+        expect(r.count, 1);
+      },
+    );
+
+    test('Q12: songs a kept playlist gains at a sync are kept; one the user '
+        'removed before is not', () async {
+      await seedLists();
+      await add(_t('4', no: 4));
+      final d = make()..followPlaylists();
+      await d.keepPlaylist('acc', 'q');
+      await d.whenIdle();
+      await d.forget(['subsonic://acc/3'], byUser: true);
+      await db.replacePlaylists('acc', [
+        (
+          id: 'q',
+          name: 'Running',
+          paths: ['subsonic://acc/2', 'subsonic://acc/3', 'subsonic://acc/4'],
+        ),
+      ]);
+      await settled(d);
+      expect((await db.offlineOf('subsonic://acc/4'))!.reason, 'user');
+      expect(await db.offlineOf('subsonic://acc/3'), isNull);
+      expect(songs(m3u(root, 'Running.m3u8')), [
+        '../Art/Alb/02 Song 2.mp3',
+        '../Art/Alb/04 Song 4.mp3',
+      ]);
+    });
+
     test('moving the folder: the .m3u8 moves with the copies', () async {
       await seedLists();
       final d = make();

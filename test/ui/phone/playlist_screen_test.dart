@@ -137,6 +137,25 @@ void main() {
     );
   });
 
+  phoneTest(
+    'playlist notée mais un morceau pas gardé (ajouté sur le serveur) : '
+    'la feuille propose « Garder », pas « Retirer »',
+    TargetPlatform.iOS,
+    (tester) async {
+      final f = await pumpPlaylists(tester);
+      await tester.runAsync(
+        () => f.db.removeOffline(['subsonic://demo/Night Drive/2']),
+      );
+      await scrollTo(tester, find.text('Running'));
+      await longPress(tester, find.text('Running'));
+      expect(find.text('Garder sur mon iPhone'), findsOneWidget);
+      expect(find.text('Retirer du téléphone'), findsNothing);
+      await tester.tap(find.text('Garder sur mon iPhone'));
+      await done(tester);
+      expect(f.downloader.keptPlaylists, [('demo', 'running')]);
+    },
+  );
+
   group('écran Playlist', () {
     phoneTest(
       'PLAYLIST · compte, l\'ordre du serveur, le doublon deux fois, '

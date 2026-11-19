@@ -100,6 +100,7 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
     List<String> trackPaths, {
     OfflineReason? only,
     bool byUser = false,
+    bool block = true,
   }) async => forgotten.add(trackPaths);
 
   @override

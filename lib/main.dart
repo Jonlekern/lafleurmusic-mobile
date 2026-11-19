@@ -106,6 +106,7 @@ Future<LafleurApp> buildLafleurApp({
     settings: () async => settings,
     mayAutoDownload: () => home.atHome,
   );
+  downloader.followPlaylists(); // synchro, compte retiré : les .m3u8 suivent
   unawaited(downloader.resumeAtLaunch());
   final topKeeper = TopKeeper(
     db: db,

@@ -35,19 +35,24 @@ Future<void> forgetPlaylist(BuildContext context, ServerPlaylist p) async {
 /// la playlist entière.
 Future<void> showPlaylistSheet(BuildContext context, ServerPlaylist p) async {
   final app = AppScope.of(context);
-  final kept = (await app.db.watchKeptPlaylists().first).contains((
+  final recorded = (await app.db.watchKeptPlaylists().first).contains((
     p.accountId,
     p.id,
   ));
+  final tracks = [
+    for (final (_, t)
+        in await app.db.watchPlaylistItems(p.accountId, p.id).first)
+      ?t,
+  ];
+  final rows = await app.db.watchOfflineWithTwins().first;
+  // gardée = notée et chacun de ses morceaux gardé (un morceau ajouté sur le serveur, pas
+  // encore en file : « Garder » de nouveau)
+  final kept = recorded && tracks.where(isRemote).every((t) => isKept(t, rows));
   if (!context.mounted) return;
   await showTrackSheet(
     context,
     title: p.name,
-    tracks: () async => [
-      for (final (_, t)
-          in await app.db.watchPlaylistItems(p.accountId, p.id).first)
-        ?t,
-    ],
+    tracks: () async => tracks,
     kept: kept,
     onKeep: () async {
       if (context.mounted) await keepPlaylist(context, p);

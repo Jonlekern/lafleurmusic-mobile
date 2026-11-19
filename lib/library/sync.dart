@@ -92,15 +92,17 @@ class LibrarySync {
     final List<SourcePlaylist> lists;
     try {
       lists = await s.playlists();
-    } on Object {
-      return;
+    } on Exception {
+      return; // network, server error: the old ones stay
     }
     await _db.replacePlaylists(s.accountId, [
       for (final l in lists)
         (
           id: l.id,
           name: l.name,
-          paths: [for (final id in l.songIds) trackKey(s.accountId, id)],
+          paths: l.songIds == null
+              ? null // unread: its old songs stay
+              : [for (final id in l.songIds!) trackKey(s.accountId, id)],
         ),
     ]);
   }

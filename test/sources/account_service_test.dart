@@ -890,6 +890,9 @@ class _CountingSource implements MusicSource {
   }
 
   @override
+  Future<List<SourcePlaylist>> playlists() async => const [];
+
+  @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
@@ -940,6 +943,9 @@ class GatedSource implements MusicSource {
       ),
     ];
   }
+
+  @override
+  Future<List<SourcePlaylist>> playlists() async => const [];
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);

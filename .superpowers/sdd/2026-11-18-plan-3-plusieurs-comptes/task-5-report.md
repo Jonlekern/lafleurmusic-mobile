@@ -75,3 +75,30 @@ No schema change: the Task 1 v4 tables are used as they are.
 4. **Absent songs** have no title: the PlaylistItems schema stores only paths, so they show as « Morceau absent ».
 5. The goldens' and demo's « 33 min » and « 13:40 » for Nightcall come from the demo durations, not from the mockup's 27 min.
 6. A few files I touched were not dart-format clean before this task (`db.dart`, `sync.dart`, `account_service.dart`, `sync_test.dart`). I kept their old formatting outside my changes.
+
+## Fix round 1 (review of 24c3b7e; rulings Q10–Q12; item 3a waits for Johnny, unchanged)
+
+1. **Failed copies keep the playlist kept** (`db.anyKept`): any offline row, own or twin, in any state (failed included). A playlist's record is dropped only when no row remains. After `adoptRoot` (`failDoneCopies`) the record stays with no file; « Réessayer » (`keep` of the failed songs) brings the .m3u8 back in the new folder.
+2. **Q10**: `PlaylistFiles.refresh` deletes our file and the record when the playlist no longer exists, either because a complete sync dropped it or because its account was removed (`deleteAccountPlaylists`). Its songs stay kept. The trigger is `Downloader.followPlaylists()`, which subscribes to drift `tableUpdates` on `playlists` and calls `syncPlaylists()` (serialized). It is wired in `main.dart`.
+3. **Q11**: `forget(..., block: false)`. `forgetPlaylist` still removes twins (`byUser`) but adds no AutoKeepBlocks. `DemoDownloader.forget` gained the parameter.
+4. **Q12**: `replacePlaylists` notes the songs a kept playlist gains (new song paths not in its old item list, kept playlists only, only when that playlist's songs were read). `syncPlaylists` takes them (`takeAddedToKept`), calls `keep` with reason user, then refreshes the m3u8. Songs the user had removed individually are not re-kept, because only additions count.
+   - The sheet's kept state (`showPlaylistSheet`) is now recorded AND every present song kept. A recorded playlist with a song that isn't kept shows « Garder », which keeps the rest. The ⬇ pill already used both conditions.
+   - Limitation: the « added » notes live in memory. If the app is killed between a sync and the handler, which runs right after, the next sync won't see those songs as new.
+5. **Minor fixes**:
+   - The part file is deleted if its write or rename fails.
+   - The download loop marks the playlists dirty and refreshes once at the end of the run, not after every file.
+   - `_storePlaylists` catches `Exception` only. Syncing test fakes that relied on `noSuchMethod` got a `playlists()` override (`_CountingSource`, `GatedSource`).
+   - `SourcePlaylist.songIds` is nullable. When one `getPlaylist` fails with a SubsonicException, that playlist gets null and keeps its old songs while the others are replaced. A network error still keeps all the old ones.
+   - Playlists and entries without an id are skipped (no more "null").
+
+### Tests (all added in this round)
+- downloader_test « server playlists »: failed copies after adoptRoot then retry → m3u8 in the new folder; Q10 sync removal (file and record gone, songs still done); Q10 account removal; Q11 no block and the Top 100 re-keeps; Q12 the gained song is kept (user), the one the user removed is not re-kept, and the m3u8 lists 2 and 4.
+- sync_test: one unreadable playlist keeps its old songs; gained songs are noted once and only for kept playlists.
+- subsonic_test: one failing `getPlaylist` gives null songs, the others read, id-less entries are skipped.
+- playlist_screen_test: recorded playlist with a song not kept → the sheet shows « Garder sur mon iPhone », which calls `keepPlaylist`.
+- Mutation check: putting back the old `anyKept` and `blockAutoKeep(byUser)` makes the failed-copies test and the Q11 test fail (`+8 -2`). The fixes then turn them green.
+
+### Runs
+- `flutter analyze`: No issues found!
+- `flutter test --exclude-tags golden`: `+740 ~3: All tests passed!` (no warning or exception lines).
+- `flutter test --tags golden`: `+21: All tests passed!`

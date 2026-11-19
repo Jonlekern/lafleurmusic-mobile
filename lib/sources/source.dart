@@ -58,6 +58,7 @@ class SourceSong {
 }
 
 /// A playlist of a server: its songs in the server's order (a song may come back twice).
+/// [songIds] null: its songs could not be read this time (the old ones stay).
 class SourcePlaylist {
   const SourcePlaylist({
     required this.id,
@@ -66,7 +67,7 @@ class SourcePlaylist {
   });
 
   final String id, name;
-  final List<String> songIds;
+  final List<String>? songIds;
 }
 
 /// A network failure talking to a source (refused, timeout, TLS…).

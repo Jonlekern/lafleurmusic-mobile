@@ -797,6 +797,48 @@ void main() {
       },
     );
 
+    test('one playlist that won\'t read: null songs, the others read; '
+        'entries without an id are skipped', () async {
+      final s = make(
+        MockClient((r) async {
+          if (r.url.path.endsWith('getPlaylists.view')) {
+            return json(
+              body({
+                'playlists': {
+                  'playlist': [
+                    {'id': 'bad', 'name': 'Bad'},
+                    {'name': 'No id'},
+                    {'id': 'ok', 'name': 'Ok'},
+                  ],
+                },
+              }),
+            );
+          }
+          if (r.url.queryParameters['id'] == 'bad') {
+            return json(
+              '{"subsonic-response":{"status":"failed","error":{"code":70,"message":"x"}}}',
+            );
+          }
+          return json(
+            body({
+              'playlist': {
+                'id': 'ok',
+                'entry': [
+                  {'id': 's1'},
+                  {'title': 'no id'},
+                ],
+              },
+            }),
+          );
+        }),
+      );
+      final lists = await s.playlists();
+      expect(
+        [for (final p in lists) (p.id, p.songIds?.join(','))],
+        [('bad', null), ('ok', 's1')],
+      );
+    });
+
     test('no playlist at all: an empty list', () async {
       final s = make(MockClient((r) async => json(body({'playlists': {}}))));
       expect(await s.playlists(), isEmpty);

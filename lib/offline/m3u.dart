@@ -55,8 +55,8 @@ class PlaylistFiles {
   }
 
   /// Réécrit chaque fichier dont le contenu a changé ; retire le fichier (et la playlist
-  /// gardée) quand plus aucun de ses morceaux n'a de copie, finie ou à venir. Une playlist
-  /// que le serveur n'a plus garde son fichier tel quel. Dossier injoignable : rien.
+  /// gardée) quand plus aucun de ses morceaux n'a de ligne hors ligne (même en échec), ou
+  /// quand le serveur ne l'a plus (règle Q10). Dossier injoignable : rien.
   Future<void> refresh() => _serial(_refresh);
 
   Future<void> _refresh() async {
@@ -72,7 +72,13 @@ class PlaylistFiles {
     };
     for (final k in kept) {
       final name = await db.playlistName(k.accountId, k.playlistId);
-      if (name == null) continue; // plus sur le serveur : on n'y touche pas
+      if (name == null) {
+        // plus sur le serveur, ou compte retiré : notre fichier part, ses morceaux restent (Q10)
+        await _delete(root, k.fileName);
+        ours.remove(k.fileName.toLowerCase());
+        await db.dropKeptPlaylist(k.accountId, k.playlistId);
+        continue;
+      }
       final paths = await db.playlistPaths(k.accountId, k.playlistId);
       if (!await db.anyKept(paths)) {
         await _delete(root, k.fileName);
@@ -124,8 +130,15 @@ class PlaylistFiles {
         // écrit à côté puis renommé : jamais un fichier à moitié écrit
         await dir.create(recursive: true);
         final part = File(partialPath(file.path));
-        await part.writeAsString(text, flush: true);
-        await part.rename(file.path);
+        try {
+          await part.writeAsString(text, flush: true);
+          await part.rename(file.path);
+        } catch (_) {
+          try {
+            if (part.existsSync()) part.deleteSync();
+          } catch (_) {}
+          rethrow;
+        }
         await _announce(file.path);
       }
       if (fileName != k.fileName) {

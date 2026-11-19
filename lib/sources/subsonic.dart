@@ -287,7 +287,7 @@ class SubsonicSource implements MusicSource, HttpSource {
         : null;
     final heads = [
       for (final p in (raw is List ? raw : const []).whereType<Map>())
-        ('${p['id']}', '${p['name'] ?? ''}'),
+        if (p['id'] != null) ('${p['id']}', '${p['name'] ?? ''}'),
     ];
     return [
       for (final (id, name) in heads)
@@ -295,11 +295,20 @@ class SubsonicSource implements MusicSource, HttpSource {
     ];
   }
 
-  Future<List<String>> _playlistSongs(String id) async {
-    final r = await _call('getPlaylist', {'id': id});
+  /// Null when this playlist won't read (the others still do).
+  Future<List<String>?> _playlistSongs(String id) async {
+    final Map<String, dynamic> r;
+    try {
+      r = await _call('getPlaylist', {'id': id});
+    } on SubsonicException {
+      return null;
+    }
     final p = r['playlist'] is Map ? r['playlist'] as Map : const {};
     final entries = p['entry'] is List ? p['entry'] as List : const [];
-    return [for (final e in entries.whereType<Map>()) '${e['id']}'];
+    return [
+      for (final e in entries.whereType<Map>())
+        if (e['id'] != null) '${e['id']}',
+    ];
   }
 
   // Servers differ on JSON types (a cover id as a number, a size as a string): read leniently.

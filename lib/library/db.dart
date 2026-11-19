@@ -1185,17 +1185,26 @@ class LibraryDb extends _$LibraryDb {
       });
 
   /// Replaces every playlist of [accountId] by [lists] (id, name, song paths in order;
-  /// a song may come back twice), in one transaction.
+  /// a song may come back twice), in one transaction. A playlist whose songs could not be
+  /// read (`paths` null) keeps its old songs. The songs that a kept playlist gains are noted
+  /// for [takeAddedToKept] (rule Q12).
   Future<void> replacePlaylists(
     String accountId,
-    List<({String id, String name, List<String> paths})> lists,
+    List<({String id, String name, List<String>? paths})> lists,
   ) => transaction(() async {
+    final old = {for (final l in await playlistsOf(accountId)) l.id: l.paths};
+    final kept = {
+      for (final k in await keptPlaylistRows())
+        if (k.accountId == accountId) k.playlistId,
+    };
+    // an id listed twice: the last one
+    final byId = {for (final l in lists) l.id: l};
     await (delete(
       playlistItems,
     )..where((i) => i.accountId.equals(accountId))).go();
     await (delete(playlists)..where((p) => p.accountId.equals(accountId))).go();
     await batch((b) {
-      for (final (pos, l) in lists.indexed) {
+      for (final (pos, l) in byId.values.indexed) {
         b.insert(
           playlists,
           PlaylistsCompanion.insert(
@@ -1204,13 +1213,9 @@ class LibraryDb extends _$LibraryDb {
             name: l.name,
             position: pos,
           ),
-          mode: InsertMode.insertOrReplace, // an id listed twice: the last one
         );
-        b.deleteWhere(
-          playlistItems,
-          (i) => i.accountId.equals(accountId) & i.playlistId.equals(l.id),
-        );
-        for (final (i, path) in l.paths.indexed) {
+        final paths = l.paths ?? old[l.id] ?? const <String>[];
+        for (final (i, path) in paths.indexed) {
           b.insert(
             playlistItems,
             PlaylistItemsCompanion.insert(
@@ -1223,7 +1228,25 @@ class LibraryDb extends _$LibraryDb {
         }
       }
     });
+    for (final l in byId.values) {
+      final before = old[l.id];
+      if (!kept.contains(l.id) || l.paths == null || before == null) continue;
+      final added = l.paths!.toSet().difference(before.toSet());
+      if (added.isNotEmpty) {
+        (_addedToKept[(accountId, l.id)] ??= {}).addAll(added);
+      }
+    }
   });
+
+  final _addedToKept = <(String, String), Set<String>>{};
+
+  /// The songs that kept playlists gained at the last syncs, (account, playlist) → paths;
+  /// emptied by the call.
+  Map<(String, String), Set<String>> takeAddedToKept() {
+    final out = Map.of(_addedToKept);
+    _addedToKept.clear();
+    return out;
+  }
 
   /// The playlists of [accountId], in the server's order, with their song paths.
   Future<List<({String id, String name, List<String> paths})>> playlistsOf(
@@ -1395,12 +1418,19 @@ class LibraryDb extends _$LibraryDb {
     return out;
   }
 
-  /// One of [paths] still has a copy, finished or coming (its own or a twin's).
+  /// One of [paths] still has an offline row, its own or a twin's, in any state (a failed
+  /// copy is still kept: « Réessayer » brings it back).
   Future<bool> anyKept(List<String> paths) async {
     for (final path in {...paths}) {
-      final own = await offlineOf(path);
-      if (own != null && own.state != OfflineState.failed.name) return true;
-      if (await twinOffline(path) != null) return true;
+      final rows = await customSelect(
+        'SELECT 1 FROM offline o WHERE o.track_path = ? OR o.track_path IN '
+        '(SELECT t2.path FROM tracks t1 JOIN tracks t2 ON t2.merge_key = t1.merge_key '
+        "WHERE t1.path = ? AND t1.merge_key <> '' AND t2.account_id <> t1.account_id) "
+        'LIMIT 1',
+        variables: [Variable.withString(path), Variable.withString(path)],
+        readsFrom: {offline, tracks},
+      ).get();
+      if (rows.isNotEmpty) return true;
     }
     return false;
   }

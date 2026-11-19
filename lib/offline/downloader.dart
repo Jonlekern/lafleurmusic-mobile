@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show TableUpdateQuery;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -103,10 +104,49 @@ class Downloader extends ChangeNotifier {
     try {
       await playlistFiles.refresh();
     } catch (e) {
-      _lastError = _describe(
-        e,
-      ); // un fichier de playlist n'arrête pas les copies
+      // un fichier de playlist n'arrête pas les copies
+      _lastError = _describe(e);
     }
+  }
+
+  /// Une copie est arrivée pendant ce tour : les .m3u8 se réécrivent une fois, à la fin.
+  bool _playlistsDirty = false;
+
+  StreamSubscription<void>? _playlistsSub;
+  Future<void> _playlistsJob = Future.value();
+
+  /// Suit les playlists des serveurs (synchro, compte retiré) : voir [syncPlaylists].
+  void followPlaylists() {
+    _playlistsSub ??= db
+        .tableUpdates(TableUpdateQuery.onTable(db.playlists))
+        .listen(
+          (_) => _playlistsJob = _playlistsJob.then((_) => syncPlaylists()),
+        );
+  }
+
+  /// Se termine quand les changements de playlists déjà vus sont traités.
+  @visibleForTesting
+  Future<void> whenPlaylistsSettled() => _playlistsJob;
+
+  /// Les playlists des serveurs ont changé : les morceaux qu'une playlist gardée a gagnés
+  /// sont gardés (règle Q12), puis les .m3u8 suivent (une playlist que le serveur n'a plus,
+  /// ou dont le compte est retiré, perd son fichier : règle Q10).
+  Future<void> syncPlaylists() async {
+    try {
+      for (final paths in db.takeAddedToKept().values) {
+        final tracks = [for (final p in paths) ?await db.trackByPath(p)];
+        if (tracks.isNotEmpty) await keep(tracks);
+      }
+    } catch (e) {
+      _lastError = _describe(e);
+    }
+    await _refreshPlaylists();
+  }
+
+  @override
+  void dispose() {
+    _playlistsSub?.cancel();
+    super.dispose();
   }
 
   Future<void>? _loop;
@@ -298,10 +338,11 @@ class Downloader extends ChangeNotifier {
 
   /// « Retirer » une playlist : son `.m3u8` (le nôtre) part, puis ses morceaux comme un
   /// « Retirer » de l'utilisateur ([forget] `byUser`), sauf ceux d'une autre playlist gardée.
+  /// Sans les bloquer : le Top 100 peut les garder de nouveau (règle Q11).
   Future<void> forgetPlaylist(String accountId, String playlistId) async {
     final paths = await playlistSongsToForget(accountId, playlistId);
     await playlistFiles.remove(accountId, playlistId);
-    await forget(paths, byUser: true);
+    await forget(paths, byUser: true, block: false);
   }
 
   /// Fait de la place pour un « Garder » de l'utilisateur : efface des copies `top100`,
@@ -438,6 +479,10 @@ class Downloader extends ChangeNotifier {
     } finally {
       _reserved.clear();
       _setProgress(0);
+      if (_playlistsDirty) {
+        _playlistsDirty = false;
+        await _refreshPlaylists();
+      }
     }
   }
 
@@ -566,7 +611,7 @@ class Downloader extends ChangeNotifier {
     try {
       await device.announce(file.path);
     } catch (_) {} // la médiathèque du système n'est pas vitale
-    await _refreshPlaylists();
+    _playlistsDirty = true;
     return rel;
   }
 
@@ -720,13 +765,15 @@ class Downloader extends ChangeNotifier {
   /// Avec [only], seules les lignes de cette raison sont oubliées (relue au moment même).
   /// [byUser] : c'est l'utilisateur qui retire (« Retirer du téléphone ») ; le Top 100 ne
   /// regarde plus ces morceaux jusqu'à un « Garder » de l'utilisateur.
+  /// [block] faux : sans ce blocage (une playlist retirée).
   Future<void> forget(
     List<String> trackPaths, {
     OfflineReason? only,
     bool byUser = false,
+    bool block = true,
   }) async {
     try {
-      await _forget(trackPaths, only: only, byUser: byUser);
+      await _forget(trackPaths, only: only, byUser: byUser, block: block);
     } finally {
       await _refreshPlaylists();
     }
@@ -736,6 +783,7 @@ class Downloader extends ChangeNotifier {
     List<String> trackPaths, {
     OfflineReason? only,
     bool byUser = false,
+    bool block = true,
   }) async {
     final own = [
       for (final t in trackPaths)
@@ -747,7 +795,7 @@ class Downloader extends ChangeNotifier {
         ? {...own, for (final t in own) ...await db.twinPaths(t)}.toList()
         : own;
     // le blocage d'abord : un tour du Top 100 entre-temps ne remet pas le morceau en file
-    if (byUser) await db.blockAutoKeep(remote);
+    if (byUser && block) await db.blockAutoKeep(remote);
     // les lignes d'abord : la boucle ne reprend pas un morceau qu'on oublie
     final taken = await db.takeOffline(remote, reason: only);
     final rels = [for (final rel in taken.values) ?rel];
