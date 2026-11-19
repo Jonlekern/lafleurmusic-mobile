@@ -523,26 +523,6 @@ void main() {
       ]);
     });
 
-    test('Q12: the songs a kept playlist gains are noted, once', () async {
-      await LibrarySync(db).run(
-        withLists('acc1', const [
-          SourcePlaylist(id: 'p1', name: 'Soirée', songIds: ['s1']),
-          SourcePlaylist(id: 'p2', name: 'Running', songIds: ['s2']),
-        ]),
-      );
-      await db.addKeptPlaylist('acc1', 'p1');
-      await LibrarySync(db).run(
-        withLists('acc1', const [
-          SourcePlaylist(id: 'p1', name: 'Soirée', songIds: ['s1', 's4', 's1']),
-          SourcePlaylist(id: 'p2', name: 'Running', songIds: ['s2', 's5']),
-        ]),
-      );
-      expect(db.takeAddedToKept(), {
-        ('acc1', 'p1'): {'subsonic://acc1/s4'},
-      });
-      expect(db.takeAddedToKept(), isEmpty);
-    });
-
     test('an incomplete sync keeps the old ones', () async {
       await LibrarySync(db).run(
         withLists('acc1', const [

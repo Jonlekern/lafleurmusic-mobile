@@ -143,6 +143,17 @@ class KeptPlaylists extends Table {
   Set<Column> get primaryKey => {accountId, playlistId};
 }
 
+/// Pourquoi l'utilisateur garde un morceau : `album:<albumMergeKey>`, `playlist:<compte>/<id>`
+/// ou `song` (règle Q13). Retirer un album ou une playlist n'efface que les morceaux qui n'ont
+/// plus aucune raison (jumeaux compris).
+@DataClassName('KeepOriginRow')
+class KeepOrigins extends Table {
+  TextColumn get trackPath => text()();
+  TextColumn get origin => text()();
+  @override
+  Set<Column> get primaryKey => {trackPath, origin};
+}
+
 /// Where the kept copies live (a reachable folder) and how a copy found there is named
 /// once it is a local track ([keyFor]: absolute path → library path; null = the path itself).
 class CopyRoot {
@@ -163,6 +174,7 @@ class CopyRoot {
     Playlists,
     PlaylistItems,
     KeptPlaylists,
+    KeepOrigins,
   ],
 )
 class LibraryDb extends _$LibraryDb {
@@ -190,6 +202,12 @@ class LibraryDb extends _$LibraryDb {
         await m.createTable(playlists);
         await m.createTable(playlistItems);
         await m.createTable(keptPlaylists);
+        await m.createTable(keepOrigins);
+        // les copies gardées par l'utilisateur avant la v4 : gardées pour elles-mêmes
+        await customStatement(
+          "INSERT OR IGNORE INTO keep_origins (track_path, origin) "
+          "SELECT track_path, 'song' FROM offline WHERE reason = 'user'",
+        );
         await m.addColumn(playCounts, playCounts.imported);
         // la sync du plan 1 écrivait les écoutes du serveur dans `count` (raisePlayCounts)
         await customStatement(
@@ -1186,17 +1204,12 @@ class LibraryDb extends _$LibraryDb {
 
   /// Replaces every playlist of [accountId] by [lists] (id, name, song paths in order;
   /// a song may come back twice), in one transaction. A playlist whose songs could not be
-  /// read (`paths` null) keeps its old songs. The songs that a kept playlist gains are noted
-  /// for [takeAddedToKept] (rule Q12).
+  /// read (`paths` null) keeps its old songs.
   Future<void> replacePlaylists(
     String accountId,
     List<({String id, String name, List<String>? paths})> lists,
   ) => transaction(() async {
     final old = {for (final l in await playlistsOf(accountId)) l.id: l.paths};
-    final kept = {
-      for (final k in await keptPlaylistRows())
-        if (k.accountId == accountId) k.playlistId,
-    };
     // an id listed twice: the last one
     final byId = {for (final l in lists) l.id: l};
     await (delete(
@@ -1228,25 +1241,7 @@ class LibraryDb extends _$LibraryDb {
         }
       }
     });
-    for (final l in byId.values) {
-      final before = old[l.id];
-      if (!kept.contains(l.id) || l.paths == null || before == null) continue;
-      final added = l.paths!.toSet().difference(before.toSet());
-      if (added.isNotEmpty) {
-        (_addedToKept[(accountId, l.id)] ??= {}).addAll(added);
-      }
-    }
   });
-
-  final _addedToKept = <(String, String), Set<String>>{};
-
-  /// The songs that kept playlists gained at the last syncs, (account, playlist) → paths;
-  /// emptied by the call.
-  Map<(String, String), Set<String>> takeAddedToKept() {
-    final out = Map.of(_addedToKept);
-    _addedToKept.clear();
-    return out;
-  }
 
   /// The playlists of [accountId], in the server's order, with their song paths.
   Future<List<({String id, String name, List<String> paths})>> playlistsOf(
@@ -1425,8 +1420,8 @@ class LibraryDb extends _$LibraryDb {
       final rows = await customSelect(
         'SELECT 1 FROM offline o WHERE o.track_path = ? OR o.track_path IN '
         '(SELECT t2.path FROM tracks t1 JOIN tracks t2 ON t2.merge_key = t1.merge_key '
-        "WHERE t1.path = ? AND t1.merge_key <> '' AND t2.account_id <> t1.account_id) "
-        'LIMIT 1',
+        "WHERE t1.path = ? AND t1.merge_key <> '' AND t2.account_id <> t1.account_id "
+        "AND t2.account_id <> 'local') LIMIT 1",
         variables: [Variable.withString(path), Variable.withString(path)],
         readsFrom: {offline, tracks},
       ).get();
@@ -1474,6 +1469,52 @@ class LibraryDb extends _$LibraryDb {
                 k.accountId.equals(accountId) & k.playlistId.equals(playlistId),
           ))
           .go();
+
+  /// [path] and its twins on the other accounts (rule Q8 groups).
+  Future<List<String>> _group(String path) async => [
+    path,
+    ...await twinPaths(path),
+  ];
+
+  /// The user keeps [paths] for [origin] (rule Q13).
+  Future<void> addOrigins(Map<String, String> originOf) => batch((b) {
+    for (final e in originOf.entries) {
+      b.insert(
+        keepOrigins,
+        KeepOriginsCompanion.insert(trackPath: e.key, origin: e.value),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+  });
+
+  /// [origin] no longer keeps [paths] (nor their twins).
+  Future<void> removeOrigin(String origin, List<String> paths) async {
+    for (final path in {...paths}) {
+      final group = await _group(path);
+      await (delete(
+        keepOrigins,
+      )..where((o) => o.origin.equals(origin) & o.trackPath.isIn(group))).go();
+    }
+  }
+
+  /// Every reason to keep [paths] goes (the user removed them one by one).
+  Future<void> clearOrigins(List<String> paths) async {
+    for (var i = 0; i < paths.length; i += 500) {
+      final chunk = paths.skip(i).take(500).toList();
+      await (delete(keepOrigins)..where((o) => o.trackPath.isIn(chunk))).go();
+    }
+  }
+
+  /// The reasons the user keeps [path] or one of its twins.
+  Future<Set<String>> originsOf(String path) async {
+    final group = await _group(path);
+    return {
+      for (final o in await (select(
+        keepOrigins,
+      )..where((o) => o.trackPath.isIn(group))).get())
+        o.origin,
+    };
+  }
 
   /// The playlists of a removed account go with it (a kept `.m3u8` stays on the phone).
   Future<void> deleteAccountPlaylists(String accountId) async {

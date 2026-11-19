@@ -12,7 +12,7 @@ import '../../library/merge.dart';
 import '../../library/models.dart';
 import '../../offline/device.dart';
 import '../../offline/downloader.dart'
-    show Downloader, KeepResult, unknownTrackSize;
+    show Downloader, KeepOrigin, KeepResult, unknownTrackSize;
 import '../../offline/paths.dart' show fileOrPlaceholderExists;
 import '../../settings.dart';
 import '../../theme/colors.dart';
@@ -421,10 +421,15 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     }
   }
 
+  /// Un album : seulement ce qu'il est seul à garder (règle Q13).
   Future<void> _remove(_Kept k) async {
-    final app = AppScope.of(context);
-    if (!await confirmRemoval(context, name: k.name, paths: k.paths)) return;
-    await app.downloader?.forget(k.paths, byUser: true);
+    final d = AppScope.of(context).downloader;
+    if (d == null) return;
+    final origin = KeepOrigin.album(k.key);
+    final gone = await d.toForgetFrom(origin, k.paths);
+    if (!mounted) return;
+    if (!await confirmRemoval(context, name: k.name, paths: gone)) return;
+    await d.forgetFrom(origin, k.paths);
   }
 
   Future<void> _removeSheet(_Kept k) async {

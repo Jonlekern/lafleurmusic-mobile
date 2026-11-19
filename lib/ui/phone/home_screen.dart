@@ -183,6 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               onLongPress: () => showTrackSheet(
                                 context,
                                 title: a.name,
+                                album: true,
                                 tracks: () =>
                                     app.library.albumTracks(a.key).first,
                               ),

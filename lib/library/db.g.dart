@@ -4090,6 +4090,221 @@ class KeptPlaylistsCompanion extends UpdateCompanion<KeptPlaylistRow> {
   }
 }
 
+class $KeepOriginsTable extends KeepOrigins
+    with TableInfo<$KeepOriginsTable, KeepOriginRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $KeepOriginsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _trackPathMeta = const VerificationMeta(
+    'trackPath',
+  );
+  @override
+  late final GeneratedColumn<String> trackPath = GeneratedColumn<String>(
+    'track_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originMeta = const VerificationMeta('origin');
+  @override
+  late final GeneratedColumn<String> origin = GeneratedColumn<String>(
+    'origin',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [trackPath, origin];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'keep_origins';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<KeepOriginRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('track_path')) {
+      context.handle(
+        _trackPathMeta,
+        trackPath.isAcceptableOrUnknown(data['track_path']!, _trackPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_trackPathMeta);
+    }
+    if (data.containsKey('origin')) {
+      context.handle(
+        _originMeta,
+        origin.isAcceptableOrUnknown(data['origin']!, _originMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_originMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {trackPath, origin};
+  @override
+  KeepOriginRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return KeepOriginRow(
+      trackPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}track_path'],
+      )!,
+      origin: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin'],
+      )!,
+    );
+  }
+
+  @override
+  $KeepOriginsTable createAlias(String alias) {
+    return $KeepOriginsTable(attachedDatabase, alias);
+  }
+}
+
+class KeepOriginRow extends DataClass implements Insertable<KeepOriginRow> {
+  final String trackPath;
+  final String origin;
+  const KeepOriginRow({required this.trackPath, required this.origin});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['track_path'] = Variable<String>(trackPath);
+    map['origin'] = Variable<String>(origin);
+    return map;
+  }
+
+  KeepOriginsCompanion toCompanion(bool nullToAbsent) {
+    return KeepOriginsCompanion(
+      trackPath: Value(trackPath),
+      origin: Value(origin),
+    );
+  }
+
+  factory KeepOriginRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return KeepOriginRow(
+      trackPath: serializer.fromJson<String>(json['trackPath']),
+      origin: serializer.fromJson<String>(json['origin']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'trackPath': serializer.toJson<String>(trackPath),
+      'origin': serializer.toJson<String>(origin),
+    };
+  }
+
+  KeepOriginRow copyWith({String? trackPath, String? origin}) => KeepOriginRow(
+    trackPath: trackPath ?? this.trackPath,
+    origin: origin ?? this.origin,
+  );
+  KeepOriginRow copyWithCompanion(KeepOriginsCompanion data) {
+    return KeepOriginRow(
+      trackPath: data.trackPath.present ? data.trackPath.value : this.trackPath,
+      origin: data.origin.present ? data.origin.value : this.origin,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('KeepOriginRow(')
+          ..write('trackPath: $trackPath, ')
+          ..write('origin: $origin')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(trackPath, origin);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is KeepOriginRow &&
+          other.trackPath == this.trackPath &&
+          other.origin == this.origin);
+}
+
+class KeepOriginsCompanion extends UpdateCompanion<KeepOriginRow> {
+  final Value<String> trackPath;
+  final Value<String> origin;
+  final Value<int> rowid;
+  const KeepOriginsCompanion({
+    this.trackPath = const Value.absent(),
+    this.origin = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  KeepOriginsCompanion.insert({
+    required String trackPath,
+    required String origin,
+    this.rowid = const Value.absent(),
+  }) : trackPath = Value(trackPath),
+       origin = Value(origin);
+  static Insertable<KeepOriginRow> custom({
+    Expression<String>? trackPath,
+    Expression<String>? origin,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (trackPath != null) 'track_path': trackPath,
+      if (origin != null) 'origin': origin,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  KeepOriginsCompanion copyWith({
+    Value<String>? trackPath,
+    Value<String>? origin,
+    Value<int>? rowid,
+  }) {
+    return KeepOriginsCompanion(
+      trackPath: trackPath ?? this.trackPath,
+      origin: origin ?? this.origin,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (trackPath.present) {
+      map['track_path'] = Variable<String>(trackPath.value);
+    }
+    if (origin.present) {
+      map['origin'] = Variable<String>(origin.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('KeepOriginsCompanion(')
+          ..write('trackPath: $trackPath, ')
+          ..write('origin: $origin, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LibraryDb extends GeneratedDatabase {
   _$LibraryDb(QueryExecutor e) : super(e);
   $LibraryDbManager get managers => $LibraryDbManager(this);
@@ -4105,6 +4320,7 @@ abstract class _$LibraryDb extends GeneratedDatabase {
   late final $PlaylistsTable playlists = $PlaylistsTable(this);
   late final $PlaylistItemsTable playlistItems = $PlaylistItemsTable(this);
   late final $KeptPlaylistsTable keptPlaylists = $KeptPlaylistsTable(this);
+  late final $KeepOriginsTable keepOrigins = $KeepOriginsTable(this);
   late final Index tracksMergeKey = Index(
     'tracks_merge_key',
     'CREATE INDEX tracks_merge_key ON tracks (merge_key)',
@@ -4128,6 +4344,7 @@ abstract class _$LibraryDb extends GeneratedDatabase {
     playlists,
     playlistItems,
     keptPlaylists,
+    keepOrigins,
     tracksMergeKey,
     tracksAlbumMergeKey,
   ];
@@ -6398,6 +6615,158 @@ typedef $$KeptPlaylistsTableProcessedTableManager =
       KeptPlaylistRow,
       PrefetchHooks Function()
     >;
+typedef $$KeepOriginsTableCreateCompanionBuilder =
+    KeepOriginsCompanion Function({
+      required String trackPath,
+      required String origin,
+      Value<int> rowid,
+    });
+typedef $$KeepOriginsTableUpdateCompanionBuilder =
+    KeepOriginsCompanion Function({
+      Value<String> trackPath,
+      Value<String> origin,
+      Value<int> rowid,
+    });
+
+class $$KeepOriginsTableFilterComposer
+    extends Composer<_$LibraryDb, $KeepOriginsTable> {
+  $$KeepOriginsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get trackPath => $composableBuilder(
+    column: $table.trackPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get origin => $composableBuilder(
+    column: $table.origin,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$KeepOriginsTableOrderingComposer
+    extends Composer<_$LibraryDb, $KeepOriginsTable> {
+  $$KeepOriginsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get trackPath => $composableBuilder(
+    column: $table.trackPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get origin => $composableBuilder(
+    column: $table.origin,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$KeepOriginsTableAnnotationComposer
+    extends Composer<_$LibraryDb, $KeepOriginsTable> {
+  $$KeepOriginsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get trackPath =>
+      $composableBuilder(column: $table.trackPath, builder: (column) => column);
+
+  GeneratedColumn<String> get origin =>
+      $composableBuilder(column: $table.origin, builder: (column) => column);
+}
+
+class $$KeepOriginsTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDb,
+          $KeepOriginsTable,
+          KeepOriginRow,
+          $$KeepOriginsTableFilterComposer,
+          $$KeepOriginsTableOrderingComposer,
+          $$KeepOriginsTableAnnotationComposer,
+          $$KeepOriginsTableCreateCompanionBuilder,
+          $$KeepOriginsTableUpdateCompanionBuilder,
+          (
+            KeepOriginRow,
+            BaseReferences<_$LibraryDb, $KeepOriginsTable, KeepOriginRow>,
+          ),
+          KeepOriginRow,
+          PrefetchHooks Function()
+        > {
+  $$KeepOriginsTableTableManager(_$LibraryDb db, $KeepOriginsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$KeepOriginsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$KeepOriginsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$KeepOriginsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> trackPath = const Value.absent(),
+                Value<String> origin = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => KeepOriginsCompanion(
+                trackPath: trackPath,
+                origin: origin,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String trackPath,
+                required String origin,
+                Value<int> rowid = const Value.absent(),
+              }) => KeepOriginsCompanion.insert(
+                trackPath: trackPath,
+                origin: origin,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$KeepOriginsTable, KeepOriginRow>(table),
+                  BaseReferences<_$LibraryDb, $KeepOriginsTable, KeepOriginRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$KeepOriginsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDb,
+      $KeepOriginsTable,
+      KeepOriginRow,
+      $$KeepOriginsTableFilterComposer,
+      $$KeepOriginsTableOrderingComposer,
+      $$KeepOriginsTableAnnotationComposer,
+      $$KeepOriginsTableCreateCompanionBuilder,
+      $$KeepOriginsTableUpdateCompanionBuilder,
+      (
+        KeepOriginRow,
+        BaseReferences<_$LibraryDb, $KeepOriginsTable, KeepOriginRow>,
+      ),
+      KeepOriginRow,
+      PrefetchHooks Function()
+    >;
 
 class $LibraryDbManager {
   final _$LibraryDb _db;
@@ -6422,4 +6791,6 @@ class $LibraryDbManager {
       $$PlaylistItemsTableTableManager(_db, _db.playlistItems);
   $$KeptPlaylistsTableTableManager get keptPlaylists =>
       $$KeptPlaylistsTableTableManager(_db, _db.keptPlaylists);
+  $$KeepOriginsTableTableManager get keepOrigins =>
+      $$KeepOriginsTableTableManager(_db, _db.keepOrigins);
 }

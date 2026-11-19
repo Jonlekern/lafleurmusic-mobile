@@ -156,6 +156,33 @@ void main() {
     },
   );
 
+  phoneTest(
+    'Q13 : retirer un album depuis l\'Accueil retire sa raison « album », '
+    'un morceau seul est retiré tel quel',
+    TargetPlatform.iOS,
+    (tester) async {
+      final f = await pumpPlaylists(tester);
+      await longPress(tester, find.text('Lafleur Surf').first);
+      await tester.tap(find.text('Retirer du téléphone'));
+      await done(tester);
+      await confirmRemoval(tester);
+      expect(f.downloader.forgottenOrigins, hasLength(1));
+      expect(f.downloader.forgottenOrigins.single, startsWith('album:'));
+    },
+  );
+
+  phoneTest('Q13 : ⬇ d\'un album le garde « album »', TargetPlatform.iOS, (
+    tester,
+  ) async {
+    final f = await pumpPlaylists(tester);
+    await scrollTo(tester, find.text('Summer Mix'));
+    await tester.tap(find.text('Summer Mix'));
+    await done(tester);
+    await tester.tap(find.byIcon(Icons.arrow_downward_rounded));
+    await done(tester);
+    expect(f.downloader.origins.single.single, startsWith('album:'));
+  });
+
   group('écran Playlist', () {
     phoneTest(
       'PLAYLIST · compte, l\'ordre du serveur, le doublon deux fois, '

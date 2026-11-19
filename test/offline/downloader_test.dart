@@ -1854,6 +1854,151 @@ void main() {
       ]);
     });
   });
+
+  group('keep origins (Q13)', () {
+    final albumOrigin = KeepOrigin.albumOf(_t('1'));
+    const albumPaths = [
+      'subsonic://acc/1',
+      'subsonic://acc/2',
+      'subsonic://acc/3',
+    ];
+
+    /// Album Alb (1, 2, 3) kept whole, playlist « r » (2, 3, 4) kept: 2 and 3 shared.
+    Future<Downloader> both() async {
+      for (var i = 1; i <= 3; i++) {
+        await add(_t('$i', no: i));
+      }
+      await add(_t('4', no: 4, album: 'Other'));
+      await db.replacePlaylists('acc', [
+        (
+          id: 'r',
+          name: 'Mix',
+          paths: ['subsonic://acc/2', 'subsonic://acc/3', 'subsonic://acc/4'],
+        ),
+      ]);
+      final d = make();
+      await d.keep([
+        for (var i = 1; i <= 3; i++) _t('$i', no: i),
+      ], origin: KeepOrigin.albumOf);
+      await d.keepPlaylist('acc', 'r');
+      await d.whenIdle();
+      return d;
+    }
+
+    Future<Set<String>> kept() async => {
+      for (final r in await db.offlineRows()) r.trackPath,
+    };
+
+    test(
+      'removing the playlist: the songs the album also keeps stay',
+      () async {
+        final d = await both();
+        expect(await d.playlistSongsToForget('acc', 'r'), ['subsonic://acc/4']);
+        await d.forgetPlaylist('acc', 'r');
+        expect(await kept(), albumPaths.toSet());
+        expect(await db.originsOf('subsonic://acc/2'), {albumOrigin});
+      },
+    );
+
+    test(
+      'removing the album: the songs the kept playlist also keeps stay',
+      () async {
+        final d = await both();
+        expect(await d.toForgetFrom(albumOrigin, albumPaths), [
+          'subsonic://acc/1',
+        ]);
+        await d.forgetFrom(albumOrigin, albumPaths);
+        expect(await kept(), {
+          'subsonic://acc/2',
+          'subsonic://acc/3',
+          'subsonic://acc/4',
+        });
+        expect(await db.autoKeepBlockedFor('subsonic://acc/1'), isTrue);
+        expect(
+          File('${root.path}/Playlists/Mix.m3u8')
+              .readAsLinesSync()
+              .where((l) => !l.startsWith('#')),
+          hasLength(3),
+          reason: 'the playlist file is untouched',
+        );
+      },
+    );
+
+    test(
+      'removing one song removes it whatever keeps it, and its reasons',
+      () async {
+        final d = await both();
+        await d.forget(['subsonic://acc/2'], byUser: true);
+        expect(await db.offlineOf('subsonic://acc/2'), isNull);
+        expect(await db.originsOf('subsonic://acc/2'), isEmpty);
+        // later removing the playlist: 3 still has its album, 4 goes
+        await d.forgetPlaylist('acc', 'r');
+        expect(await kept(), {'subsonic://acc/1', 'subsonic://acc/3'});
+      },
+    );
+
+    test(
+      'a twin\'s reason counts (the same song on another account)',
+      () async {
+        await add(_t('1'));
+        await add(_t('1', acc: 'B'));
+        final d = make();
+        await d.keep([_t('1', acc: 'B')], origin: KeepOrigin.songOf);
+        await d.keep([_t('1')], origin: KeepOrigin.albumOf);
+        await d.whenIdle();
+        expect(
+          await d.toForgetFrom(albumOrigin, ['subsonic://acc/1']),
+          isEmpty,
+        );
+      },
+    );
+
+    test('a Top 100 copy has no reason: an album removal takes it', () async {
+      await add(_t('1'));
+      final d = make();
+      await d.keep([_t('1')], reason: OfflineReason.top100);
+      await d.whenIdle();
+      await d.forgetFrom(albumOrigin, ['subsonic://acc/1']);
+      expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    });
+
+    test('at launch, a kept playlist keeps its songs without any copy, except '
+        'one the user removed himself', () async {
+      final d = await both();
+      await d.forget(['subsonic://acc/4'], byUser: true); // blocked
+      await add(_t('5', no: 5, album: 'Other'));
+      await db.replacePlaylists('acc', [
+        (
+          id: 'r',
+          name: 'Mix',
+          paths: [
+            'subsonic://acc/2',
+            'subsonic://acc/3',
+            'subsonic://acc/4',
+            'subsonic://acc/5',
+          ],
+        ),
+      ]); // no follower: the gain is seen at the next launch
+      expect(await db.offlineOf('subsonic://acc/5'), isNull);
+      await d.resumeAtLaunch();
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://acc/5'))!.state, 'done');
+      expect(await db.offlineOf('subsonic://acc/4'), isNull);
+      expect(await db.originsOf('subsonic://acc/5'), {
+        KeepOrigin.playlist('acc', 'r'),
+      });
+    });
+
+    test('a playlist removed meanwhile keeps nothing more', () async {
+      await add(_t('5', no: 5, album: 'Other'));
+      await db.replacePlaylists('acc', [
+        (id: 'r', name: 'Mix', paths: ['subsonic://acc/5']),
+      ]);
+      final d = make();
+      await d.syncPlaylists(); // not kept: nothing
+      expect(await db.offlineOf('subsonic://acc/5'), isNull);
+    });
+  });
 }
 
 extension on Track {

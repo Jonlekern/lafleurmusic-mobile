@@ -90,9 +90,33 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
   Future<KeepResult> keep(
     List<Track> tracks, {
     OfflineReason reason = OfflineReason.user,
+    String Function(Track)? origin,
   }) async {
     kept.add([for (final t in tracks) t.path]);
+    if (origin != null) {
+      origins.add({for (final t in tracks) origin(t)});
+    }
     return result;
+  }
+
+  /// Les raisons notées par [keep], un ensemble par appel.
+  final origins = <Set<String>>[];
+
+  /// Les raisons retirées par [forgetFrom].
+  final forgottenOrigins = <String>[];
+
+  @override
+  Future<List<String>> toForgetFrom(String origin, List<String> paths) async =>
+      paths;
+
+  @override
+  Future<void> forgetFrom(
+    String origin,
+    List<String> paths, {
+    bool block = true,
+  }) async {
+    forgottenOrigins.add(origin);
+    forgotten.add(paths);
   }
 
   @override

@@ -102,3 +102,50 @@ No schema change: the Task 1 v4 tables are used as they are.
 - `flutter analyze`: No issues found!
 - `flutter test --exclude-tags golden`: `+740 ~3: All tests passed!` (no warning or exception lines).
 - `flutter test --tags golden`: `+21: All tests passed!`
+
+## Fix round 2 (Johnny's 3a answer « 1 », ruling Q13, re-review minors)
+
+### A. Keep origins (Q13)
+- **Schema** (still v4): a new `KeepOrigins(trackPath, origin)` table, primary key on both, data class `KeepOriginRow`. It is created in `onCreate` (createAll) and in the `from < 4` step, which then runs `INSERT OR IGNORE … SELECT track_path, 'song' FROM offline WHERE reason = 'user'`, so 0.2.0 user copies count as kept for themselves. `db.g.dart` was regenerated. The v1/v2/v3→v4 migration tests pass; the v3 test now also checks the `song` origin.
+- **DB**: `addOrigins`, `removeOrigin(origin, paths)` (works on the twin group), `clearOrigins(paths)`, `originsOf(path)` (the union over the group).
+- **Downloader**:
+  - `keep(..., origin: String Function(Track)?)` records an origin for user keeps only. A null origin records nothing (Top 100, « Réessayer »).
+  - `KeepOrigin` gives `song`, `album:<albumKeyOf(t)>` and `playlist:<acc>/<id>`.
+  - `toForgetFrom(origin, paths)` returns the paths with no other origin across the twin group. `forgetFrom(origin, paths, {block})` removes that origin, then forgets only those paths (`byUser`, twins included). `block` is true for albums and false for playlists (Q11).
+  - `forget(byUser: true)` clears the origins of everything it removes, so removing a single song is unconditional.
+  - `playlistSongsToForget` and `forgetPlaylist` now go through origins; this replaces the "other kept playlist" rule.
+- **Who records which origin**:
+  - Album: the album ⬇ pill (`isAlbum`), « Sélectionner » (screen 8), and the sheet when it holds an album (Home album long-press, album « … »; new `album:` flag on `showTrackSheet`).
+  - Song: a single song's sheet, and the pills of the Songs, artist, genre and Top 100 lists.
+  - Playlist: the playlist ⬇ and its sheet, plus songs a kept playlist gains.
+- **Removals**:
+  - Album via the sheet (`forgetAlbum`) or the « Sur mon iPhone » swipe/sheet (`_remove`): `forgetFrom(album origin)`. The confirmation dialog counts only `toForgetFrom`, i.e. what will really be deleted.
+  - A single song via its sheet: `forgetTracks`, which is unconditional.
+  - A playlist: `forgetFrom(playlist origin, block: false)`.
+- `DemoDownloader` gained matching overrides (`origins`, `forgottenOrigins`; `forgetFrom` also records into `forgotten`, so the Task 2c tests are unchanged).
+
+### B. Re-review minors
+1. and 4. `syncPlaylists` is now a catch-up instead of the in-memory gained-songs note, which is removed (`takeAddedToKept` is gone). For each playlist still in KeptPlaylists, it keeps, with the playlist origin, every present song that has no offline row (own or twin, any state). It re-checks that the record still exists before keeping, so a Retirer in between wins. It runs on playlist-table changes (`followPlaylists`) and at launch (`resumeAtLaunch`), which covers gains seen by a sync just before the app was killed.
+2. Songs blocked by `autoKeepBlockedFor` (removed one by one) are skipped.
+3. The `anyKept` twin subquery excludes `account_id = 'local'`.
+
+### Tests
+- downloader_test « keep origins (Q13) »:
+  - Album + playlist sharing songs 2 and 3: removing the playlist leaves 1, 2 and 3. Removing the album leaves 2, 3 and 4, blocks 1, and leaves the m3u8 at 3 lines.
+  - Removing a single song removes it and clears its origins; a later playlist removal keeps 3 (album) and drops 4.
+  - A twin's origin counts.
+  - A Top 100 copy (no origin) goes with an album removal.
+  - Launch catch-up keeps a gained song 5 with the playlist origin but not the blocked song 4.
+  - A playlist that is not kept keeps nothing.
+- db_migration_test: the v3 user copy gets origin `song`.
+- playlist_screen_test: Home album long-press → Retirer → `forgetFrom` with an `album:` origin; the album ⬇ keeps with an `album:` origin.
+- The round-1 tests still pass (Q10–Q12, failed copies).
+
+### Runs
+- `flutter analyze`: No issues found!
+- `flutter test --exclude-tags golden`: `+748 ~3: All tests passed!` (0 warning or exception lines).
+- `flutter test --tags golden`: `+21: All tests passed!`
+
+### Notes
+- An album removal blocks only the songs it really deletes. The songs that stay are not blocked, because they are still kept by something else.
+- Origins attach to the row the user acted on. Lookups and removals use the twin group, so a change of representative row (account order) doesn't lose them.

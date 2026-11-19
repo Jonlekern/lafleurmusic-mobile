@@ -7,7 +7,7 @@ import '../../l10n/strings.dart';
 import '../../library/db.dart' show OfflineRow;
 import '../../library/merge.dart';
 import '../../library/models.dart';
-import '../../offline/downloader.dart' show unknownTrackSize;
+import '../../offline/downloader.dart' show KeepOrigin, unknownTrackSize;
 import '../../settings.dart';
 import '../../theme/colors.dart';
 import '../cover_image.dart';
@@ -97,7 +97,9 @@ class _KeepScreenState extends State<KeepScreen> {
 
   Future<void> _keep(List<_Entry> chosen) async {
     setState(() => _busy = true);
-    final ok = await keepTracks(context, [for (final e in chosen) ...e.tracks]);
+    final ok = await keepTracks(context, [
+      for (final e in chosen) ...e.tracks,
+    ], origin: KeepOrigin.albumOf);
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) Navigator.of(context).maybePop();

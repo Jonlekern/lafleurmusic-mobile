@@ -7,7 +7,7 @@ import '../app_scope.dart';
 import '../l10n/strings.dart';
 import '../library/db.dart' show OfflineRow;
 import '../library/models.dart';
-import '../offline/downloader.dart' show Downloader, KeepResult;
+import '../offline/downloader.dart' show Downloader, KeepOrigin, KeepResult;
 import '../player/media_resolver.dart';
 import '../theme/colors.dart';
 
@@ -33,12 +33,17 @@ void say(ScaffoldMessengerState messenger, String text) =>
     );
 
 /// Garde [tracks] (ceux d'un serveur) : dit pourquoi si c'est refusé. Vrai si c'est en file.
-Future<bool> keepTracks(BuildContext context, List<Track> tracks) => keepWith(
+/// [origin] : pourquoi (pour lui-même par défaut, ou avec son album : [KeepOrigin]).
+Future<bool> keepTracks(
+  BuildContext context,
+  List<Track> tracks, {
+  String Function(Track) origin = KeepOrigin.songOf,
+}) => keepWith(
   context,
   (d) => d.keep([
     for (final t in tracks)
       if (isRemote(t)) t,
-  ]),
+  ], origin: origin),
 );
 
 /// Un « Garder » ([keep] : ce qu'on demande au téléchargeur) : dit pourquoi si c'est refusé,
@@ -99,6 +104,30 @@ Future<void> forgetTracks(
   if (!await confirmRemoval(context, name: name, paths: paths)) return;
   if (!context.mounted) return;
   await AppScope.of(context).downloader?.forget(paths, byUser: true);
+}
+
+/// Retire un album ([tracks]) du téléphone : seuls partent ceux qui ne sont gardés pour aucune
+/// autre raison (une playlist, le morceau lui-même : règle Q13), après la question, qui ne
+/// compte qu'eux.
+Future<void> forgetAlbum(
+  BuildContext context,
+  List<Track> tracks, {
+  required String name,
+}) async {
+  final d = AppScope.of(context).downloader;
+  if (d == null) return;
+  final byOrigin = <String, List<String>>{};
+  for (final t in tracks) {
+    if (isRemote(t)) (byOrigin[KeepOrigin.albumOf(t)] ??= []).add(t.path);
+  }
+  final gone = [
+    for (final e in byOrigin.entries) ...await d.toForgetFrom(e.key, e.value),
+  ];
+  if (!context.mounted) return;
+  if (!await confirmRemoval(context, name: name, paths: gone)) return;
+  for (final e in byOrigin.entries) {
+    await d.forgetFrom(e.key, e.value);
+  }
 }
 
 /// Demande « Retirer du téléphone ? » avant un retrait voulu par l'utilisateur. Vrai : on retire

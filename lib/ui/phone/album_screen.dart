@@ -10,6 +10,7 @@ import '../artist_avatar.dart';
 import '../cover_image.dart';
 import '../cover_mosaic.dart';
 import '../format.dart';
+import '../../offline/downloader.dart' show KeepOrigin;
 import '../keep_actions.dart';
 import '../track_menu.dart';
 import 'phone_shell.dart';
@@ -80,6 +81,7 @@ class AlbumScreen extends StatelessWidget {
                   : () => showTrackSheet(
                       context,
                       title: title,
+                      album: isAlbum,
                       tracks: () async => list,
                     ),
             ),
@@ -149,7 +151,7 @@ class AlbumScreen extends StatelessWidget {
                   ),
                   if (app.downloader != null && list.any(isRemote)) ...[
                     const SizedBox(width: 8),
-                    _KeepPill(tracks: list),
+                    _KeepPill(tracks: list, album: isAlbum),
                   ],
                 ],
               ),
@@ -184,8 +186,9 @@ void _play(BuildContext context, List<Track> list, {bool shuffle = false}) {
 /// Le rond ⬇ à côté de Lecture / Aléatoire : garde la liste sur le téléphone, rose quand tout y est
 /// (un toucher de plus dit comment la retirer : appui long sur un morceau).
 class _KeepPill extends StatelessWidget {
-  const _KeepPill({required this.tracks});
+  const _KeepPill({required this.tracks, required this.album});
   final List<Track> tracks;
+  final bool album; // gardé avec son album, sinon chaque morceau pour lui-même
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +207,11 @@ class _KeepPill extends StatelessWidget {
                   ScaffoldMessenger.of(context),
                   app.strings.alreadyOnDevice(onIphone),
                 )
-              : keepTracks(context, remote),
+              : keepTracks(
+                  context,
+                  remote,
+                  origin: album ? KeepOrigin.albumOf : KeepOrigin.songOf,
+                ),
         );
       },
     );

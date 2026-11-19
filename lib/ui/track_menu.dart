@@ -5,6 +5,7 @@ import '../app_scope.dart';
 import '../library/db.dart' show OfflineRow;
 import '../library/models.dart';
 import '../theme/colors.dart';
+import '../offline/downloader.dart' show KeepOrigin;
 import 'keep_actions.dart';
 import 'phone/keep_screen.dart';
 import 'phone/phone_shell.dart' show pushPhone;
@@ -89,13 +90,15 @@ class TrackMenuArea extends StatelessWidget {
 /// pour [tracks] (un morceau, ou tout un album), puis « Garder sur mon iPhone » (ou « Retirer du téléphone »
 /// quand tout est gardé) et « Sélectionner… » pour les morceaux d'un serveur. En-tête : [title] · [sub].
 /// Une playlist du serveur dit elle-même si elle est gardée ([kept]) et se garde ou se retire
-/// entière ([onKeep], [onRemove] : son `.m3u8` avec).
+/// entière ([onKeep], [onRemove] : son `.m3u8` avec). [album] : [tracks] est un album (gardé et
+/// retiré comme tel, règle Q13).
 Future<void> showTrackSheet(
   BuildContext context, {
   required String title,
   String? sub,
   required Future<List<Track>> Function() tracks,
   bool? kept,
+  bool album = false,
   Future<void> Function()? onKeep,
   Future<void> Function()? onRemove,
 }) async {
@@ -216,13 +219,20 @@ Future<void> showTrackSheet(
       if (onKeep != null) {
         await onKeep();
       } else if (context.mounted) {
-        await keepTracks(context, remote);
+        await keepTracks(
+          context,
+          remote,
+          origin: album ? KeepOrigin.albumOf : KeepOrigin.songOf,
+        );
       }
     case _Action.remove:
       if (onRemove != null) {
         await onRemove();
       } else if (context.mounted) {
-        await forgetTracks(context, remote, name: title);
+        // un album : seulement ce qu'il est seul à garder ; un morceau : retiré quoi qu'il arrive
+        album
+            ? await forgetAlbum(context, remote, name: title)
+            : await forgetTracks(context, remote, name: title);
       }
     case _Action.select:
       if (context.mounted) {

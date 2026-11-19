@@ -206,6 +206,8 @@ void main() {
     );
     expect((await db.pending('acc')).single.remoteId, '1');
     expect(await db.autoKeepBlocked(), {'subsonic://acc/2'});
+    // a user copy from 0.2.0 is kept for itself (Q13)
+    expect(await db.originsOf('subsonic://acc/1'), {'song'});
     await _expectV4(db);
   });
 }
