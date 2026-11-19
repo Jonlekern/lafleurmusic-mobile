@@ -10,11 +10,14 @@ Track t({
   String album = 'Album',
   int? no = 1,
   String account = 'a',
+  String artist = 'x',
+  String albumArtist = '',
 }) => Track(
   path: path,
   accountId: account,
   title: title,
-  artist: 'x',
+  artist: artist,
+  albumArtist: albumArtist,
   album: album,
   trackNo: no,
   durationMs: 1000,
@@ -37,6 +40,26 @@ void main() {
     );
   });
 
+  test('Beyoncé and Beyonce, The  Album and the album: merged', () {
+    expect(
+      mergeKey(t(albumArtist: 'Beyoncé', album: 'The  Album')),
+      mergeKey(t(albumArtist: 'Beyonce', album: 'the album')),
+    );
+    expect(mergeKey(t(title: ' Un   deux ')), mergeKey(t(title: 'un deux')));
+  });
+
+  test('same album name by two artists is not merged', () {
+    expect(
+      mergeKey(t(albumArtist: 'Alice')),
+      isNot(mergeKey(t(albumArtist: 'Bob'))),
+    );
+  });
+
+  test('without album artist the track artist is used', () {
+    expect(mergeKey(t(artist: 'Beyoncé')), mergeKey(t(albumArtist: 'beyonce')));
+    expect(mergeKey(t(artist: 'Alice')), isNot(mergeKey(t(artist: 'Bob'))));
+  });
+
   test('another title, album or number gives another key', () {
     final base = mergeKey(t());
     expect(mergeKey(t(title: 'Other')), isNot(base));
@@ -45,13 +68,10 @@ void main() {
     expect(mergeKey(t(no: null)), isNot(base));
   });
 
-  test(
-    'the key is album, title and number split by NUL, number may be empty',
-    () {
-      expect(mergeKey(t(no: 7)), 'album\u0000song\u00007');
-      expect(mergeKey(t(no: null)), 'album\u0000song\u0000');
-    },
-  );
+  test('the key is artist, album, title and number split by NUL, number may be empty', () {
+    expect(mergeKey(t(no: 7)), 'x\u0000album\u0000song\u00007');
+    expect(mergeKey(t(no: null)), 'x\u0000album\u0000song\u0000');
+  });
 
   test('fields cannot slide into each other', () {
     expect(

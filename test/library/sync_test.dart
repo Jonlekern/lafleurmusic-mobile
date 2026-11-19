@@ -159,29 +159,39 @@ void main() {
     expect(await count('local'), 1);
   });
 
-  test('play counts: server count raised in imported, app plays kept apart', () async {
-    final k = trackKey('acc1', 's0');
-    for (var i = 0; i < 3; i++) {
-      await db.addPlay(k, DateTime(2026));
-    }
-    Future<(int, int)?> cnt() async {
-      final r = await (db.select(
-        db.playCounts,
-      )..where((p) => p.path.equals(k))).getSingleOrNull();
-      return r == null ? null : (r.imported, r.count);
-    }
+  test(
+    'play counts: imported follows the server, app plays are not counted twice',
+    () async {
+      final k = trackKey('acc1', 's0');
+      for (var i = 0; i < 3; i++) {
+        await db.addPlay(k, DateTime(2026));
+      }
+      Future<(int, int)?> cnt() async {
+        final r = await (db.select(
+          db.playCounts,
+        )..where((p) => p.path.equals(k))).getSingleOrNull();
+        return r == null ? null : (r.imported, r.count);
+      }
 
-    Map<SourceAlbum, List<SourceSong>> one(int pc) => {
-      alb(0): [song('s0', playCount: pc)],
-    };
-    await LibrarySync(db).run(FakeSource('acc1', one(12)));
-    expect(await cnt(), (12, 3));
-    await LibrarySync(db).run(FakeSource('acc1', one(5)));
-    expect(await cnt(), (12, 3)); // never lowered
-    await LibrarySync(db).run(FakeSource('acc1', one(20)));
-    expect(await cnt(), (20, 3));
-    expect((await db.top(10)).single.$2, 23); // the Top 100 counts both
-  });
+      Future<int> total() async => (await db.top(10)).single.$2;
+      Map<SourceAlbum, List<SourceSong>> one(int pc) => {
+        alb(0): [song('s0', playCount: pc)],
+      };
+      await LibrarySync(db).run(FakeSource('acc1', one(12)));
+      expect(await cnt(), (9, 3)); // the server's 12 already holds the app's 3
+      expect(await total(), 12);
+      await LibrarySync(db).run(FakeSource('acc1', one(5)));
+      expect(await cnt(), (9, 3)); // never lowered
+      // one more app listen, scrobbled: the server now says 13
+      await db.addPlay(k, DateTime(2026));
+      expect(await total(), 13);
+      await LibrarySync(db).run(FakeSource('acc1', one(13)));
+      expect(await total(), 13);
+      // two listens from another device
+      await LibrarySync(db).run(FakeSource('acc1', one(15)));
+      expect(await total(), 15);
+    },
+  );
 
   test('albumSongs failing on the 3rd album: nothing deleted', () async {
     Map<SourceAlbum, List<SourceSong>> five({String? rename}) => {
@@ -235,7 +245,11 @@ void main() {
 
     LibrarySync syncer() => LibrarySync(db, copyRoot: () async => root);
 
-    Future<void> keep(String id, {String state = 'done', bool file = true}) async {
+    Future<void> keep(
+      String id, {
+      String state = 'done',
+      bool file = true,
+    }) async {
       final path = trackKey('acc1', id);
       await db.queueOffline([path], OfflineReason.user);
       if (state == 'done') {
@@ -248,23 +262,29 @@ void main() {
       }
     }
 
-    test('a done copy outlives its track: local track, plays follow, row gone', () async {
-      await syncer().run(FakeSource('acc1', lib3x()));
-      await keep('s3');
-      await db.addPlay(trackKey('acc1', 's3'), DateTime(2026));
-      final r = await syncer().run(FakeSource('acc1', lib3x(drop: 's3')));
-      expect(r.removed, 1);
-      expect(await db.trackByPath(trackKey('acc1', 's3')), isNull);
-      final abs = '${tmp.path}/Art/Album/s3.mp3';
-      final t = (await db.trackByPath(abs))!;
-      expect((t.accountId, t.remoteId, t.title, t.album), ('local', '', 'T', 'Album'));
-      expect(t.coverId, 'cs3'); // tags and cover fields kept
-      expect(t.size, 3);
-      expect(await db.offlineOf(trackKey('acc1', 's3')), isNull);
-      final plays = await db.select(db.playCounts).get();
-      expect([for (final p in plays) p.path], [abs]);
-      expect(File(abs).existsSync(), isTrue); // never deleted
-    });
+    test(
+      'a done copy outlives its track: local track, plays follow, row gone',
+      () async {
+        await syncer().run(FakeSource('acc1', lib3x()));
+        await keep('s3');
+        await db.addPlay(trackKey('acc1', 's3'), DateTime(2026));
+        final r = await syncer().run(FakeSource('acc1', lib3x(drop: 's3')));
+        expect(r.removed, 1);
+        expect(await db.trackByPath(trackKey('acc1', 's3')), isNull);
+        final abs = '${tmp.path}/Art/Album/s3.mp3';
+        final t = (await db.trackByPath(abs))!;
+        expect(
+          (t.accountId, t.remoteId, t.title, t.album),
+          ('local', '', 'T', 'Album'),
+        );
+        expect(t.coverId, 'cs3'); // tags and cover fields kept
+        expect(t.size, 3);
+        expect(await db.offlineOf(trackKey('acc1', 's3')), isNull);
+        final plays = await db.select(db.playCounts).get();
+        expect([for (final p in plays) p.path], [abs]);
+        expect(File(abs).existsSync(), isTrue); // never deleted
+      },
+    );
 
     test('queued, failed and file-less rows go with their track', () async {
       await syncer().run(FakeSource('acc1', lib3x()));
@@ -276,7 +296,13 @@ void main() {
       await syncer().run(FakeSource('acc1', lib3x(drop: 's2')));
       await syncer().run(FakeSource('acc1', lib3x(drop: 's4')));
       expect(await db.select(db.offline).get(), isEmpty);
-      expect(await db.select(db.tracks).get().then((l) => l.where((t) => t.accountId == 'local')), isEmpty);
+      expect(
+        await db
+            .select(db.tracks)
+            .get()
+            .then((l) => l.where((t) => t.accountId == 'local')),
+        isEmpty,
+      );
     });
 
     test('incomplete sync deletes nothing, copies included (R3)', () async {
@@ -295,7 +321,10 @@ void main() {
       expect(await db.trackByPath('${tmp.path}/Art/Album/s3.mp3'), isNotNull);
       expect(await db.select(db.offline).get(), isEmpty);
       expect(
-        await db.select(db.tracks).get().then((l) => l.map((t) => t.accountId).toSet()),
+        await db
+            .select(db.tracks)
+            .get()
+            .then((l) => l.map((t) => t.accountId).toSet()),
         {'local'},
       );
     });
@@ -312,15 +341,24 @@ void main() {
       expect(await db.trackByPath(trackKey('acc1', 's3')), isNotNull);
       expect((await db.offlineOf(trackKey('acc1', 's3')))!.state, 'done');
       expect(await db.select(db.playCounts).get(), hasLength(1));
-      expect(await db.offlineOf(trackKey('acc1', 's4')), isNull); // not done: goes
+      expect(
+        await db.offlineOf(trackKey('acc1', 's4')),
+        isNull,
+      ); // not done: goes
     });
 
     test('keyFor names the local track (iPhone: docs://)', () async {
       await syncer().run(FakeSource('acc1', lib3x()));
       await keep('s3');
-      root = CopyRoot(tmp.path, (a) async => a.replaceFirst('${tmp.path}/', 'docs://'));
+      root = CopyRoot(
+        tmp.path,
+        (a) async => a.replaceFirst('${tmp.path}/', 'docs://'),
+      );
       await syncer().run(FakeSource('acc1', lib3x(drop: 's3')));
-      expect((await db.trackByPath('docs://Art/Album/s3.mp3'))!.accountId, 'local');
+      expect(
+        (await db.trackByPath('docs://Art/Album/s3.mp3'))!.accountId,
+        'local',
+      );
     });
   });
 }

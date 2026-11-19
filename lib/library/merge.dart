@@ -1,7 +1,12 @@
 import 'models.dart';
 
+String _norm(String s) => sortKey(s).trim().replaceAll(RegExp(r'\s+'), ' ');
+
 /// Clé de fusion : le même morceau sur deux comptes donne la même clé.
-/// Album, titre (sans accents ni casse, sans espaces autour) et numéro de piste
-/// (vide s'il manque), séparés par NUL pour que les champs ne se mélangent pas.
+/// Artiste de l'album (l'artiste du morceau s'il manque), album, titre et numéro de piste
+/// (vide s'il manque). Chaque texte est sans accents ni casse, espaces réduits ; les champs
+/// sont séparés par NUL pour ne pas se mélanger. Deux albums de même nom d'artistes
+/// différents ne fusionnent donc pas.
 String mergeKey(Track t) =>
-    '${sortKey(t.album).trim()}\u0000${sortKey(t.title).trim()}\u0000${t.trackNo ?? ''}';
+    '${_norm(t.albumArtist.isEmpty ? t.artist : t.albumArtist)}\u0000'
+    '${_norm(t.album)}\u0000${_norm(t.title)}\u0000${t.trackNo ?? ''}';

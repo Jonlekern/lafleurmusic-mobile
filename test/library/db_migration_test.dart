@@ -36,6 +36,7 @@ Future<void> _expectV4(LibraryDb db) async {
           path: r.path,
           title: r.title,
           artist: r.artist,
+          albumArtist: r.albumArtist,
           album: r.album,
           trackNo: r.trackNo,
           durationMs: r.durationMs,
@@ -164,8 +165,8 @@ void main() {
       "INSERT INTO accounts VALUES ('acc', 'subsonic', 'Home', 'http://h', 'u', 0)",
     );
     raw.execute(
-      "INSERT INTO tracks (path, account_id, remote_id, title, artist, album, album_key, track_no, duration_ms, has_cover, size, search_key) "
-      "VALUES ('subsonic://acc/1', 'acc', '1', 'Été', 'a', 'Café', 'cafe', 4, 1000, 1, 5, 'k')",
+      "INSERT INTO tracks (path, account_id, remote_id, album_artist, title, artist, album, album_key, track_no, duration_ms, has_cover, size, search_key) "
+      "VALUES ('subsonic://acc/1', 'acc', '1', 'Beyoncé', 'Été', 'a', 'Café', 'cafe', 4, 1000, 1, 5, 'k')",
     );
     raw.execute(
       "INSERT INTO tracks (path, title, artist, album, album_key, duration_ms, has_cover, size, search_key) "
@@ -183,6 +184,14 @@ void main() {
     final db = LibraryDb(NativeDatabase.opened(raw));
     addTearDown(db.close);
 
+    final keys = {
+      for (final r in await db.select(db.tracks).get()) r.path: r.mergeKey,
+    };
+    expect(keys['subsonic://acc/1'], 'beyonce\u0000cafe\u0000ete\u00004');
+    expect(
+      keys['/m/1.flac'],
+      'a\u0000cafe\u0000local\u0000',
+    ); // no album artist: the artist
     expect(await db.select(db.tracks).get(), hasLength(2));
     final plays = {
       for (final p in await db.select(db.playCounts).get())

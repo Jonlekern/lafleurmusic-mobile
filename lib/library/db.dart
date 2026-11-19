@@ -571,25 +571,17 @@ class LibraryDb extends _$LibraryDb {
     }
   });
 
-  /// Raises the server's counts [counts] (path -> count, kept in `imported`) where higher;
-  /// never lowers one and never touches the plays made in the app (`count`).
+  /// The server's counts [counts] (path -> count). The server's number already holds the
+  /// listens the app scrobbled, so what it knows beyond the app's own `count` goes in
+  /// `imported`: `imported = max(imported, server - count)`, never lowered.
   Future<void> raisePlayCounts(Map<String, int> counts) async {
     for (final e in counts.entries) {
-      await into(playCounts).insert(
-        PlayCountsCompanion.insert(
-          path: e.key,
-          count: 0,
-          imported: Value(e.value),
-          lastPlayed: 0,
-        ),
-        onConflict: DoUpdate(
-          (_) => PlayCountsCompanion.custom(
-            imported: const CustomExpression(
-              'max(imported, excluded.imported)',
-            ),
-          ),
-          target: [playCounts.path],
-        ),
+      await customUpdate(
+        'INSERT INTO play_counts (path, count, imported, last_played) '
+        'VALUES (?, 0, ?, 0) ON CONFLICT(path) DO UPDATE SET '
+        'imported = max(imported, excluded.imported - count)',
+        variables: [Variable(e.key), Variable(e.value)],
+        updates: {playCounts},
       );
     }
   }
