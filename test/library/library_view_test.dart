@@ -409,7 +409,11 @@ void main() {
     await db.addPlay('subsonic://B/b3', DateTime(2026));
     final v = view(AppSettings(displayMode: DisplayMode.one, oneAccount: 'B'));
     final top = await v.top(100).first;
-    expect([for (final (t, _) in top) t.path], ['subsonic://B/b3']);
+    // only B's rows are shown; the listen on A counts for b1, A's twin of it
+    expect([for (final (t, _) in top) t.path], [
+      'subsonic://B/b1',
+      'subsonic://B/b3',
+    ]);
   });
 
   test('without settings: every account, merged', () async {

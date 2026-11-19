@@ -111,6 +111,7 @@ Future<LafleurApp> buildLafleurApp({
     db: db,
     downloader: downloader,
     atHome: () => home.atHome,
+    reachable: (id) => accountService.stateOf(id) != AccountState.absent,
   );
   // le Top 100 change (une écoute comptée) : un tour de plus, sans rafale
   final topSub = db.watchTop(100).listen((_) => topKeeper.schedule());

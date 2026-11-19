@@ -123,7 +123,8 @@ class LibraryView {
   Stream<List<Track>> genreTracks(String genre) =>
       _follow((a) => db.watchGenreTracks(genre, accounts: a));
 
-  /// The Top 100 of the accounts shown (twins are merged in a later step).
+  /// The Top 100 of the accounts shown: one rank per song, the listens of its twins added
+  /// up (see [LibraryDb.watchTop]).
   Stream<List<(Track, int)>> top(int limit) =>
       _follow((a) => db.watchTop(limit, accounts: a));
 

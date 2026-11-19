@@ -686,40 +686,66 @@ class LibraryDb extends _$LibraryDb {
     updates: {playCounts}, // le Top 100 affiché se met à jour
   );
 
-  /// Les [limit] plus écoutés (morceaux absents du disque cachés) avec leur nombre d'écoutes.
-  /// [accounts] : seulement ces comptes et les fichiers du téléphone (null : tous).
-  Stream<List<(Track, int)>> watchTop(int limit, {Set<String>? accounts}) =>
-      _topQuery(limit, accounts).watch().map(_topRows);
+  /// The [limit] most played songs (files missing from the disk hidden) with their
+  /// merged number of listens, one row per song: the same song on several accounts is
+  /// one rank, shown by the row of the merged view ([_reps]). [accounts]: only these
+  /// accounts and the files on the phone are shown (null: all); the hidden accounts'
+  /// listens still count.
+  Stream<List<(Track, int)>> watchTop(int limit, {Set<String>? accounts}) {
+    final (sql, v) = _topSql(limit, accounts);
+    return customSelect(
+      sql,
+      variables: v,
+      readsFrom: {tracks, offline, accountRows, playCounts},
+    ).watch().map(_topRows);
+  }
 
-  /// Le même classement, une fois (le Top 100 gardé sur le téléphone).
-  Future<List<(Track, int)>> top(int limit) async =>
-      _topRows(await _topQuery(limit).get());
+  /// The same ranking, once (the Top 100 kept on the phone: all accounts).
+  Future<List<(Track, int)>> top(int limit) async {
+    final (sql, v) = _topSql(limit, null);
+    return _topRows(
+      await customSelect(
+        sql,
+        variables: v,
+        readsFrom: {tracks, offline, accountRows, playCounts},
+      ).get(),
+    );
+  }
 
-  JoinedSelectStatement<HasResultSet, dynamic> _topQuery(
-    int limit, [
-    Set<String>? accounts,
-  ]) =>
-      select(tracks)
-          .join([innerJoin(playCounts, playCounts.path.equalsExp(tracks.path))])
-        ..where(
-          tracks.missing.equals(false) &
-              (accounts == null
-                  ? const Constant(true)
-                  : tracks.accountId.equals('local') |
-                        tracks.accountId.isIn(accounts)),
-        )
-        ..orderBy([
-          OrderingTerm.desc(playCounts.count + playCounts.imported),
-          OrderingTerm.desc(playCounts.lastPlayed),
-        ])
-        ..limit(limit);
+  /// The merged listens of a song: the server's own count is per account, so the value
+  /// of a group of twins is `max(imported of the twins) + sum(count of the twins)`
+  /// (what the servers knew, at most; plus every listen made in the app). Twins are
+  /// the rows with one `merge_key` on other accounts, the n-th duplicate of an account
+  /// pairing with the n-th of the other (as in [_reps]); local files are never grouped
+  /// together. [base] is SQL naming a CTE `base(path)`, the songs to value: the result
+  /// has `m(rp, imp, cnt, lp)` for each of them that was played.
+  static const _mergedPlays =
+      'nn AS (SELECT t.path, t.account_id, t.merge_key, ROW_NUMBER() OVER '
+      '(PARTITION BY t.account_id, t.merge_key ORDER BY t.path) AS n '
+      "FROM tracks t WHERE t.merge_key <> ''), "
+      'grp AS (SELECT b.path AS rp, x.path AS xp FROM base b '
+      'JOIN nn r ON r.path = b.path JOIN nn x ON x.merge_key = r.merge_key '
+      "AND (x.n = r.n OR x.account_id = 'local' OR r.account_id = 'local') "
+      "AND (x.account_id <> 'local' OR r.account_id <> 'local' OR x.path = r.path) "
+      'UNION ALL SELECT b.path, b.path FROM base b '
+      'WHERE b.path NOT IN (SELECT path FROM nn)), '
+      'm AS (SELECT g.rp, MAX(p.imported) AS imp, SUM(p.count) AS cnt, '
+      'MAX(p.last_played) AS lp FROM grp g JOIN play_counts p ON p.path = g.xp '
+      'GROUP BY g.rp) ';
 
-  List<(Track, int)> _topRows(List<TypedResult> rows) => [
+  (String, List<Variable<Object>>) _topSql(int limit, Set<String>? accounts) {
+    final (reps, v) = _reps(accounts);
+    return (
+      '$reps, base AS (SELECT path FROM reps WHERE missing = 0), $_mergedPlays'
+          'SELECT r.*, m.imp + m.cnt AS plays FROM reps r JOIN m ON m.rp = r.path '
+          'ORDER BY plays DESC, m.lp DESC, r.id LIMIT $limit',
+      v,
+    );
+  }
+
+  List<(Track, int)> _topRows(List<QueryRow> rows) => [
     for (final r in rows)
-      (
-        _fromRow(r.readTable(tracks)),
-        r.readTable(playCounts).count + r.readTable(playCounts).imported,
-      ),
+      (_fromRow(tracks.map(r.data)), r.read<int>('plays')),
   ];
 
   /// Retire les lignes [trackPaths] (seulement celles de [reason] si donné), en une
@@ -772,8 +798,14 @@ class LibraryDb extends _$LibraryDb {
   Future<List<OfflineRow>> top100ByLeastPlayed() async {
     final rows = await top100Offline();
     final plays = {
-      for (final c in await select(playCounts).get())
-        c.path: (c.count + c.imported, c.lastPlayed),
+      for (final r in await customSelect(
+        'WITH base AS (SELECT DISTINCT track_path AS path FROM offline '
+        "WHERE reason = ?), $_mergedPlays"
+        'SELECT rp, imp + cnt AS plays, lp FROM m',
+        variables: [Variable.withString(OfflineReason.top100.name)],
+        readsFrom: {tracks, offline, playCounts},
+      ).get())
+        r.read<String>('rp'): (r.read<int>('plays'), r.read<int>('lp')),
     };
     rows.sort((a, b) {
       final x = plays[a.trackPath], y = plays[b.trackPath];

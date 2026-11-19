@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/library_view.dart';
+import 'package:lafleurmusic/library/merge.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/settings.dart';
 
@@ -58,6 +59,17 @@ void main() {
     for (final p in kept) {
       await db.markOfflineDone(p, p, 1);
     }
+    // listens: 2000 songs known by both servers (twins), the app played some of them
+    await db.raisePlayCounts({
+      for (var a = 0; a < 200; a++)
+        for (var n = 1; n <= 10; n++) ...{
+          'subsonic://A/$a-$n': 1 + (a * n) % 40,
+          'subsonic://B/$a-$n': 1 + (a + n) % 40,
+        },
+    });
+    for (var i = 0; i < 100; i++) {
+      await db.addPlay('subsonic://B/${i % 200}-${1 + i % 10}', DateTime(2026));
+    }
     final v = LibraryView(db, settings: AppSettings());
     addTearDown(v.dispose);
     Future<(T, Duration)> time<T>(Future<T> Function() f) async {
@@ -73,14 +85,18 @@ void main() {
       () => v.albumTracks(albums[500].key).first,
     );
     final (_, tAll) = await time(() => v.allTracks().first);
+    final (top, tTop) = await time(() => v.top(100).first);
+    expect(top, hasLength(100));
+    expect({for (final r in top) mergeKey(r.$1)}, hasLength(100)); // one rank per song
+    final (_, tLeast) = await time(() => db.top100ByLeastPlayed());
     final (_, tArtist) = await time(() => v.artistTracks('Artist 7').first);
     expect(albums, hasLength(1000));
     expect(keptAlbums, hasLength(50));
     expect(tracks, hasLength(10));
     printOnFailure(
-      'albums $tAlbums, kept $tKept, album $tAlbum, all $tAll, artist $tArtist',
+      'albums $tAlbums, kept $tKept, album $tAlbum, all $tAll, artist $tArtist, top $tTop, least $tLeast',
     );
-    for (final t in [tAlbums, tKept, tAlbum, tArtist, tAll]) {
+    for (final t in [tAlbums, tKept, tAlbum, tArtist, tAll, tTop, tLeast]) {
       expect(t, lessThan(_bound));
     }
   });

@@ -220,4 +220,105 @@ void main() {
     await dl.forget(['subsonic://acc/1']); // not by the user
     expect(await db.autoKeepBlocked(), isEmpty);
   });
+
+  group('two accounts with the same song', () {
+    late bool aUp;
+    Track tw(String acc, String id) => Track(
+      path: 'subsonic://$acc/$id',
+      accountId: acc,
+      remoteId: id,
+      title: 'Song $id',
+      artist: 'Art',
+      albumArtist: 'Art',
+      album: 'Alb',
+      trackNo: 1,
+      disc: 1,
+      suffix: 'mp3',
+      durationMs: 1000,
+      hasCover: false,
+      size: _mb,
+    );
+
+    setUp(() async {
+      aUp = true;
+      for (final (i, id) in ['A', 'B'].indexed) {
+        await db
+            .into(db.accountRows)
+            .insert(
+              AccountRowsCompanion.insert(
+                id: id,
+                type: 'subsonic',
+                name: id,
+                base: 'https://music.example.com',
+                user: 'u',
+                position: i,
+              ),
+            );
+      }
+      keeper.dispose();
+      keeper = TopKeeper(
+        db: db,
+        downloader: dl,
+        atHome: () => home,
+        reachable: (id) => id != 'A' || aUp,
+        debounce: const Duration(milliseconds: 20),
+      );
+      await db.upsertTracks([tw('A', '1'), tw('B', '1')]);
+      await db.raisePlayCounts({'subsonic://A/1': 5, 'subsonic://B/1': 3});
+    });
+
+    test('one copy only, from the first account', () async {
+      await keeper.refresh();
+      expect(await reasons(), {'subsonic://A/1': 'top100'});
+      await keeper.refresh();
+      expect(await reasons(), {'subsonic://A/1': 'top100'});
+    });
+
+    test('the first account is down: the next one gives the copy', () async {
+      aUp = false;
+      await keeper.refresh();
+      expect(await reasons(), {'subsonic://B/1': 'top100'});
+    });
+
+    test('a twin that already has a copy is the one kept', () async {
+      await db.queueOffline(['subsonic://B/1'], OfflineReason.top100);
+      await db.markOfflineDone('subsonic://B/1', 'Art/Alb/01 Song 1.mp3', 4);
+      await keeper.refresh();
+      expect(await reasons(), {'subsonic://B/1': 'top100'});
+    });
+
+    test(
+      'a queued copy on the other twin is not forgotten nor doubled',
+      () async {
+        await db.queueOffline([
+          'subsonic://A/1',
+          'subsonic://B/1',
+        ], OfflineReason.top100);
+        for (var i = 0; i < 3; i++) {
+          await db.markOfflineFailed('subsonic://A/1');
+        }
+        await keeper.refresh();
+        expect((await reasons()).keys, ['subsonic://B/1']);
+      },
+    );
+
+    test('two copies from before the merge: only one stays', () async {
+      for (final a in ['A', 'B']) {
+        await db.queueOffline(['subsonic://$a/1'], OfflineReason.top100);
+        await db.markOfflineDone('subsonic://$a/1', '$a.mp3', 4);
+      }
+      await keeper.refresh();
+      expect((await reasons()).keys, ['subsonic://A/1']);
+    });
+
+    test(
+      'removed by the user on one twin: not kept again on the other',
+      () async {
+        await keeper.refresh();
+        await dl.forget(['subsonic://A/1'], byUser: true);
+        await keeper.refresh();
+        expect(await reasons(), isEmpty);
+      },
+    );
+  });
 }
