@@ -7,8 +7,8 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Écrans : reprendre ceux du Mac, empilés
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
-- ✅ Plans 1 « écouter son serveur », 2 « hors ligne » et 3 « plusieurs comptes » écrits et codés ; plans 4 à 7 ensuite
-- ⬜ Code (plans 1, 2 et 3 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
+- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes » et 4 « Jellyfin » écrits et codés ; plans 5 à 7 ensuite
+- ⬜ Code (plans 1, 2, 3 et 4 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 
@@ -31,9 +31,11 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Dehors : seulement la musique gardée sur le téléphone, le reste est grisé
 - ✅ Plan 3 fait : deux comptes fusionnés (affichage « Un compte », « Tous » ou « Choisis »), albums et morceaux en double affichés une fois, écoutes et nombres d'écoutes fusionnés
 - ✅ Plan 3 essayé de bout en bout (deux faux serveurs) : album affiché une fois, premier serveur coupé → lecture depuis le second et écoute envoyée au second, playlist gardée → fichier `.m3u8` dans `Playlists/`
+- ✅ Plan 4 fait : comptes Jellyfin (nom et mot de passe ; l'appli garde la clé de connexion et se reconnecte seule si le serveur l'oublie), bibliothèque, pochettes, playlists, lecture, copies sur le téléphone, écoutes envoyées
+- ✅ Plan 4 essayé : contre un vrai Jellyfin dans GitHub (sons d'essai faits par nous), et de bout en bout avec un faux Navidrome et un faux Jellyfin qui ont le même album → affiché une fois, Navidrome coupé → lecture depuis Jellyfin et écoute envoyée à Jellyfin
 
 ## Ordre de construction
-- ✅ Famille Subsonic, puis Jellyfin, puis Plex : tous dans ce projet, l'un après l'autre
+- ✅ Famille Subsonic, puis Jellyfin, puis Plex : tous dans ce projet, l'un après l'autre (Subsonic et Jellyfin faits)
 
 ## Garder sur le téléphone
 - ✅ « Garder sur mon iPhone / téléphone » par sélection : album, playlist, morceaux, plusieurs d'un coup
