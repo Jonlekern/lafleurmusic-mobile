@@ -170,19 +170,20 @@ class MediaResolver {
     );
     _note(path, chosen);
     final id = parseRemoteKey(chosen)!;
-    final MusicSource s;
     try {
-      s = await source(id.$1).timeout(sourceTimeout);
+      final s = await source(id.$1).timeout(sourceTimeout);
       // Jellyfin: the token is read synchronously below, so it is loaded (or signed in) first
-      if (s is AuthRenewable) await (s as AuthRenewable).prepare();
+      if (s is AuthRenewable) {
+        await (s as AuthRenewable).prepare().timeout(sourceTimeout);
+      }
+      return Media(
+        s.streamUri(id.$2).toString(),
+        httpHeaders: s.headers.isEmpty ? null : s.headers,
+      );
     } on Object {
       // account gone, unusable or too slow: mpv fails on the raw key and the track is skipped like an unreadable file
       return Media(chosen);
     }
-    return Media(
-      s.streamUri(id.$2).toString(),
-      httpHeaders: s.headers.isEmpty ? null : s.headers,
-    );
   }
 
   void _note(String asked, String played) =>

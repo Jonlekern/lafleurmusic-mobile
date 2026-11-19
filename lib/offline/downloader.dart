@@ -70,7 +70,10 @@ class _Refusal implements Exception {}
 enum _Next { go, skipAccount, stop }
 
 /// Une réponse que le serveur n'a pas servie comme fichier (4xx, ou erreur Subsonic en JSON/XML).
-class _NotAFile implements Exception {}
+class _NotAFile implements Exception {
+  _NotAFile(this.status);
+  final int status;
+}
 
 /// The server answered 401 (the token may have been revoked).
 class _Unauthorized implements Exception {}
@@ -627,7 +630,10 @@ class Downloader extends ChangeNotifier {
 
   /// Réseau (socket, délai, TLS, coupure) ou disque : rien ne passera pour les autres non plus.
   static bool _stopsAll(Object e) =>
-      e is IOException || e is TimeoutException || e is http.ClientException;
+      e is IOException ||
+      e is TimeoutException ||
+      e is http.ClientException ||
+      e is SourceNetworkException;
 
   /// Télécharge le morceau ; renvoie le chemin relatif, null si abandonné.
   Future<String?> _download(OfflineRow row, _Active active) async {
@@ -763,8 +769,9 @@ class Downloader extends ChangeNotifier {
       await auth!.renewAuth();
       try {
         return await _get(active, url(), headers(), fallback: fallback);
-      } on _NotAFile {
-        onDenied?.call();
+      } on _NotAFile catch (e) {
+        // only a refusal of the rights (not a 404, a proxy page…) marks the account
+        if (e.status == 401 || e.status == 403) onDenied?.call();
         rethrow;
       }
     }
@@ -793,7 +800,7 @@ class Downloader extends ChangeNotifier {
     if (!bad) return res;
     if (!fallback) {
       await res.stream.drain<void>().timeout(requestTimeout);
-      throw _NotAFile();
+      throw _NotAFile(res.statusCode);
     }
     var notFound = res.statusCode == 404 || res.statusCode == 410;
     if (type.contains('json') || type.contains('xml')) {

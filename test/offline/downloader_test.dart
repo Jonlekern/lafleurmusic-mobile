@@ -758,6 +758,66 @@ void main() {
       },
     );
 
+    test('a 404 after the renewal does not mark the account: the next song '
+        'still tries its original', () async {
+      final tries = <String, int>{};
+      handler = (r) async {
+        if (!r.url.path.endsWith('/Download')) {
+          return _ok([9, 9], type: 'audio/flac');
+        }
+        final n = tries[r.url.path] = (tries[r.url.path] ?? 0) + 1;
+        return _ok([], code: n == 1 ? 401 : 404);
+      };
+      final d = makeJf(jf());
+      for (final id in ['1', '2']) {
+        await add(jt(id));
+      }
+      await d.keep([jt('1'), jt('2')]);
+      await d.whenIdle();
+      // first sign-in + one renewal per song (the account was not marked)
+      expect(signIns, hasLength(3));
+      expect(tries, {'/Items/1/Download': 2, '/Items/2/Download': 2});
+    });
+
+    test(
+      'prepare() failing offline stops the queue like any network loss',
+      () async {
+        handler = (r) async => _ok([1, 2, 3, 4]);
+        final offline = JellyfinSource(
+          accountId: 'acc',
+          base: Uri.parse('http://jf.example:8096'),
+          user: 'max',
+          password: 'pw-secret',
+          secrets: secrets,
+          deviceName: 'iPhone',
+          client: MockClient(
+            (r) async => throw const SocketException('unreachable'),
+          ),
+        );
+        final d = Downloader(
+          db: db,
+          resolver: MediaResolver(
+            (id) async => id == 'acc' ? offline : _AccSource(id),
+          ),
+          device: device,
+          settings: () async => settings,
+          client: () => _Client((r) {
+            seen.add(r);
+            return handler(r);
+          }),
+          tags: io,
+          reader: reader,
+        );
+        await add(jt('1'));
+        await add(_t('1', acc: 'B'));
+        await d.keep([jt('1'), _t('1', acc: 'B')]);
+        await d.whenIdle();
+        final other = (await db.offlineOf('subsonic://B/1'))!;
+        expect(other.state, 'queued', reason: 'the queue stopped: B waits');
+        expect((await db.offlineOf('jellyfin://acc/1'))!.failures, 0);
+      },
+    );
+
     test('404 on the original is a refusal, counted like Subsonic', () async {
       handler = (r) async => _ok([], code: 404);
       final d = makeJf(jf());

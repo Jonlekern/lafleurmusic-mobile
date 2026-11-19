@@ -38,6 +38,7 @@ Track remote(String song, {String? coverId = 'al-1'}) => Track(
 );
 
 void main() {
+  preparedSourceTests();
   group('MediaResolver', () {
     late List<String> asked;
     late MediaResolver r;
@@ -520,4 +521,40 @@ class _ClosingSource implements MusicSource {
   void close() => closed = true;
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _Prep implements MusicSource, AuthRenewable {
+  _Prep(this.prepareFn);
+  final Future<void> Function() prepareFn;
+  @override
+  Future<void> prepare() => prepareFn();
+  @override
+  Future<void> renewAuth() async {}
+  @override
+  Uri streamUri(String id) => throw StateError('not signed in');
+  @override
+  Map<String, String> get headers => const {};
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+void preparedSourceTests() {
+  test(
+    'a hanging or failing prepare() or a StateError never reaches the player',
+    () async {
+      final hang = MediaResolver(
+        (_) async => _Prep(() => Completer<void>().future),
+        sourceTimeout: const Duration(milliseconds: 50),
+      );
+      expect(
+        (await hang.media('jellyfin://acc1/s1')).uri,
+        'jellyfin://acc1/s1',
+      );
+      final signedOut = MediaResolver((_) async => _Prep(() async {}));
+      expect(
+        (await signedOut.media('jellyfin://acc1/s1')).uri,
+        'jellyfin://acc1/s1',
+      );
+    },
+  );
 }
