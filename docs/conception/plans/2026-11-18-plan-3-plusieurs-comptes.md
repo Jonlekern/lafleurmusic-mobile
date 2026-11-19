@@ -73,6 +73,19 @@ Johnny a ajouté son compte Navidrome dans la 0.2.0 : « connecté », mais aucu
 
 - [ ] Step 1: tests (synchro relancée après 30 s avec une horloge simulée ; un album en erreur n'empêche pas les autres ; pas de double synchro). Échec, implémentation, verts. Commit `fix: load the library reliably after adding an account`.
 
+### Task 2c: Confirmer avant de retirer du téléphone (demande de Johnny, 19.11.2026)
+
+Maquette validée : `maquettes/10-confirmer-retirer.png` (écrans 12 et 12b).
+
+**Files:** Modify `lib/ui/keep_actions.dart`, `lib/ui/phone/on_device_screen.dart`, `lib/settings.dart`, `lib/l10n/strings.dart` · Test widget + goldens
+
+**Interfaces:**
+- Produces : avant chaque « Retirer du téléphone » voulu par l'utilisateur (appui long, glisser dans Sur mon iPhone), une fenêtre « Retirer du téléphone ? » / « Remove from the iPhone/phone? » : « « <nom> » (<N> morceaux, <taille>) sera effacé de ton iPhone. Il reste sur ton serveur : tu pourras le garder à nouveau. » (« téléphone » sur Android ; EN équivalent), case « Ne plus me demander », boutons « Annuler » / « Retirer ». Annuler ne touche à rien.
+- Produces : `AppSettings.confirmRemove` (bool, défaut vrai) ; la case cochée + Retirer le met à faux ; dans « Sur mon iPhone », section « CONFIRMATIONS » avec l'interrupteur « Demander avant de retirer » et le texte « Si tu as coché « Ne plus me demander », rallume-le ici. ».
+- Les retraits automatiques (Top 100) ne demandent jamais.
+
+- [ ] Step 1: tests (fenêtre affichée, Annuler ne retire rien, Retirer retire, case cochée → plus de fenêtre, interrupteur la remet) ; goldens écrans 12 et 12b. Commit `feat: confirm before removing from the phone`.
+
 ### Task 3: Nombres d'écoutes fusionnés
 
 **Files:** Modify `lib/library/db.dart` (`raisePlayCounts`, `addPlay`, `_topQuery`), `lib/library/sync.dart` · Test `test/library/plays_test.dart`, `test/library/sync_test.dart`

@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:900px;height:1000px;background:#2b2b2b;font-family:Inter;color:#F2F2F2;display:flex;gap:36px;padding:40px 36px;overflow:hidden}
+.col{display:flex;flex-direction:column;align-items:center;gap:14px}
+.cap{color:#ddd;font-size:15px;font-weight:700}.cap span{color:#F26EF2}
+.ph{width:390px;height:844px;background:#0D0D0D;border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.sb{height:44px;display:flex;justify-content:space-between;align-items:center;padding:6px 28px 0;font-size:14px;font-weight:700;flex:none}
+.top{height:50px;display:flex;align-items:center;justify-content:center;position:relative;flex:none;background:#1C1C1C;border-bottom:1px solid #000}
+.top img{height:15px}.top.bk img{height:11px;margin-left:40px}.top .l{position:absolute;left:14px;color:#F26EF2;font-size:15px;font-weight:700}.top .r{position:absolute;right:16px;color:#bbb;font-size:18px}
+.body{flex:1;overflow:hidden;padding:14px 16px;position:relative}
+.sec{font-size:11px;font-weight:700;color:#999;letter-spacing:1px;margin:14px 4px 8px}
+.it{font-size:16px;font-weight:700;padding:11px 12px;border-radius:8px;display:flex;align-items:center;gap:12px}.it .c{margin-left:auto;color:#666}
+.it.on{background:#F26EF2;color:#111}.it.on .c{color:#111}
+.sq{width:30px;height:30px;border-radius:4px;flex:none}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid #444;border-radius:16px;padding:6px 12px;font-size:13px;font-weight:700}
+.chip.p{border-color:#F26EF2;color:#F26EF2}
+.search{background:#1C1C1C;border-radius:10px;color:#888;font-size:14px;padding:10px 14px;margin-top:10px}
+.mini{height:64px;background:#1C1C1C;border-top:1px solid #000;display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+.mini .t{font-size:14px;font-weight:700}.mini .a{font-size:12px;color:#999;margin-top:2px}.mini .b{margin-left:auto;font-size:20px;display:flex;gap:18px}
+.prog{height:3px;background:#333;flex:none}.prog i{display:block;height:3px;width:38%;background:#F26EF2}
+.home{height:30px;flex:none;display:flex;justify-content:center;align-items:center}.home i{width:134px;height:5px;border-radius:3px;background:#fff}
+h1{font-size:28px;font-weight:700;margin-top:12px}.lbl{color:#999;font-size:11px;letter-spacing:.9px;font-weight:700}
+.pill{display:inline-block;border-radius:22px;padding:10px 18px;font-weight:700;font-size:14px;border:1px solid #444;margin-right:8px}.pill.p{background:#F26EF2;color:#111;border-color:#F26EF2}
+.tr{display:flex;align-items:center;gap:12px;padding:11px 8px;font-size:15px;font-weight:700;border-bottom:1px solid #1e1e1e;position:relative}
+.tr .n{width:20px;color:#bbb}.tr .s{color:#999;font-size:12px;font-weight:400;margin-top:2px}.tr .d{margin-left:auto;color:#bbb;font-weight:400;font-size:13px}
+.tr.cur{background:#F26EF2;color:#111;border-radius:8px}.tr.cur .n,.tr.cur .s,.tr.cur .d{color:#111}
+.tr.off{color:#555}.tr.off .s,.tr.off .d,.tr.off .n{color:#444}
+.dl{color:#F26EF2;font-size:13px}
+.swipe{position:absolute;right:0;top:0;bottom:0;width:110px;background:#F26EF2;color:#111;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:0 8px 8px 0}
+.cover{width:300px;height:300px;margin:6px auto 0;border-radius:8px;background:#EDE8DE;position:relative;overflow:hidden}
+.ctl{display:flex;justify-content:space-between;align-items:center;padding:0 30px;font-size:26px;margin-top:18px}.ctl .pp{width:64px;height:64px;border-radius:32px;background:#F26EF2;color:#111;display:flex;align-items:center;justify-content:center}
+.bar2{height:4px;background:#333;border-radius:2px;margin-top:16px}.bar2 i{display:block;height:4px;width:38%;background:#F26EF2;border-radius:2px}
+.times{display:flex;justify-content:space-between;color:#999;font-size:12px;margin-top:6px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0}.row .t{font-size:14px;font-weight:700}.row .a{color:#999;font-size:12px;margin-top:2px}.row .x{color:#777;font-size:15px;margin-left:auto}.grip{color:#666;font-size:13px;width:12px}
+.tabs{display:flex;gap:8px;margin-top:16px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#232323;border-top:1px solid #3a3a3a;border-radius:18px 18px 0 0;padding:10px 12px 22px;box-shadow:0 -12px 40px rgba(0,0,0,.6);font-size:16px}
+.sheet .g{width:40px;height:5px;border-radius:3px;background:#555;margin:0 auto 10px}
+.sheet div.o{padding:12px 12px;border-radius:8px}.sheet .hl{background:#F26EF2;color:#111;font-weight:700}.sheet hr{border:0;border-top:1px solid #3a3a3a;margin:5px 4px}.sheet .red{color:#ff6b6b}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.dlg{position:absolute;left:28px;right:28px;top:260px;background:#232323;border:1px solid #3a3a3a;border-radius:18px;padding:22px 20px 16px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.dlg h3{font-size:18px;font-weight:700;margin-bottom:10px}.dlg p{font-size:14px;color:#ccc;line-height:1.5}
+.ckrow{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:14px;font-weight:700}.ck{width:22px;height:22px;border:2px solid #666;border-radius:5px;display:inline-block}.ck.on{background:#F26EF2;border-color:#F26EF2;color:#111;text-align:center;font-size:14px;line-height:18px}
+.btns2{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.b{padding:10px 18px;border-radius:20px;font-weight:700;font-size:14px}.b.g{border:1px solid #444}.b.p{background:#F26EF2;color:#111}
+.note{font-size:13px;color:#bbb;width:390px;text-align:center;line-height:1.5}
+.set{background:#1C1C1C;border-radius:10px;padding:12px 14px;display:flex;align-items:center;font-size:15px;font-weight:700;margin-top:6px}.tog{margin-left:auto;width:46px;height:28px;border-radius:14px;background:#F26EF2;position:relative}.tog i{position:absolute;right:3px;top:3px;width:22px;height:22px;border-radius:11px;background:#fff}
+</style></head><body>
+<div class="col"><div class="cap"><span>12</span> Retirer du téléphone : confirmation</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">‹ Albums</span><img src="logo-texte-grand.png"><span class="r">⋯</span></div>
+<div class="body" style="opacity:.35">
+ <div class="tr"><span class="n">1</span><div>Ocean Drive<div class="s">Johnny</div></div><span class="d">3:42</span></div>
+ <div class="tr"><span class="n">2</span><div>Lafleur Surf<div class="s">LAFLEURSTUDIO</div></div><span class="d">4:05</span></div>
+ <div class="tr"><span class="n">3</span><div>Golden Hour<div class="s">Divers</div></div><span class="d">3:18</span></div>
+</div>
+<div class="dlg"><h3>Retirer du téléphone ?</h3>
+<p>« Night Drive » (4 morceaux, 38 Mo) sera effacé de ton iPhone. Il reste sur ton serveur : tu pourras le garder à nouveau.</p>
+<div class="ckrow"><span class="ck"></span>Ne plus me demander</div>
+<div class="btns2"><span class="b g">Annuler</span><span class="b p">Retirer</span></div></div>
+<div class="home" style="margin-top:auto"><i></i></div></div>
+<div class="note">S'ouvre avant chaque « Retirer du téléphone » (appui long, ou glisser dans Sur mon iPhone).</div></div>
+
+<div class="col"><div class="cap"><span>12b</span> Pour la retrouver : Sur mon iPhone (en bas)</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">‹ Accueil</span><img src="logo-texte-grand.png"></div>
+<div class="body">
+ <div class="sec">DOSSIER</div>
+ <div class="set" style="margin-top:0">Sur mon iPhone › LAFLEURMUSIC<span style="margin-left:auto;color:#666">›</span></div>
+ <div class="sec" style="margin-top:24px">CONFIRMATIONS</div>
+ <div class="set">Demander avant de retirer<span class="tog"><i></i></span></div>
+ <div style="color:#999;font-size:12px;margin-top:10px;line-height:1.5">Si tu as coché « Ne plus me demander », rallume-le ici.</div>
+</div>
+<div class="home" style="margin-top:auto"><i></i></div></div>
+<div class="note">Un interrupteur pour remettre la question.</div></div>
+</body></html>
