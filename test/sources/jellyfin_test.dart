@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:lafleurmusic/app_version.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/models.dart' show unknownAlbumName;
+import 'package:lafleurmusic/library/play_counter.dart' show scrobbleRefused;
 import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/player/media_resolver.dart' show remoteCover;
 import 'package:lafleurmusic/sources/accounts.dart';
@@ -71,6 +72,7 @@ Future<http.Response> serve(
 
 void main() {
   libraryTests();
+  playbackTests();
   group('JellyfinSource.test', () {
     test('ok: public info, then sign-in, token kept in the store', () async {
       final log = <http.Request>[];
@@ -1054,6 +1056,207 @@ void libraryTests() {
           .run(source(c, secrets: FakeSecretStore()));
       expect((r.complete, r.removed), (false, 0));
       expect((await db.select(db.tracks).get()), hasLength(5));
+    });
+  });
+}
+
+void playbackTests() {
+  FakeSecretStore stored([String token = 'tok-secret-1']) => FakeSecretStore()
+    ..data[JellyfinSource.tokenKey('acc1')] = token
+    ..data[JellyfinSource.userIdKey('acc1')] = 'user-1';
+
+  group('JellyfinSource playback', () {
+    test('streamUri: universal endpoint, formats, token in the URL', () async {
+      final s = source(server(), secrets: stored());
+      await s.prepare();
+      final u = s.streamUri('song9');
+      expect(u.path, '/Audio/song9/universal');
+      final q = u.queryParameters;
+      expect(q['UserId'], 'user-1');
+      expect(q['Container'], 'flac,mp3,m4a,ogg,opus,wav');
+      expect(q['TranscodingContainer'], 'mp3');
+      expect(q['AudioCodec'], 'mp3');
+      expect(q['api_key'], 'tok-secret-1');
+      expect(s.headers['Authorization'], contains('Token="tok-secret-1"'));
+    });
+
+    test(
+      'prepare: signs in when nothing is stored, headers then carry the token',
+      () async {
+        final log = <http.Request>[];
+        final secrets = FakeSecretStore();
+        final s = source(server(log: log), secrets: secrets);
+        expect(s.headers['Authorization'], isNot(contains('Token=')));
+        expect(() => s.streamUri('a'), throwsStateError);
+        await s.prepare();
+        expect(log.map((r) => r.url.path), ['/Users/AuthenticateByName']);
+        expect(s.headers['Authorization'], contains('Token="tok-secret-1"'));
+        expect(s.streamUri('a').queryParameters['api_key'], 'tok-secret-1');
+        await s.prepare(); // already there: no second sign-in
+        expect(log, hasLength(1));
+      },
+    );
+
+    test('prepare with a stored token makes no request', () async {
+      final log = <http.Request>[];
+      final s = source(server(log: log), secrets: stored());
+      await s.prepare();
+      expect(log, isEmpty);
+      expect(s.userId, 'user-1');
+    });
+
+    test('the StateError of a missing token never carries a secret', () {
+      final s = source(server(), secrets: stored());
+      try {
+        s.streamUri('a');
+      } catch (e) {
+        expect('$e', isNot(contains('tok-secret-1')));
+        expect('$e', isNot(contains('pw-secret')));
+      }
+    });
+
+    test('downloadUri: the original file, no token in the address', () async {
+      final s = source(server(), secrets: stored());
+      await s.prepare();
+      final u = s.downloadUri('song9');
+      expect(u.path, '/Items/song9/Download');
+      expect(u.hasQuery, isFalse);
+      expect(s.headers['Authorization'], contains('Token="tok-secret-1"'));
+    });
+
+    test(
+      'renewAuth: signs in again once, headers carry the new token',
+      () async {
+        final log = <http.Request>[];
+        final s = source(
+          server(log: log, token: 'new-token'),
+          secrets: stored('old-token'),
+        );
+        await s.prepare();
+        expect(s.headers['Authorization'], contains('old-token'));
+        await s.renewAuth();
+        expect(s.headers['Authorization'], contains('Token="new-token"'));
+        expect(s.streamUri('a').queryParameters['api_key'], 'new-token');
+        expect(log.map((r) => r.url.path), ['/Users/AuthenticateByName']);
+      },
+    );
+
+    test(
+      'renewAuth with a wrong password fails and forgets the token',
+      () async {
+        final secrets = stored('old-token');
+        final s = source(server(pw: 'other'), secrets: secrets);
+        await s.prepare();
+        await expectLater(
+          s.renewAuth(),
+          throwsA(
+            isA<JellyfinException>().having(
+              (e) => e.wrongPassword,
+              'wrongPassword',
+              true,
+            ),
+          ),
+        );
+        expect(secrets.data[JellyfinSource.tokenKey('acc1')], isNull);
+      },
+    );
+
+    test(
+      'scrobble: POST PlayedItems with the original date, UTC ISO-8601',
+      () async {
+        final log = <http.Request>[];
+        final s = source(
+          MockClient((r) async {
+            log.add(r);
+            return json('{}');
+          }),
+          secrets: stored(),
+        );
+        // an offline listen sent days later keeps the time it was heard (local zone input)
+        final heard = DateTime.utc(2026, 11, 2, 21, 30, 5).toLocal();
+        await s.scrobble('song9', heard);
+        final r = log.single;
+        expect(r.method, 'POST');
+        expect(
+          r.url.path,
+          '/Users/user-1/UserPlayedItems/song9'.replaceFirst(
+            'UserPlayedItems',
+            'PlayedItems',
+          ),
+        );
+        expect(
+          DateTime.parse(r.url.queryParameters['DatePlayed']!),
+          DateTime.utc(2026, 11, 2, 21, 30, 5),
+        );
+        expect(r.url.queryParameters['DatePlayed'], endsWith('Z'));
+        expect(r.headers['Authorization'], contains('Token="tok-secret-1"'));
+      },
+    );
+
+    test('scrobble: a revoked token signs in again once and repeats', () async {
+      final log = <http.Request>[];
+      final s = source(
+        MockClient((r) async {
+          log.add(r);
+          if (r.url.path == '/Users/AuthenticateByName') {
+            return json(_auth.replaceAll('tok-secret-1', 'new-token'));
+          }
+          return (r.headers['Authorization'] ?? '').contains('new-token')
+              ? json('{}')
+              : http.Response('', 401);
+        }),
+        secrets: stored('old-token'),
+      );
+      await s.scrobble('song9', DateTime.utc(2026, 11, 2));
+      expect(log.map((r) => '${r.method} ${r.url.path}'), [
+        'POST /Users/user-1/PlayedItems/song9',
+        'POST /Users/AuthenticateByName',
+        'POST /Users/user-1/PlayedItems/song9',
+      ]);
+    });
+
+    test(
+      'scrobble: 404 is a refusal (dropped), 500 and network are retried',
+      () async {
+        Future<Object?> run(MockClient c) async {
+          try {
+            await source(
+              c,
+              secrets: stored(),
+            ).scrobble('x', DateTime.utc(2026));
+          } catch (e) {
+            return e;
+          }
+          return null;
+        }
+
+        final gone = await run(MockClient((r) async => http.Response('', 404)));
+        expect(gone, isA<JellyfinException>());
+        expect(scrobbleRefused(gone!), isTrue);
+        final boom = await run(MockClient((r) async => http.Response('', 500)));
+        expect(boom, isA<JellyfinException>());
+        expect(scrobbleRefused(boom!), isFalse);
+        final net = await run(
+          MockClient((r) async => throw http.ClientException('x', r.url)),
+        );
+        expect(net, isA<SourceNetworkException>());
+        expect(scrobbleRefused(net!), isFalse);
+        for (final e in [gone, boom, net]) {
+          expect('$e', isNot(contains('tok-secret-1')));
+        }
+      },
+    );
+
+    test('a source error never prints the api_key', () {
+      final e = SourceNetworkException(
+        http.ClientException(
+          'failed',
+          Uri.parse(
+            'http://jf.example:8096/Audio/a/universal?api_key=tok-secret-1',
+          ),
+        ),
+      );
+      expect('$e', isNot(contains('tok-secret-1')));
     });
   });
 }

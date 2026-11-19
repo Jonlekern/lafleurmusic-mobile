@@ -173,6 +173,8 @@ class MediaResolver {
     final MusicSource s;
     try {
       s = await source(id.$1).timeout(sourceTimeout);
+      // Jellyfin: the token is read synchronously below, so it is loaded (or signed in) first
+      if (s is AuthRenewable) await (s as AuthRenewable).prepare();
     } on Object {
       // account gone, unusable or too slow: mpv fails on the raw key and the track is skipped like an unreadable file
       return Media(chosen);

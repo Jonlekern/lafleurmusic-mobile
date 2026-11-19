@@ -72,6 +72,9 @@ enum _Next { go, skipAccount, stop }
 /// Une réponse que le serveur n'a pas servie comme fichier (4xx, ou erreur Subsonic en JSON/XML).
 class _NotAFile implements Exception {}
 
+/// The server answered 401 (the token may have been revoked).
+class _Unauthorized implements Exception {}
+
 /// File des copies hors ligne : un morceau à la fois, repris au lancement.
 /// Aucune URL (elle porte le jeton) dans les erreurs ni les journaux.
 class Downloader extends ChangeNotifier {
@@ -636,16 +639,30 @@ class Downloader extends ChangeNotifier {
     final source = await resolver.source(key.$1);
     final root = await device.musicRoot();
 
+    // Jellyfin: the token is read synchronously below, so it is loaded (or signed in) first
+    final auth = source is AuthRenewable ? source as AuthRenewable : null;
+    await auth?.prepare();
+
     var viaDownload = true;
     http.StreamedResponse res;
     try {
-      res = await _get(active, source.downloadUri(key.$2), source.headers);
-    } on _NotAFile {
-      viaDownload = false;
-      res = await _get(
+      res = await _getRenewing(
         active,
-        source.streamUri(key.$2),
-        source.headers,
+        // a download refused after a fresh sign-in is the account's rights, not the token:
+        // the next songs go straight to the stream instead of signing in once each
+        _downloadDenied.contains(key.$1) ? null : auth,
+        () => source.downloadUri(key.$2),
+        () => source.headers,
+        onDenied: () => _downloadDenied.add(key.$1),
+      );
+    } on _NotAFile {
+      // the original is refused (no download right: 401/403, not audio…): the stream
+      viaDownload = false;
+      res = await _getRenewing(
+        active,
+        auth,
+        () => source.streamUri(key.$2),
+        () => source.headers,
         fallback: true,
       );
     }
@@ -723,14 +740,52 @@ class Downloader extends ChangeNotifier {
         t == 'application/ogg';
   }
 
+  /// [_get], and a 401 from a source that can sign in again ([auth]) signs in once and repeats.
+  /// A second 401 is a refusal of this file, not of the token: it goes the usual way
+  /// (original → stream; stream → server refused).
+  Future<http.StreamedResponse> _getRenewing(
+    _Active active,
+    AuthRenewable? auth,
+    Uri Function() url,
+    Map<String, String> Function() headers, {
+    bool fallback = false,
+    void Function()? onDenied,
+  }) async {
+    try {
+      return await _get(
+        active,
+        url(),
+        headers(),
+        fallback: fallback,
+        unauthorized: auth != null,
+      );
+    } on _Unauthorized {
+      await auth!.renewAuth();
+      try {
+        return await _get(active, url(), headers(), fallback: fallback);
+      } on _NotAFile {
+        onDenied?.call();
+        rethrow;
+      }
+    }
+  }
+
+  /// Accounts whose original files were refused (401) even with a fresh token, this session.
+  final _downloadDenied = <String>{};
+
   Future<http.StreamedResponse> _get(
     _Active active,
     Uri url,
     Map<String, String> headers, {
     bool fallback = false,
+    bool unauthorized = false,
   }) async {
     final req = http.Request('GET', url)..headers.addAll(headers);
     final res = await active.client.send(req).timeout(requestTimeout);
+    if (unauthorized && res.statusCode == 401) {
+      await res.stream.drain<void>().timeout(requestTimeout);
+      throw _Unauthorized();
+    }
     final type = (res.headers['content-type'] ?? '').toLowerCase();
     // Subsonic répond « erreur » par un 200 avec un corps JSON ou XML
     // ou une page HTML (connexion d'un proxy, Cloudflare Access) : seul de l'audio passe

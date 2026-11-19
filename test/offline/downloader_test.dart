@@ -6,15 +6,19 @@ import 'package:drift/native.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/offline/device.dart';
 import 'package:lafleurmusic/offline/downloader.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/settings.dart';
+import 'package:lafleurmusic/sources/jellyfin.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/tags/tag_reader.dart';
 import 'package:lafleurmusic/tags/tag_writer.dart';
+
+import '../sources/fake_secret_store.dart';
 
 const _mb = 1024 * 1024;
 
@@ -133,8 +137,9 @@ Track _t(
   int? no = 1,
   String album = 'Alb',
   String? cover,
+  String scheme = 'subsonic://',
 }) => Track(
-  path: 'subsonic://$acc/$id',
+  path: '$scheme$acc/$id',
   accountId: acc,
   remoteId: id,
   title: 'Song $id',
@@ -620,6 +625,164 @@ void main() {
       expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
     },
   );
+
+  group('Jellyfin', () {
+    late List<http.Request> signIns;
+    late String token; // the token the server accepts
+    late FakeSecretStore secrets;
+
+    JellyfinSource jf() => JellyfinSource(
+      accountId: 'acc',
+      base: Uri.parse('http://jf.example:8096'),
+      user: 'max',
+      password: 'pw-secret',
+      secrets: secrets,
+      deviceName: 'iPhone',
+      client: MockClient((r) async {
+        signIns.add(r);
+        return http.Response(
+          '{"User":{"Id":"u1"},"AccessToken":"$token"}',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    Downloader makeJf(JellyfinSource s) => Downloader(
+      db: db,
+      resolver: MediaResolver((_) async => s),
+      device: device,
+      settings: () async => settings,
+      client: () => _Client((r) {
+        seen.add(r);
+        return handler(r);
+      }),
+      tags: io,
+      reader: reader,
+    );
+
+    Track jt(String id) => _t(id, scheme: 'jellyfin://');
+
+    bool authed(http.BaseRequest r) =>
+        (r.headers['Authorization'] ?? '').contains('Token="$token"');
+
+    setUp(() {
+      signIns = [];
+      token = 'tok-1';
+      secrets = FakeSecretStore();
+    });
+
+    test('a fresh source signs in first, then the original is fetched with the token', () async {
+      handler = (r) async => authed(r) ? _ok([1, 2, 3, 4]) : _ok([], code: 401);
+      final d = makeJf(jf());
+      await add(jt('1'));
+      await d.keep([jt('1')]);
+      await d.whenIdle();
+      expect(signIns, hasLength(1));
+      expect(seen.map((r) => r.url.path), ['/Items/1/Download']);
+      expect((await db.offlineOf('jellyfin://acc/1'))!.state, 'done');
+    });
+
+    test(
+      'a revoked token: one sign-in again, the download is repeated',
+      () async {
+        secrets.data[JellyfinSource.tokenKey('acc')] = 'old';
+        secrets.data[JellyfinSource.userIdKey('acc')] = 'u1';
+        handler = (r) async =>
+            authed(r) ? _ok([1, 2, 3, 4]) : _ok([], code: 401);
+        final d = makeJf(jf());
+        await add(jt('1'));
+        await d.keep([jt('1')]);
+        await d.whenIdle();
+        expect(signIns, hasLength(1));
+        expect(seen.map((r) => r.url.path), [
+          '/Items/1/Download',
+          '/Items/1/Download',
+        ]);
+        expect((await db.offlineOf('jellyfin://acc/1'))!.state, 'done');
+      },
+    );
+
+    test(
+      'download refused (401 with a valid token, or 403): one sign-in at most, '
+      'then the stream with the token',
+      () async {
+        for (final code in [401, 403]) {
+          seen.clear();
+          signIns.clear();
+          secrets.data.clear();
+          handler = (r) async => r.url.path.endsWith('/Download')
+              ? _ok([], code: code)
+              : (authed(r) && r.url.queryParameters['api_key'] == token
+                    ? _ok([9, 9], type: 'audio/flac')
+                    : _ok([], code: 401));
+          final d = makeJf(jf());
+          final id = '$code';
+          await add(jt(id));
+          await d.keep([jt(id)]);
+          await d.whenIdle();
+          final paths = seen.map((r) => r.url.path).toList();
+          expect(
+            paths.where((p) => p.endsWith('/Download')),
+            hasLength(code == 401 ? 2 : 1),
+          );
+          expect(paths.last, '/Audio/$id/universal');
+          expect(
+            signIns.length,
+            code == 401 ? 2 : 1,
+            reason: 'first sign-in + one renewal on 401',
+          );
+          expect((await db.offlineOf('jellyfin://acc/$id'))!.state, 'done');
+          // the stored token or password never reach the last error
+          expect(d.lastError ?? '', isNot(contains('tok-1')));
+        }
+      },
+    );
+
+    test(
+      'downloads refused for the whole account: one renewal, not one per song',
+      () async {
+        handler = (r) async => r.url.path.endsWith('/Download')
+            ? _ok([], code: 401)
+            : _ok([9, 9], type: 'audio/flac');
+        final d = makeJf(jf());
+        for (final id in ['1', '2', '3']) {
+          await add(jt(id));
+        }
+        await d.keep([jt('1'), jt('2'), jt('3')]);
+        await d.whenIdle();
+        expect(signIns, hasLength(2), reason: 'first sign-in + one renewal');
+        for (final id in ['1', '2', '3']) {
+          expect((await db.offlineOf('jellyfin://acc/$id'))!.state, 'done');
+        }
+      },
+    );
+
+    test('404 on the original is a refusal, counted like Subsonic', () async {
+      handler = (r) async => _ok([], code: 404);
+      final d = makeJf(jf());
+      await add(jt('1'));
+      await d.keep([jt('1')]);
+      await d.whenIdle();
+      final row = (await db.offlineOf('jellyfin://acc/1'))!;
+      expect(row.failures, greaterThan(0));
+      expect(d.lastError ?? '', isNot(contains('tok-1')));
+    });
+
+    test('a stream refused again after the sign-in (401) is not counted and not endless', () async {
+      handler = (r) async => _ok([], code: 401);
+      final d = makeJf(jf());
+      await add(jt('1'));
+      await d.keep([jt('1')]);
+      await d.whenIdle();
+      final row = (await db.offlineOf('jellyfin://acc/1'))!;
+      expect(row.state, isNot('done'));
+      expect(row.failures, 0);
+      // 1 sign-in, then 1 renewal for the original, 1 for the stream: no more
+      expect(signIns.length, lessThanOrEqualTo(3));
+      expect(d.lastError ?? '', isNot(contains('tok-1')));
+    });
+  });
 
   test('404 counts, row goes behind, 3rd marks it failed', () async {
     handler = (r) async => r.url.queryParameters['id'] == '1'

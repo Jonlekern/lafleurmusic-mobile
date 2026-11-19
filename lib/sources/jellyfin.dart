@@ -32,7 +32,8 @@ class JellyfinException implements Exception {
 /// A Jellyfin server (REST). Signs in once with name and password, keeps the access token in
 /// the [SecretStore] under the account id, and signs in again once when the server refuses
 /// the token (revoked, expired) with the password the account already holds.
-class JellyfinSource implements MusicSource, HttpSource, TypedSource {
+class JellyfinSource
+    implements MusicSource, HttpSource, TypedSource, AuthRenewable {
   JellyfinSource({
     required this.accountId,
     required Uri base,
@@ -664,17 +665,69 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
     {'maxWidth': '$size', 'quality': '90'},
   );
 
-  @override
-  Uri streamUri(String songId) =>
-      throw UnimplementedError('Jellyfin playback: task 3');
+  // ---- playback, downloads, listens ---------------------------------------------------------
 
+  /// Loads the stored token, or signs in when there is none: after this, [headers] and
+  /// [streamUri] carry a token. Callers that read them synchronously (the resolver, the
+  /// downloader) wait for it first.
   @override
-  Uri downloadUri(String songId) =>
-      throw UnimplementedError('Jellyfin downloads: task 3');
+  Future<void> prepare() async {
+    await _load();
+    if (_token == null || _userId == null) {
+      await (_signingIn ??= _signIn().whenComplete(() => _signingIn = null));
+    }
+  }
 
+  /// The server refused the token: signs in again, once, with the account's password. Throws
+  /// a [JellyfinException] ([JellyfinException.wrongPassword]) when the password is refused too.
   @override
-  Future<void> scrobble(String songId, DateTime at) =>
-      throw UnimplementedError('Jellyfin listens: task 3');
+  Future<void> renewAuth() async {
+    await _load();
+    final stale = _token;
+    try {
+      await _reSignIn(stale);
+    } on JellyfinException catch (e) {
+      if (e.wrongPassword) await _forgetToken(stale);
+      rethrow;
+    }
+  }
+
+  /// The audio stream. mpv may not send custom headers after a redirect, so the token also
+  /// travels as `api_key`: this address is never shown, logged nor stored (see [prepare]).
+  @override
+  Uri streamUri(String songId) {
+    final token = _token, uid = _userId;
+    if (token == null || uid == null) {
+      throw StateError('Jellyfin source not signed in');
+    }
+    return _url('Audio/$songId/universal', {
+      'UserId': uid,
+      'Container': 'flac,mp3,m4a,ogg,opus,wav',
+      'TranscodingContainer': 'mp3',
+      'AudioCodec': 'mp3',
+      'api_key': token,
+    });
+  }
+
+  /// The original file; the token goes in [headers] only.
+  @override
+  Uri downloadUri(String songId) => _url('Items/$songId/Download');
+
+  /// Marks the song played at [at] (its original date, so a listen sent later keeps it).
+  /// A 404 (the server no longer has the song) is a [JellyfinException] with that code.
+  @override
+  Future<void> scrobble(String songId, DateTime at) async {
+    final uid = await _uid();
+    final res = await _authed(
+      () => _url('Users/$uid/PlayedItems/$songId', {
+        'DatePlayed': at.toUtc().toIso8601String(),
+      }),
+      'POST',
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw JellyfinException('listen refused', statusCode: res.statusCode);
+    }
+  }
 
   @override
   void close() {

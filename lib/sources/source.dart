@@ -151,6 +151,16 @@ abstract interface class MusicSource {
   void close();
 }
 
+/// A source whose token must be loaded before [MusicSource.headers] and [MusicSource.streamUri]
+/// are read (they are synchronous), and that can sign in again when the server refuses it.
+abstract interface class AuthRenewable {
+  /// Loads the stored token, or signs in when there is none.
+  Future<void> prepare();
+
+  /// The server refused the token: signs in again (once per call). Throws when it can't.
+  Future<void> renewAuth();
+}
+
 /// A source reached over HTTP: its client also fetches the covers (same connection pool, mockable in tests).
 abstract interface class HttpSource {
   http.Client get httpClient;
