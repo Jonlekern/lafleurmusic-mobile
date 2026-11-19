@@ -47,60 +47,75 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
         stream: _recent,
         builder: (context, recent) => StreamBuilder<List<Album>>(
           stream: _albums,
-          builder: (context, albums) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-            children: [
-              if (recent.data?.isNotEmpty ?? false) ...[
-                PhoneSection(s.recentlyPlayed),
-                SizedBox(
-                  height: 84 + 4 + 20,
-                  child: ListView.separated(
-                    key: const Key('recent-albums'),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: recent.data!.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 10),
-                    itemBuilder: (_, i) => _Tile(recent.data![i], size: 84),
+          builder: (context, albums) {
+            final list = albums.data ?? const <Album>[];
+            // CustomScrollView: only the tiles on screen are built (thousands of albums)
+            return CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  sliver: SliverList.list(
+                    children: [
+                      if (recent.data?.isNotEmpty ?? false) ...[
+                        PhoneSection(s.recentlyPlayed),
+                        SizedBox(
+                          height: 84 + 4 + 20,
+                          child: ListView.separated(
+                            key: const Key('recent-albums'),
+                            scrollDirection: Axis.horizontal,
+                            itemCount: recent.data!.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(width: 10),
+                            itemBuilder: (_, i) =>
+                                _Tile(recent.data![i], size: 84),
+                          ),
+                        ),
+                      ],
+                      PhoneSection(s.playlists),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final v in AlbumSort.values)
+                            PhoneChip(
+                              s.albumSort(v),
+                              key: Key('sort-${v.name}'),
+                              on: v == _sort,
+                              onTap: () {
+                                setState(() => _pick(v));
+                                app.settings?.albumSort = v;
+                                app.saveSettings?.call();
+                              },
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  sliver: SliverLayoutBuilder(
+                    builder: (context, c) {
+                      final size = (c.crossAxisExtent - 20) / 3;
+                      return SliverGrid.builder(
+                        key: const Key('album-grid'),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          mainAxisExtent:
+                              size + 4 + 16, // cover, gap, one line of name
+                        ),
+                        itemCount: list.length,
+                        itemBuilder: (_, i) => _Tile(list[i], size: size),
+                      );
+                    },
                   ),
                 ),
               ],
-              PhoneSection(s.playlists),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final v in AlbumSort.values)
-                    PhoneChip(
-                      s.albumSort(v),
-                      key: Key('sort-${v.name}'),
-                      on: v == _sort,
-                      onTap: () {
-                        setState(() => _pick(v));
-                        app.settings?.albumSort = v;
-                        app.saveSettings?.call();
-                      },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              LayoutBuilder(
-                builder: (context, c) {
-                  final size = (c.maxWidth - 20) / 3;
-                  return Wrap(
-                    key: const Key('album-grid'),
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      for (final a in albums.data ?? const <Album>[])
-                        SizedBox(
-                          width: size,
-                          child: _Tile(a, size: size),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

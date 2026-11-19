@@ -560,6 +560,77 @@ void main() {
       },
     );
 
+    test('recent: B ordered first or shown alone does not make a known album new', () async {
+      for (final (first, second) in [('B', 'A'), ('A', 'B')]) {
+        await db.delete(db.tracks).go();
+        await account(first, 0);
+        await account(second, 1);
+        await db.upsertTracks([
+          song('A', 'a1', 'Old', 'Art', added: 10), // known on A long ago
+          song('B', 'b1', 'Old', 'Art', added: 900), // B synced later
+          song('A', 'a2', 'Mid', 'Art', added: 50),
+        ]);
+        // B's copy is kept offline: it becomes the row shown
+        await db.queueOffline(['subsonic://B/b1'], OfflineReason.user);
+        await db.markOfflineDone('subsonic://B/b1', 'b1', 1);
+        expect(await names(view(), AlbumSort.recent), ['Mid', 'Old']);
+      }
+      // display mode One = B: the album is still older than the one only A has
+      await db.delete(db.tracks).go();
+      await account('A', 0);
+      await account('B', 1);
+      await db.upsertTracks([
+        song('A', 'a1', 'Old', 'Art', added: 10),
+        song('B', 'b1', 'Old', 'Art', added: 900),
+        song('B', 'b2', 'Mid', 'Art', added: 50),
+      ]);
+      final onlyB = view(
+        AppSettings(displayMode: DisplayMode.one, oneAccount: 'B'),
+      );
+      expect(await names(onlyB, AlbumSort.recent), ['Mid', 'Old']);
+    });
+
+    test(
+      'recent: only imported server counts (never played here): empty',
+      () async {
+        await account('A', 0);
+        await db.upsertTracks([song('A', 'a1', 'One', 'Art')]);
+        await db.raisePlayCounts({'subsonic://A/a1': 12});
+        expect(await view().recentAlbums().first, isEmpty);
+        await db.addPlay('subsonic://A/a1', DateTime(2026, 1, 1));
+        expect(
+          [for (final a in await view().recentAlbums().first) a.name],
+          ['One'],
+        );
+      },
+    );
+
+    test(
+      'artist sort is stable beyond 32 albums: ties keep the name order',
+      () async {
+        await db.upsertTracks([
+          for (var i = 0; i < 60; i++)
+            song(
+              'local',
+              'x$i',
+              'Album ${(59 - i).toString().padLeft(2, '0')}',
+              'Artist ${i % 3}',
+            ),
+        ]);
+        final r = await view().albums(sort: AlbumSort.artist).first;
+        expect(r, hasLength(60));
+        for (var i = 1; i < r.length; i++) {
+          final a = r[i - 1], b = r[i];
+          final byArtist = a.artist.compareTo(b.artist);
+          expect(
+            byArtist < 0 || (byArtist == 0 && a.name.compareTo(b.name) < 0),
+            isTrue,
+            reason: '${a.artist}/${a.name} before ${b.artist}/${b.name}',
+          );
+        }
+      },
+    );
+
     test('added_at is set once: a re-sync or re-scan keeps it', () async {
       await db.upsertTracks([song('local', 'a', 'A', 'Art', added: 42)]);
       await db.upsertTracks([song('local', 'a', 'A2', 'Art', added: 9999)]);

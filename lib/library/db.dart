@@ -1075,7 +1075,11 @@ class LibraryDb extends _$LibraryDb {
       ).watch().map((rows) => [for (final r in rows) _albumRow(r)]);
     }
     final order = switch (sort) {
-      AlbumSort.recent => 'MIN(added_at) DESC, sk, name, k',
+      // the oldest row of the album on ANY account, shown or not (rows of `reps` only
+      // are the ones chosen to be shown: B ordered first must not make the album new)
+      AlbumSort.recent =>
+        '(SELECT MIN(t2.added_at) FROM tracks t2 '
+            'WHERE t2.album_merge_key = reps.album_merge_key) DESC, sk, name, k',
       _ => 'sk, name, k',
     };
     return _shown(
@@ -1084,9 +1088,14 @@ class LibraryDb extends _$LibraryDb {
     ).watch().map((rows) {
       final list = [for (final r in rows) _albumRow(r)];
       if (sort == AlbumSort.artist) {
-        // stable: within one artist the name order of the query stays
-        final keys = {for (final a in list) a.key: sortKey(a.artist)};
-        list.sort((a, b) => keys[a.key]!.compareTo(keys[b.key]!));
+        // List.sort is not stable: the position given by the query (name order) breaks ties
+        final keys = [for (final a in list) sortKey(a.artist)];
+        final order = [for (var i = 0; i < list.length; i++) i]
+          ..sort((a, b) {
+            final c = keys[a].compareTo(keys[b]);
+            return c != 0 ? c : a.compareTo(b);
+          });
+        return [for (final i in order) list[i]];
       }
       return list;
     });
@@ -1094,13 +1103,13 @@ class LibraryDb extends _$LibraryDb {
 
   /// The [limit] albums last played, the newest first, one per [albumMergeKey]: the same
   /// album played on two accounts is one. One query ([_mergedPlays] gives each song's
-  /// last listen, twins included); the listens of hidden accounts count for the song.
+  /// last listen, twins included; imported server counts have no date and do not count); the listens of hidden accounts count for the song.
   Stream<List<Album>> watchRecentAlbums(int limit, {Set<String>? accounts}) {
     final (reps, v) = _reps(accounts);
     return customSelect(
       '$reps, base AS (SELECT path FROM reps), $_mergedPlays'
       'SELECT $_albumCols, MAX(m.lp) AS lp FROM reps JOIN m ON m.rp = reps.path '
-      'GROUP BY album_merge_key ORDER BY lp DESC, sk, name, k LIMIT $limit',
+      'GROUP BY album_merge_key HAVING MAX(m.lp) > 0 ORDER BY lp DESC, sk, name, k LIMIT $limit',
       variables: v,
       readsFrom: {tracks, offline, accountRows, playCounts},
     ).watch().map((rows) => [for (final r in rows) _albumRow(r)]);

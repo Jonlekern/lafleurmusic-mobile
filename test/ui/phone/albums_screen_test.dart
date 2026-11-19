@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
+import 'package:lafleurmusic/library/models.dart';
+import 'package:lafleurmusic/ui/cover_image.dart';
 import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/ui/phone/album_screen.dart';
 import 'package:lafleurmusic/ui/phone/albums_screen.dart';
@@ -124,5 +126,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AlbumsScreen), findsOneWidget);
     expect(find.byType(PhoneShell), findsOneWidget);
+  });
+
+  testWidgets('5 000 albums: only the tiles on screen are built', (
+    tester,
+  ) async {
+    final f = await open(tester);
+    await tester.runAsync(
+      () => f.db.upsertTracks([
+        for (var i = 0; i < 5000; i++)
+          Track(
+            path: '/m/big$i.mp3',
+            title: 'T',
+            artist: 'Art',
+            albumArtist: 'Art',
+            album: 'Big ${i.toString().padLeft(4, '0')}',
+            trackNo: 1,
+            durationMs: 1000,
+            hasCover: false,
+            size: 1,
+          ),
+      ]),
+    );
+    await settle(tester);
+    final built = find.descendant(
+      of: find.byKey(const Key('album-grid')),
+      matching: find.byType(CoverImage),
+    );
+    expect(built.evaluate().length, inInclusiveRange(1, 40));
   });
 }
