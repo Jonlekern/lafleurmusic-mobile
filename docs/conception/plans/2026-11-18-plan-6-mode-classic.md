@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Visuel : version A de `maquettes/6-molette.png` (écran menu + molette). **Pas encore de maquette pour : l'écran En cours en Mode Classic, et le choix du mode dans Réglages** → tâche 3, étape 1 = maquette, puis on attend le oui de Johnny.
+- Visuel : version A de `maquettes/6-molette.png` (écran menu + molette). Écran En cours en Mode Classic et choix du mode dans Réglages : **maquette validée** `maquettes/12-classic.png` (oui de Johnny le 19.11.2026) — A : tourner = volume (barre blanche) ; B : appui au milieu = avancer dans le morceau (losange rose, retour au volume par un nouvel appui ou après 3 s) ; C : Réglages › Affichage, « Mode normal / Mode Classic ».
 - Molette : tourner dans le sens des aiguilles = descendre, l'autre sens = monter ; un cran tous les 15° ; petit clic (vibration légère) à chaque cran ; rond du milieu = choisir ; MENU (haut de l'anneau) = retour ; ⏮ / ⏭ (côtés) = morceau précédent / suivant ; ▶︎❙❙ (bas) = lecture / pause. Sur l'écran En cours, tourner = volume (comme l'iPod), un appui au milieu passe en mode « avancer dans le morceau ».
 - Menu du Mode Classic (dans cet ordre) : Cover Flow, Artistes, Albums, Morceaux, Playlists, Top 100, Sur mon iPhone / Sur mon téléphone, En cours, Réglages.
 - Le mode choisi est gardé dans `settings.json` ; Mode normal par défaut.
@@ -49,9 +49,9 @@
 
 ### Task 3: En cours en Mode Classic et choix du mode
 
-**Files:** Create `lib/ui/classic/classic_now.dart`, `maquettes/10-classic-en-cours.png` + source · Modify `lib/ui/phone/accounts_screen.dart` (Réglages : section « MODE » avec « Normal / Classic »), `lib/settings.dart`, `lib/l10n/strings.dart` · Test widget + goldens
+**Files:** Create `lib/ui/classic/classic_now.dart`, `maquettes/12-classic.png` (déjà faite) · Modify `lib/ui/phone/accounts_screen.dart` (Réglages : section « MODE » avec « Normal / Classic »), `lib/settings.dart`, `lib/l10n/strings.dart` · Test widget + goldens
 
-- [ ] Step 1: **maquette** de l'écran En cours Classic et de la section MODE des Réglages ; **stop : la montrer à Johnny et attendre son oui**.
+- [x] Step 1: maquette validée (`maquettes/12-classic.png`).
 - [ ] Step 2: tests (volume à la molette, avancer dans le morceau, point 4, réglage gardé). Échec, implémentation, verts ; goldens ; captures. Commit `feat: Classic now playing and mode setting`.
 
 ### Task 4: Bout en bout et documents

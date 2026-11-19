@@ -1,0 +1,143 @@
+<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1760px;height:1000px;background:#2b2b2b;font-family:Inter;color:#F2F2F2;display:flex;gap:36px;padding:40px 36px;overflow:hidden}
+.col{display:flex;flex-direction:column;align-items:center;gap:14px;justify-content:center}
+.cap{color:#ddd;font-size:15px;font-weight:700}.cap span{color:#F26EF2}
+.ph{width:390px;height:844px;background:#0D0D0D;border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.sb{height:44px;display:flex;justify-content:space-between;align-items:center;padding:6px 28px 0;font-size:14px;font-weight:700;flex:none}
+.top{height:50px;display:flex;align-items:center;justify-content:center;position:relative;flex:none;background:#1C1C1C;border-bottom:1px solid #000}
+.top img{height:15px}.top.bk img{height:11px;margin-left:80px}.ph,.land{flex:none}.top .l{position:absolute;left:14px;color:#F26EF2;font-size:15px;font-weight:700}.top .r{position:absolute;right:16px;color:#bbb;font-size:18px}
+.body{flex:1;overflow:hidden;padding:14px 16px;position:relative}
+.sec{font-size:11px;font-weight:700;color:#999;letter-spacing:1px;margin:14px 4px 8px}
+.it{font-size:16px;font-weight:700;padding:11px 12px;border-radius:8px;display:flex;align-items:center;gap:12px}.it .c{margin-left:auto;color:#666}
+.it.on{background:#F26EF2;color:#111}.it.on .c{color:#111}
+.sq{width:30px;height:30px;border-radius:4px;flex:none}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid #444;border-radius:16px;padding:6px 12px;font-size:13px;font-weight:700}
+.chip.p{border-color:#F26EF2;color:#F26EF2}
+.search{background:#1C1C1C;border-radius:10px;color:#888;font-size:14px;padding:10px 14px;margin-top:10px}
+.mini{height:64px;background:#1C1C1C;border-top:1px solid #000;display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+.mini .t{font-size:14px;font-weight:700}.mini .a{font-size:12px;color:#999;margin-top:2px}.mini .b{margin-left:auto;font-size:20px;display:flex;gap:18px}
+.prog{height:3px;background:#333;flex:none}.prog i{display:block;height:3px;width:38%;background:#F26EF2}
+.home{height:30px;flex:none;display:flex;justify-content:center;align-items:center}.home i{width:134px;height:5px;border-radius:3px;background:#fff}
+h1{font-size:28px;font-weight:700;margin-top:12px}.lbl{color:#999;font-size:11px;letter-spacing:.9px;font-weight:700}
+.pill{display:inline-block;border-radius:22px;padding:10px 18px;font-weight:700;font-size:14px;border:1px solid #444;margin-right:8px}.pill.p{background:#F26EF2;color:#111;border-color:#F26EF2}
+.tr{display:flex;align-items:center;gap:12px;padding:11px 8px;font-size:15px;font-weight:700;border-bottom:1px solid #1e1e1e;position:relative}
+.tr .n{width:20px;color:#bbb}.tr .s{color:#999;font-size:12px;font-weight:400;margin-top:2px}.tr .d{margin-left:auto;color:#bbb;font-weight:400;font-size:13px}
+.tr.cur{background:#F26EF2;color:#111;border-radius:8px}.tr.cur .n,.tr.cur .s,.tr.cur .d{color:#111}
+.tr.off{color:#555}.tr.off .s,.tr.off .d,.tr.off .n{color:#444}
+.dl{color:#F26EF2;font-size:13px}
+.swipe{position:absolute;right:0;top:0;bottom:0;width:110px;background:#F26EF2;color:#111;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:0 8px 8px 0}
+.cover{width:300px;height:300px;margin:6px auto 0;border-radius:8px;background:#EDE8DE;position:relative;overflow:hidden}
+.ctl{display:flex;justify-content:space-between;align-items:center;padding:0 30px;font-size:26px;margin-top:18px}.ctl .pp{width:64px;height:64px;border-radius:32px;background:#F26EF2;color:#111;display:flex;align-items:center;justify-content:center}
+.bar2{height:4px;background:#333;border-radius:2px;margin-top:16px}.bar2 i{display:block;height:4px;width:38%;background:#F26EF2;border-radius:2px}
+.times{display:flex;justify-content:space-between;color:#999;font-size:12px;margin-top:6px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0}.row .t{font-size:14px;font-weight:700}.row .a{color:#999;font-size:12px;margin-top:2px}.row .x{color:#777;font-size:15px;margin-left:auto}.grip{color:#666;font-size:13px;width:12px}
+.tabs{display:flex;gap:8px;margin-top:16px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#232323;border-top:1px solid #3a3a3a;border-radius:18px 18px 0 0;padding:10px 12px 22px;box-shadow:0 -12px 40px rgba(0,0,0,.6);font-size:16px}
+.sheet .g{width:40px;height:5px;border-radius:3px;background:#555;margin:0 auto 10px}
+.sheet div.o{padding:12px 12px;border-radius:8px}.sheet .hl{background:#F26EF2;color:#111;font-weight:700}.sheet hr{border:0;border-top:1px solid #3a3a3a;margin:5px 4px}.sheet .red{color:#ff6b6b}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+
+.land{width:844px;height:390px;background:radial-gradient(ellipse at 50% 40%,#1c1c1c,#050505 75%);border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;box-sizing:content-box}
+.cf{position:absolute;left:0;right:0;top:52px;height:170px;perspective:700px}
+.cv{position:absolute;top:10px;width:150px;height:150px;border-radius:2px;-webkit-box-reflect:below 2px linear-gradient(transparent 55%,rgba(255,255,255,.18))}
+.cv.c{left:337px;width:170px;height:170px;top:0}
+.lt{color:#999;font-size:12px}
+.acc{display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:#161616;margin-bottom:8px}
+.acc .ic{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#111;flex:none}
+.acc .t{font-size:15px;font-weight:700}.acc .a{font-size:12px;color:#999;margin-top:2px}.acc .r{margin-left:auto;display:flex;gap:10px;align-items:center;color:#666}
+.ck{width:22px;height:22px;border-radius:6px;border:2px solid #555;flex:none}.ck.on{background:#F26EF2;border-color:#F26EF2;color:#111;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.f{margin-top:12px}.f label{display:block;color:#999;font-size:11px;letter-spacing:1px;font-weight:700;margin-bottom:6px}.f .in{background:#161616;border:1px solid #333;border-radius:8px;padding:11px 12px;font-size:14px}.f .in.on{border-color:#F26EF2}
+.seg{display:flex;background:#161616;border-radius:9px;padding:3px;gap:3px}.seg span{flex:1;text-align:center;padding:8px 0;font-size:13px;font-weight:700;border-radius:7px;color:#bbb}.seg span.on{background:#F26EF2;color:#111}
+.hd{display:flex;gap:6px;margin-top:6px}.hd .in{flex:1;font-size:12px;padding:9px 10px}
+.gauge{height:8px;border-radius:4px;background:#2a2a2a;overflow:hidden;margin-top:8px}.gauge i{display:block;height:8px;width:42%;background:#F26EF2}
+.selbar{position:absolute;left:12px;right:12px;bottom:12px;background:#F26EF2;color:#111;border-radius:14px;padding:14px;font-weight:700;font-size:15px;text-align:center}
+
+.wheel{width:270px;height:270px;border-radius:50%;background:#1C1C1C;position:relative;margin:0 auto;box-shadow:inset 0 0 0 1px #2a2a2a}
+.wheel .hub{position:absolute;left:50%;top:50%;width:100px;height:100px;margin:-50px;border-radius:50%;background:#0D0D0D;box-shadow:inset 0 0 0 1px #2a2a2a}
+.wheel .k{position:absolute;color:#ddd;font-weight:700;font-size:15px}
+.wheel .menu{top:22px;left:50%;transform:translateX(-50%);letter-spacing:1px;font-size:13px}
+.wheel .prev{left:26px;top:50%;transform:translateY(-50%)}
+.wheel .next{right:26px;top:50%;transform:translateY(-50%)}
+.wheel .pp{bottom:22px;left:50%;transform:translateX(-50%)}
+.wheel .arc{position:absolute;inset:0;border-radius:50%;border:3px solid transparent;border-top-color:#F26EF2;transform:rotate(35deg)}
+.wheel.sm{width:190px;height:190px}.wheel.sm .hub{width:70px;height:70px;margin:-35px}.wheel.sm .menu{top:14px;font-size:11px}.wheel.sm .prev{left:16px}.wheel.sm .next{right:16px}.wheel.sm .pp{bottom:14px}
+.ipodscr{background:#111;border-radius:10px;margin:0 6px;padding:8px 0;height:300px;overflow:hidden}
+.ipodscr .r{display:flex;justify-content:space-between;padding:9px 14px;font-size:15px;font-weight:700}
+.ipodscr .r.on{background:#F26EF2;color:#111}
+.ipodscr .t{font-size:11px;color:#999;letter-spacing:1px;padding:0 14px 6px;font-weight:700;display:flex;justify-content:space-between}
+.note{font-size:13px;color:#bbb;width:390px;line-height:1.5;text-align:center}
+.lt{color:#999;font-size:12px}
+.toast{position:absolute;left:12px;right:12px;bottom:76px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;font-size:14px;font-weight:700;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+.toast .b{color:#F26EF2;margin-left:auto}.toast .b2{color:#F26EF2}
+.swr{position:absolute;left:0;top:0;bottom:0;width:150px;background:#F26EF2;color:#111;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:8px 0 0 8px}
+.rec{display:flex;gap:10px;margin-top:4px}.rec .c{width:84px}.rec .c i{display:block;width:84px;height:84px;border-radius:6px}.rec .c div{font-size:11px;font-weight:700;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}.grid i{display:block;aspect-ratio:1;border-radius:6px}.grid div{font-size:11px;font-weight:700;margin-top:4px}
+.dlg{position:absolute;left:30px;right:30px;top:260px;background:#232323;border:1px solid #3a3a3a;border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.7)}
+.dlg h3{font-size:17px}.dlg p{color:#bbb;font-size:13px;line-height:1.5;margin-top:8px}.dlg .bt{display:flex;gap:10px;margin-top:16px}.dlg .bt span{flex:1;text-align:center;padding:11px 0;border-radius:10px;font-weight:700;font-size:14px;border:1px solid #444}.dlg .bt span.p{background:#F26EF2;color:#111;border-color:#F26EF2}
+</style></head><body>
+<div class="col"><div class="cap"><span>A</span> Glisser à droite = Ajouter à la file</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><span class="l">‹ Albums</span><img src="logo-texte-grand.png" style="margin-left:60px;height:11px"></div>
+<div class="body">
+ <div style="display:flex;gap:14px;align-items:center"><div style="width:90px;height:90px;border-radius:6px;background:#2f6f8f"></div><div><div style="font-size:20px;font-weight:700">Studio Lafleur</div><div class="lt" style="margin-top:4px">LAFLEURSTUDIO · 9 morceaux</div></div></div>
+ <div style="margin-top:14px">
+ <div class="tr"><span class="n">1</span><div>Night Drive<div class="s">LAFLEURSTUDIO</div></div><span class="d">3:41</span></div>
+ <div class="tr" style="padding-left:160px"><span class="swr">＋ Ajouter à la file</span><span class="n">2</span><div>Surf Break<div class="s">LAFLEURSTUDIO</div></div></div>
+ <div class="tr"><span class="n">3</span><div>Lafleur Surf<div class="s">LAFLEURSTUDIO</div></div><span class="d">4:05</span></div>
+ <div class="tr"><span class="n">4</span><div>Low Tide<div class="s">LAFLEURSTUDIO</div></div><span class="d">2:58</span></div>
+ <div class="tr"><span class="n">5</span><div>Palm Echo<div class="s">LAFLEURSTUDIO</div></div><span class="d">3:12</span></div>
+ </div>
+ <div class="toast">✓ Ajouté à la file<span class="b">Annuler</span><span class="b2">Voir la file</span></div>
+</div>
+<div class="prog"><i></i></div><div class="mini"><div style="width:40px;height:40px;border-radius:4px;background:#EDE8DE"></div><div><div class="t">Lafleur Surf</div><div class="a">LAFLEURSTUDIO</div></div><div class="b"><span>❙❙</span><span>⏭</span></div></div>
+<div class="home"><i></i></div></div>
+<div class="note">À droite = Ajouter à la file (à la fin). À gauche = Lire ensuite, comme aujourd'hui. La bulle part seule après 4 s.</div></div>
+
+<div class="col"><div class="cap"><span>B</span> Bibliothèque : tri gardé, écoutés récemment</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><span class="l">‹ Accueil</span><img src="logo-texte-grand.png" style="margin-left:60px;height:11px"></div>
+<div class="body">
+ <div class="sec" style="margin-top:4px">ÉCOUTÉS RÉCEMMENT</div>
+ <div class="rec"><div class="c"><i style="background:#EDE8DE"></i><div>Studio Lafleur</div></div><div class="c"><i style="background:#2f6f8f"></i><div>Blue Hours</div></div><div class="c"><i style="background:#c9a227"></i><div>Golden</div></div><div class="c"><i style="background:#5b3a6e"></i><div>Night Shift</div></div></div>
+ <div class="sec" style="margin-top:20px">ALBUMS</div>
+ <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip">Nom</span><span class="chip">Artiste</span><span class="chip p">Ajout récent</span><span class="chip">Plus écouté</span></div>
+ <div class="grid">
+  <div><i style="background:#3d6b4f"></i><div>Green Room</div></div><div><i style="background:#9e2c36"></i><div>Red Line</div></div><div><i style="background:#2f6f8f"></i><div>Blue Hours</div></div>
+  <div><i style="background:#c9a227"></i><div>Golden</div></div><div><i style="background:#EDE8DE"></i><div>Studio Lafleur</div></div><div><i style="background:#5b3a6e"></i><div>Night Shift</div></div>
+ </div>
+</div>
+<div class="home"><i></i></div></div>
+<div class="note">Le tri choisi reste le même la prochaine fois. « Écoutés récemment » = les derniers albums joués.</div></div>
+
+<div class="col"><div class="cap"><span>C</span> « Vider » ne retire que tes ajouts</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><span class="l">⌄</span><img src="logo-texte-grand.png"></div>
+<div class="body">
+ <div class="sec" style="display:flex;justify-content:space-between;margin-top:4px"><span>AJOUTÉS PAR TOI</span><span style="color:#F26EF2">Vider</span></div>
+ <div class="row"><span class="grip">≡</span><div><div class="t">Surf Break</div><div class="a">LAFLEURSTUDIO</div></div><span class="x">✕</span></div>
+ <div class="row"><span class="grip">≡</span><div><div class="t">Golden Hour</div><div class="a">Golden</div></div><span class="x">✕</span></div>
+ <div class="sec" style="margin-top:18px">SUITE DE L'ALBUM</div>
+ <div class="row"><span class="grip">≡</span><div><div class="t">Low Tide</div><div class="a">LAFLEURSTUDIO</div></div></div>
+ <div class="row"><span class="grip">≡</span><div><div class="t">Palm Echo</div><div class="a">LAFLEURSTUDIO</div></div></div>
+ <div class="dim"></div>
+ <div class="dlg"><h3>Vider tes ajouts ?</h3><p>Les 2 morceaux que tu as ajoutés partent de la file. La suite de l'album reste.</p><div class="bt"><span>Annuler</span><span class="p">Vider</span></div></div>
+</div>
+<div class="home"><i></i></div></div>
+<div class="note">Une seule question, avant de vider. La suite de l'album continue de jouer.</div></div>
+
+<div class="col"><div class="cap"><span>D</span> En cours ⋯ : aller à l'album / l'artiste</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><span class="l">⌄</span><img src="logo-texte-grand.png"><span class="r">⋯</span></div>
+<div class="body" style="padding:14px 22px">
+ <div class="cover"><div style="position:absolute;left:30px;top:75px;width:240px;height:150px;border-radius:50%;background:#9e2c36;box-shadow:0 0 0 6px #f0d9a0"></div></div>
+ <h1>Lafleur Surf</h1><div class="lt" style="font-size:14px;margin-top:4px">LAFLEURSTUDIO · Studio Lafleur</div>
+ <div class="dim"></div>
+ <div class="sheet"><div class="g"></div>
+  <div class="o hl">Aller à l'album</div><div class="o">Aller à l'artiste</div><hr><div class="o">Ajouter à la file</div><div class="o">Garder sur l'iPhone</div>
+ </div>
+</div>
+<div class="home"><i></i></div></div>
+<div class="note">Le menu ⋯ de l'écran En cours gagne deux lignes en haut : « Aller à l'album » et « Aller à l'artiste ».</div></div>
+</body></html>

@@ -1,0 +1,158 @@
+<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:2190px;height:1000px;background:#2b2b2b;font-family:Inter;color:#F2F2F2;display:flex;gap:36px;padding:40px 36px;overflow:hidden}
+.col{display:flex;flex-direction:column;align-items:center;gap:14px;justify-content:center}
+.cap{color:#ddd;font-size:15px;font-weight:700}.cap span{color:#F26EF2}
+.ph{width:390px;height:844px;background:#0D0D0D;border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.sb{height:44px;display:flex;justify-content:space-between;align-items:center;padding:6px 28px 0;font-size:14px;font-weight:700;flex:none}
+.top{height:50px;display:flex;align-items:center;justify-content:center;position:relative;flex:none;background:#1C1C1C;border-bottom:1px solid #000}
+.top img{height:15px}.top.bk img{height:11px;margin-left:80px}.ph,.land{flex:none}.top .l{position:absolute;left:14px;color:#F26EF2;font-size:15px;font-weight:700}.top .r{position:absolute;right:16px;color:#bbb;font-size:18px}
+.body{flex:1;overflow:hidden;padding:14px 16px;position:relative}
+.sec{font-size:11px;font-weight:700;color:#999;letter-spacing:1px;margin:14px 4px 8px}
+.it{font-size:16px;font-weight:700;padding:11px 12px;border-radius:8px;display:flex;align-items:center;gap:12px}.it .c{margin-left:auto;color:#666}
+.it.on{background:#F26EF2;color:#111}.it.on .c{color:#111}
+.sq{width:30px;height:30px;border-radius:4px;flex:none}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid #444;border-radius:16px;padding:6px 12px;font-size:13px;font-weight:700}
+.chip.p{border-color:#F26EF2;color:#F26EF2}
+.search{background:#1C1C1C;border-radius:10px;color:#888;font-size:14px;padding:10px 14px;margin-top:10px}
+.mini{height:64px;background:#1C1C1C;border-top:1px solid #000;display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+.mini .t{font-size:14px;font-weight:700}.mini .a{font-size:12px;color:#999;margin-top:2px}.mini .b{margin-left:auto;font-size:20px;display:flex;gap:18px}
+.prog{height:3px;background:#333;flex:none}.prog i{display:block;height:3px;width:38%;background:#F26EF2}
+.home{height:30px;flex:none;display:flex;justify-content:center;align-items:center}.home i{width:134px;height:5px;border-radius:3px;background:#fff}
+h1{font-size:28px;font-weight:700;margin-top:12px}.lbl{color:#999;font-size:11px;letter-spacing:.9px;font-weight:700}
+.pill{display:inline-block;border-radius:22px;padding:10px 18px;font-weight:700;font-size:14px;border:1px solid #444;margin-right:8px}.pill.p{background:#F26EF2;color:#111;border-color:#F26EF2}
+.tr{display:flex;align-items:center;gap:12px;padding:11px 8px;font-size:15px;font-weight:700;border-bottom:1px solid #1e1e1e;position:relative}
+.tr .n{width:20px;color:#bbb}.tr .s{color:#999;font-size:12px;font-weight:400;margin-top:2px}.tr .d{margin-left:auto;color:#bbb;font-weight:400;font-size:13px}
+.tr.cur{background:#F26EF2;color:#111;border-radius:8px}.tr.cur .n,.tr.cur .s,.tr.cur .d{color:#111}
+.tr.off{color:#555}.tr.off .s,.tr.off .d,.tr.off .n{color:#444}
+.dl{color:#F26EF2;font-size:13px}
+.swipe{position:absolute;right:0;top:0;bottom:0;width:110px;background:#F26EF2;color:#111;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:0 8px 8px 0}
+.cover{width:300px;height:300px;margin:6px auto 0;border-radius:8px;background:#EDE8DE;position:relative;overflow:hidden}
+.ctl{display:flex;justify-content:space-between;align-items:center;padding:0 30px;font-size:26px;margin-top:18px}.ctl .pp{width:64px;height:64px;border-radius:32px;background:#F26EF2;color:#111;display:flex;align-items:center;justify-content:center}
+.bar2{height:4px;background:#333;border-radius:2px;margin-top:16px}.bar2 i{display:block;height:4px;width:38%;background:#F26EF2;border-radius:2px}
+.times{display:flex;justify-content:space-between;color:#999;font-size:12px;margin-top:6px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0}.row .t{font-size:14px;font-weight:700}.row .a{color:#999;font-size:12px;margin-top:2px}.row .x{color:#777;font-size:15px;margin-left:auto}.grip{color:#666;font-size:13px;width:12px}
+.tabs{display:flex;gap:8px;margin-top:16px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#232323;border-top:1px solid #3a3a3a;border-radius:18px 18px 0 0;padding:10px 12px 22px;box-shadow:0 -12px 40px rgba(0,0,0,.6);font-size:16px}
+.sheet .g{width:40px;height:5px;border-radius:3px;background:#555;margin:0 auto 10px}
+.sheet div.o{padding:12px 12px;border-radius:8px}.sheet .hl{background:#F26EF2;color:#111;font-weight:700}.sheet hr{border:0;border-top:1px solid #3a3a3a;margin:5px 4px}.sheet .red{color:#ff6b6b}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+
+.land{width:844px;height:390px;background:radial-gradient(ellipse at 50% 40%,#1c1c1c,#050505 75%);border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;box-sizing:content-box}
+.cf{position:absolute;left:0;right:0;top:52px;height:170px;perspective:700px}
+.cv{position:absolute;top:10px;width:150px;height:150px;border-radius:2px;-webkit-box-reflect:below 2px linear-gradient(transparent 55%,rgba(255,255,255,.18))}
+.cv.c{left:337px;width:170px;height:170px;top:0}
+.lt{color:#999;font-size:12px}
+.acc{display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:#161616;margin-bottom:8px}
+.acc .ic{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#111;flex:none}
+.acc .t{font-size:15px;font-weight:700}.acc .a{font-size:12px;color:#999;margin-top:2px}.acc .r{margin-left:auto;display:flex;gap:10px;align-items:center;color:#666}
+.ck{width:22px;height:22px;border-radius:6px;border:2px solid #555;flex:none}.ck.on{background:#F26EF2;border-color:#F26EF2;color:#111;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.f{margin-top:12px}.f label{display:block;color:#999;font-size:11px;letter-spacing:1px;font-weight:700;margin-bottom:6px}.f .in{background:#161616;border:1px solid #333;border-radius:8px;padding:11px 12px;font-size:14px}.f .in.on{border-color:#F26EF2}
+.seg{display:flex;background:#161616;border-radius:9px;padding:3px;gap:3px}.seg span{flex:1;text-align:center;padding:8px 0;font-size:13px;font-weight:700;border-radius:7px;color:#bbb}.seg span.on{background:#F26EF2;color:#111}
+.hd{display:flex;gap:6px;margin-top:6px}.hd .in{flex:1;font-size:12px;padding:9px 10px}
+.gauge{height:8px;border-radius:4px;background:#2a2a2a;overflow:hidden;margin-top:8px}.gauge i{display:block;height:8px;width:42%;background:#F26EF2}
+.selbar{position:absolute;left:12px;right:12px;bottom:12px;background:#F26EF2;color:#111;border-radius:14px;padding:14px;font-weight:700;font-size:15px;text-align:center}
+
+.wheel{width:270px;height:270px;border-radius:50%;background:#1C1C1C;position:relative;margin:0 auto;box-shadow:inset 0 0 0 1px #2a2a2a}
+.wheel .hub{position:absolute;left:50%;top:50%;width:100px;height:100px;margin:-50px;border-radius:50%;background:#0D0D0D;box-shadow:inset 0 0 0 1px #2a2a2a}
+.wheel .k{position:absolute;color:#ddd;font-weight:700;font-size:15px}
+.wheel .menu{top:22px;left:50%;transform:translateX(-50%);letter-spacing:1px;font-size:13px}
+.wheel .prev{left:26px;top:50%;transform:translateY(-50%)}
+.wheel .next{right:26px;top:50%;transform:translateY(-50%)}
+.wheel .pp{bottom:22px;left:50%;transform:translateX(-50%)}
+.wheel .arc{position:absolute;inset:0;border-radius:50%;border:3px solid transparent;border-top-color:#F26EF2;transform:rotate(35deg)}
+.wheel.sm{width:190px;height:190px}.wheel.sm .hub{width:70px;height:70px;margin:-35px}.wheel.sm .menu{top:14px;font-size:11px}.wheel.sm .prev{left:16px}.wheel.sm .next{right:16px}.wheel.sm .pp{bottom:14px}
+.ipodscr{background:#111;border-radius:10px;margin:0 6px;padding:8px 0;height:300px;overflow:hidden}
+.ipodscr .r{display:flex;justify-content:space-between;padding:9px 14px;font-size:15px;font-weight:700}
+.ipodscr .r.on{background:#F26EF2;color:#111}
+.ipodscr .t{font-size:11px;color:#999;letter-spacing:1px;padding:0 14px 6px;font-weight:700;display:flex;justify-content:space-between}
+.note{font-size:13px;color:#bbb;width:390px;line-height:1.5;text-align:center}
+.lt{color:#999;font-size:12px}
+.dlg{position:absolute;left:24px;right:24px;top:250px;background:#232323;border:1px solid #3a3a3a;border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.7)}
+.dlg h3{font-size:17px}.dlg p{color:#bbb;font-size:13px;line-height:1.5;margin-top:8px}.dlg .bt{display:flex;gap:10px;margin-top:16px}.dlg .bt span{flex:1;text-align:center;padding:11px 0;border-radius:10px;font-weight:700;font-size:14px;border:1px solid #444}.dlg .bt span.p{background:#F26EF2;color:#111;border-color:#F26EF2}
+.big{background:#F26EF2;color:#111;border-radius:24px;padding:13px 28px;text-align:center;font-weight:700;font-size:15px;display:inline-block}
+.pl{display:flex;align-items:center;gap:12px;padding:10px 6px;font-size:15px;font-weight:700}.pl .s{color:#999;font-size:12px;font-weight:400;margin-top:2px}.pl .ck{margin-left:auto}.pl i{width:44px;height:44px;border-radius:4px;flex:none;display:block}
+.plus{width:30px;height:30px;border-radius:50%;border:2px solid #ddd;display:inline-flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;line-height:1}
+.plus.on{background:#F26EF2;border-color:#F26EF2;color:#111;font-size:15px}
+.acts{display:flex;gap:8px;margin-top:14px}.acts span{border:1px solid #444;border-radius:18px;padding:8px 14px;font-size:13px;font-weight:700}
+.rm{width:22px;height:22px;border-radius:50%;background:#F26EF2;color:#111;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+</style></head><body>
+
+<div class="col"><div class="cap"><span>A</span> « + » dans le lecteur</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><span class="l">⌄</span><img src="logo-texte-grand.png"><span class="r">⋯</span></div>
+<div class="body" style="padding:14px 22px">
+ <div class="cover"><div style="position:absolute;left:30px;top:75px;width:240px;height:150px;border-radius:50%;background:#9e2c36;box-shadow:0 0 0 6px #f0d9a0"></div></div>
+ <div style="display:flex;align-items:center;margin-top:12px"><div><h1 style="margin:0">Lafleur Surf</h1><div class="lt" style="font-size:14px;margin-top:4px">LAFLEURSTUDIO · Studio Lafleur</div></div><span class="plus" style="margin-left:auto">+</span></div>
+ <div class="bar2"><i></i></div><div class="times"><span>1:33</span><span>−2:32</span></div>
+ <div class="ctl"><span>⏮</span><span class="pp">❙❙</span><span>⏭</span></div>
+</div>
+<div class="home"><i></i></div></div>
+<div class="note">Le « + » à côté du titre ouvre le choix des playlists (comme Spotify). Dans les listes : menu ⋯ → « Ajouter à une playlist ».</div></div>
+
+<div class="col"><div class="cap"><span>B</span> Cocher plusieurs playlists</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><span class="l">Annuler</span><img src="logo-texte-grand.png" style="margin-left:40px;height:11px"></div>
+<div class="body">
+ <div style="font-size:18px;font-weight:700;text-align:center;margin-top:6px">Ajouter à une playlist</div>
+ <div style="text-align:center;margin-top:14px"><span class="big">Nouvelle playlist</span></div>
+ <div class="search">🔍 Chercher une playlist</div>
+ <div style="margin-top:8px">
+ <div class="pl"><i style="background:linear-gradient(135deg,#2f6f8f 50%,#9e2c36 50%)"></i><div>Road Trip<div class="s">Navidrome maison · 24 morceaux</div></div><div class="ck on" style="margin-left:auto">✓</div></div>
+ <div class="pl"><i style="background:#c9a227"></i><div>Été 2026<div class="s">Navidrome maison · 12 morceaux</div></div><div class="ck on" style="margin-left:auto">✓</div></div>
+ <div class="pl"><i style="background:#3d6b4f"></i><div>Calme<div class="s">Navidrome maison · 40 morceaux</div></div><div class="ck" style="margin-left:auto"></div></div>
+ <div class="pl"><i style="background:#5b3a6e"></i><div>Sport<div class="s">Sur mon iPhone · 31 morceaux</div></div><div class="ck" style="margin-left:auto"></div></div>
+ </div>
+ <div style="position:absolute;left:0;right:0;bottom:18px;text-align:center"><span class="big">OK</span></div>
+</div>
+<div class="home"><i></i></div></div>
+<div class="note">On coche une ou plusieurs playlists, puis OK. Une bulle confirme : « Ajouté à 2 playlists ».</div></div>
+
+<div class="col"><div class="cap"><span>C</span> Donner un nom</div>
+<div class="ph" style="background:linear-gradient(#3a2240,#0D0D0D 60%)"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="body" style="text-align:center;display:flex;flex-direction:column;justify-content:center;padding-bottom:160px">
+ <div style="font-size:22px;font-weight:700">Donne un nom à ta playlist</div>
+ <div style="font-size:30px;font-weight:700;border-bottom:2px solid #F26EF2;margin:34px 26px 0;padding-bottom:8px">Soirée</div>
+ <div class="lt" style="margin-top:22px">Où la ranger :</div>
+ <div class="seg" style="margin:8px 16px 0"><span class="on">Sur mon iPhone</span><span>Navidrome maison</span><span>Jellyfin</span></div>
+ <div style="margin-top:34px;display:flex;gap:12px;justify-content:center"><span class="big" style="background:transparent;color:#ddd;border:1px solid #555">Annuler</span><span class="big">Créer</span></div>
+</div>
+<div class="home"><i></i></div></div>
+<div class="note">Sans serveur : elle reste sur le téléphone (rien à choisir). Avec un serveur : tu peux aussi la ranger dessus, pour la retrouver ailleurs.</div></div>
+
+<div class="col"><div class="cap"><span>D</span> La playlist : Ajouter · Modifier · Trier</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><span class="l">‹ Accueil</span><img src="logo-texte-grand.png" style="margin-left:60px;height:11px"></div>
+<div class="body">
+ <div style="display:flex;gap:14px;align-items:center"><div style="width:96px;height:96px;border-radius:6px;background:linear-gradient(135deg,#2f6f8f 50%,#9e2c36 50%)"></div><div><div style="font-size:22px;font-weight:700">Road Trip</div><div class="lt" style="margin-top:4px">Navidrome maison · 24 morceaux · 1 h 32</div></div></div>
+ <div class="acts"><span>＋ Ajouter</span><span>✎ Modifier</span><span>⇅ Trier</span><span style="margin-left:auto;background:#F26EF2;color:#111;border-color:#F26EF2;width:40px;text-align:center;padding:8px 0">▶︎</span></div>
+ <div style="margin-top:10px">
+ <div class="tr"><div>Night Drive<div class="s">LAFLEURSTUDIO</div></div><span class="d">3:41</span></div>
+ <div class="tr"><div>Surf Break<div class="s">LAFLEURSTUDIO</div></div><span class="d">3:20</span></div>
+ <div class="tr"><div>Golden Hour<div class="s">Golden</div></div><span class="d">4:02</span></div>
+ <div class="tr"><div>Low Tide<div class="s">LAFLEURSTUDIO</div></div><span class="d">2:58</span></div>
+ </div>
+ <div class="dim"></div>
+ <div class="dlg"><h3>Déjà dans « Road Trip »</h3><p>« Surf Break » y est déjà.</p><div class="bt"><span>Ajouter quand même</span><span class="p">Ignorer</span></div></div>
+</div>
+<div class="home"><i></i></div></div>
+<div class="note">« Ajouter » ouvre la recherche dans ta musique. Si un morceau y est déjà : « Ignorer » ou « Ajouter quand même » (fiable chez nous).</div></div>
+
+<div class="col"><div class="cap"><span>E</span> Modifier</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ▭</span></div>
+<div class="top"><span class="l">Annuler</span><img src="logo-texte-grand.png" style="margin-left:40px;height:11px"><span class="r" style="color:#F26EF2;font-size:15px;font-weight:700;right:14px">OK</span></div>
+<div class="body">
+ <div style="display:flex;flex-direction:column;align-items:center"><div style="width:120px;height:120px;border-radius:6px;background:linear-gradient(135deg,#2f6f8f 50%,#9e2c36 50%)"></div><div class="lt" style="margin-top:6px">Changer la pochette</div>
+ <div style="font-size:20px;font-weight:700;border-bottom:1px solid #F26EF2;margin-top:10px;padding:0 20px 4px">Road Trip</div></div>
+ <div style="margin-top:12px">
+ <div class="row"><span class="rm">−</span><div><div class="t">Night Drive</div><div class="a">LAFLEURSTUDIO</div></div><span class="x">≡</span></div>
+ <div class="row"><span class="rm">−</span><div><div class="t">Surf Break</div><div class="a">LAFLEURSTUDIO</div></div><span class="x">≡</span></div>
+ <div class="row" style="background:#1C1C1C;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.6)"><span class="rm">−</span><div><div class="t">Golden Hour</div><div class="a">Golden</div></div><span class="x" style="color:#F26EF2">≡</span></div>
+ <div class="row"><span class="rm">−</span><div><div class="t">Low Tide</div><div class="a">LAFLEURSTUDIO</div></div><span class="x">≡</span></div>
+ </div>
+ <div style="color:#ff6b6b;font-size:14px;font-weight:700;margin-top:14px;text-align:center">Supprimer la playlist</div>
+</div>
+<div class="home"><i></i></div></div>
+<div class="note">Nom, pochette, retirer (−), déplacer (≡ à droite, comme Spotify). Gratuit, pas réservé à un abonnement.</div></div>
+</body></html>
