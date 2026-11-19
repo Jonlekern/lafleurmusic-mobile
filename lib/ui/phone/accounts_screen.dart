@@ -166,7 +166,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                         label: a.name,
                         on: app.settings!.customAccounts.contains(a.id),
                         onTap: () {
-                          app.toggleCustom(a.id);
+                          app.toggleCustom(a.id, _list);
                           setState(() {});
                         },
                       ),

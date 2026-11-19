@@ -7,6 +7,7 @@ import '../../sources/accounts.dart';
 import '../../sources/source.dart';
 import '../../theme/colors.dart';
 import '../../theme/widgets.dart';
+import 'display_choice.dart';
 import 'phone_shell.dart';
 
 /// Fond des champs et des segments de la maquette 2.
@@ -246,6 +247,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     );
     if (yes != true || !mounted) return;
     await app.accountService?.remove(a.id);
+    app.forgetAccount(a.id);
     if (mounted) Navigator.of(context).maybePop();
   }
 

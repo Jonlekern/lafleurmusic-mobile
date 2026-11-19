@@ -16,3 +16,8 @@ Written after the implementation (not strict red/green first). Added in `test/ui
 ## Concerns
 - Dart format of `test lib` briefly touched unrelated files; reverted, only task files committed.
 - Perso with every account later removed: customAccounts keeps stale ids (visibleOf ignores them).
+
+## Fix round 1
+1. Stale ids in Perso: `toggleCustom(id, order)` counts only accounts present (refuses unchecking the last present one) and prunes stale ids; `chooseDisplay(custom)` re-checks every present account when none of the checked ones is present; new `forgetAccount(id)` (called after an account is deleted in `account_form.dart`) removes it from Perso and Un compte, and falls back to Tout if Perso is left empty. 3 new widget tests (refuse last present after removal; all-checked removed then Perso re-checks present; forgetAccount).
+2. `_chooseGroup` no longer uses `currentContext!` (returns quietly if the chip is not laid out). Chooser look unchanged.
+Results: analyze clean; non-golden and golden suites green (see reply).

@@ -240,9 +240,9 @@ class _AccountChipsState extends State<_AccountChips> {
   Future<void> _chooseGroup(List<Account> list) async {
     final app = AppScope.of(context);
     final s = app.strings;
-    final box = _first.currentContext!.findRenderObject()! as RenderBox;
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final box = _first.currentContext?.findRenderObject();
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (box is! RenderBox || overlay is! RenderBox) return;
     final pos = RelativeRect.fromRect(
       Rect.fromPoints(
         box.localToGlobal(Offset(0, box.size.height), ancestor: overlay),

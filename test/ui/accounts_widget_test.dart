@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/ui/phone/account_form.dart';
+import 'package:lafleurmusic/ui/phone/display_choice.dart';
 import 'package:lafleurmusic/ui/phone/accounts_screen.dart';
 import 'package:lafleurmusic/ui/phone/home_screen.dart';
 
@@ -323,6 +325,60 @@ void main() {
       await tapAndSettle(tester, find.text('Perso')); // même mode : redessine
       await tapAndSettle(tester, find.byKey(ValueKey('check-${ids[1]}')));
       expect(f.settings.customAccounts, [ids[1]]);
+    });
+
+    testWidgets(
+      'Perso : un compte retiré ne compte plus, le dernier présent reste coché',
+      (tester) async {
+        final f = await pumpAccounts(
+          tester,
+          home: () => const AccountsScreen(),
+        );
+        final ids = [for (final a in await f.list(tester)) a.id];
+        f.settings
+          ..displayMode = DisplayMode.custom
+          ..customAccounts = [ids[0], ids[1]];
+        await tester.runAsync(() => f.accounts.remove(ids[0], root: null));
+        await settle(tester);
+        await tapAndSettle(tester, find.byKey(ValueKey('check-${ids[1]}')));
+        expect(f.settings.customAccounts, contains(ids[1])); // refusé
+        expect(find.byKey(ValueKey('check-${ids[1]}')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Perso : tous les comptes cochés retirés → Perso recoche les présents',
+      (tester) async {
+        final f = await pumpAccounts(
+          tester,
+          home: () => const AccountsScreen(),
+        );
+        final ids = [for (final a in await f.list(tester)) a.id];
+        f.settings
+          ..displayMode = DisplayMode.all
+          ..customAccounts = [ids[0]];
+        await tester.runAsync(() => f.accounts.remove(ids[0], root: null));
+        await settle(tester);
+        await tapAndSettle(tester, find.text('Perso'));
+        expect(f.settings.customAccounts, [ids[1], ids[2]]);
+      },
+    );
+
+    testWidgets('retirer un compte le sort de Perso et d’Un compte', (
+      tester,
+    ) async {
+      final f = await pumpAccounts(tester, home: () => const AccountsScreen());
+      final ids = [for (final a in await f.list(tester)) a.id];
+      f.settings
+        ..displayMode = DisplayMode.custom
+        ..oneAccount = ids[0]
+        ..customAccounts = [ids[0], ids[1]];
+      final app = AppScope.of(tester.element(find.byType(AccountsScreen)));
+      app.forgetAccount(ids[0]);
+      expect(f.settings.customAccounts, [ids[1]]);
+      expect(f.settings.oneAccount, isNull);
+      app.forgetAccount(ids[1]); // plus rien de coché : retour à Tout
+      expect(f.settings.displayMode, DisplayMode.all);
     });
 
     testWidgets('l’ordre glissé change la meilleure source', (tester) async {
