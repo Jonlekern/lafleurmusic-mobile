@@ -1,14 +1,14 @@
 # LAFLEURMUSIC mobile — liste de contrôle
 
-Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décider ou à faire.
+Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décider ou à faire.
 
 ## Étapes
 - ✅ Idées (brainstorm)
 - ✅ Écrans : reprendre ceux du Mac, empilés
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
-- ✅ Plan 1 « écouter son serveur » et plan 2 « hors ligne » écrits et codés ; plans 3 à 7 ensuite
-- ⬜ Code (plans 1 et 2 faits, essai de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
+- ✅ Plans 1 « écouter son serveur », 2 « hors ligne » et 3 « plusieurs comptes » écrits et codés ; plans 4 à 7 ensuite
+- ⬜ Code (plans 1, 2 et 3 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 
@@ -29,6 +29,8 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ L'écoute est comptée sur le compte qui a joué le morceau
 - ✅ Navidrome seulement à la maison pour l'instant ; l'adresse du serveur peut changer plus tard
 - ✅ Dehors : seulement la musique gardée sur le téléphone, le reste est grisé
+- ✅ Plan 3 fait : deux comptes fusionnés (affichage « Un compte », « Tous » ou « Choisis »), albums et morceaux en double affichés une fois, écoutes et nombres d'écoutes fusionnés
+- ✅ Plan 3 essayé de bout en bout (deux faux serveurs) : album affiché une fois, premier serveur coupé → lecture depuis le second et écoute envoyée au second, playlist gardée → fichier `.m3u8` dans `Playlists/`
 
 ## Ordre de construction
 - ✅ Famille Subsonic, puis Jellyfin, puis Plex : tous dans ce projet, l'un après l'autre
@@ -55,7 +57,9 @@ Mise à jour : 18.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Mode Classic (molette d'iPod, version A de la maquette 6) ou Mode normal, au choix dans Réglages
 - ✅ Fondu enchaîné et Volume égal
 - ✅ Playlists = albums, comme sur le Mac et la console
-- ✅ En plus : section « Playlists du serveur » sous les albums (lecture seule, gardables)
+- ✅ En plus : section « Playlists du serveur » sous les albums (lecture seule, gardables) ; garder une playlist écrit un fichier `.m3u8` dans `Playlists/` (l'appli n'efface que ses propres fichiers)
+- ✅ Plan 3 fait : Cover Flow en couché (comptes et playlists compris), tablette = colonnes côte à côte
+- ⬜ Plan 3 : les visuels de la tablette et le texte « Ouvrir l'album » du Cover Flow attendent le oui de Johnny
 
 ## Mode clair
 - ✅ L'affichage actuel = mode sombre
