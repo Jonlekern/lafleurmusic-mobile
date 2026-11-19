@@ -111,6 +111,10 @@ Future<LafleurApp> mountGuarded(Future<LafleurApp> Function() mount) async {
       app.downloader.pause();
       await app.downloader.whenIdle();
       final rows = (await app.db.watchOffline().first).values;
+      // the `.m3u8` files the app wrote itself (KeptPlaylists), under Playlists/
+      for (final k in await app.db.keptPlaylistRows()) {
+        if (k.fileName.isNotEmpty) made.add(p.join('Playlists', k.fileName));
+      }
       made.addAll([
         for (final r in rows)
           if (r.filePath != null) r.filePath!,
@@ -122,6 +126,13 @@ Future<LafleurApp> mountGuarded(Future<LafleurApp> Function() mount) async {
         if (made.contains(rel) || isPartialName(rel)) {
           File(p.join(root.path, rel)).deleteSync();
         }
+      }
+      // the Playlists/ folder, if the run made it and left it empty
+      final playlistsDir = Directory(p.join(root.path, 'Playlists'));
+      if (!before.any((f) => p.isWithin('Playlists', f)) &&
+          playlistsDir.existsSync() &&
+          playlistsDir.listSync().isEmpty) {
+        playlistsDir.deleteSync();
       }
     }
   });

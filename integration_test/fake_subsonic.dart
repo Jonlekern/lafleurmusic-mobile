@@ -78,6 +78,7 @@ class FakeSubsonic {
     this.password,
     this.secondAlbum,
     this.topPlays,
+    this.playlists,
   );
 
   final HttpServer _server;
@@ -88,6 +89,9 @@ class FakeSubsonic {
   /// by itself. Off: nothing is kept unless the run asks for it.
   final bool topPlays;
   final requests = <FakeRequest>[];
+
+  /// Server playlists (getPlaylists / getPlaylist): id → (name, song ids). Empty: none.
+  final Map<String, (String, List<String>)> playlists;
 
   /// Cuts the server: every connection is closed without an answer (the app sees a network
   /// error, like a phone out of reach of its server). Nothing is recorded in [requests].
@@ -104,9 +108,18 @@ class FakeSubsonic {
     String password = 'lafleur-e2e',
     bool secondAlbum = false,
     bool topPlays = true,
+    Map<String, (String, List<String>)> playlists = const {},
   }) async {
+    // port 0: every call gets its own port, so two servers can run at once
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final fake = FakeSubsonic._(server, user, password, secondAlbum, topPlays);
+    final fake = FakeSubsonic._(
+      server,
+      user,
+      password,
+      secondAlbum,
+      topPlays,
+      playlists,
+    );
     server.listen(fake._handle);
     return fake;
   }
@@ -131,6 +144,14 @@ class FakeSubsonic {
     (r['albumList2'] as Map)['album'] = list;
     return jsonEncode(d);
   }
+
+  static const _ok = {
+    'status': 'ok',
+    'version': '1.16.1',
+    'type': 'navidrome',
+    'serverVersion': '0.54.0',
+    'openSubsonic': true,
+  };
 
   bool _authOk(Map<String, String> q) {
     final salt = q['s'], token = q['t'];
@@ -188,6 +209,45 @@ class FakeSubsonic {
             json(album2Json);
           } else {
             res.statusCode = HttpStatus.notFound;
+          }
+        case 'getPlaylists':
+          json(
+            jsonEncode({
+              'subsonic-response': {
+                ..._ok,
+                'playlists': {
+                  'playlist': [
+                    for (final e in playlists.entries)
+                      {
+                        'id': e.key,
+                        'name': e.value.$1,
+                        'songCount': e.value.$2.length,
+                      },
+                  ],
+                },
+              },
+            }),
+          );
+        case 'getPlaylist':
+          final pl = playlists[q['id']];
+          if (pl == null) {
+            res.statusCode = HttpStatus.notFound;
+          } else {
+            json(
+              jsonEncode({
+                'subsonic-response': {
+                  ..._ok,
+                  'playlist': {
+                    'id': q['id'],
+                    'name': pl.$1,
+                    'songCount': pl.$2.length,
+                    'entry': [
+                      for (final id in pl.$2) {'id': id},
+                    ],
+                  },
+                },
+              }),
+            );
           }
         case 'getCoverArt':
           res.headers.contentType = ContentType('image', 'png');

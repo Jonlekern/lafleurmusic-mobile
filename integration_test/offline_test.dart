@@ -116,10 +116,17 @@ void main() {
       await tester.tap(find.text(s.keepOnDevice(onIphone)));
       await tester.pump();
 
-      final tracks = await app.db.watchAlbumTracks('Studio Lafleur').first;
+      // an album is asked for by its key (plan 3), not by its name
+      Future<List<Track>> albumNamed(String name) async {
+        final albums = await app.library.albums().first;
+        return app.library
+            .albumTracks(albums.firstWhere((a) => a.name == name).key)
+            .first;
+      }
+
+      final tracks = await albumNamed('Studio Lafleur');
       final track = tracks.firstWhere((t) => t.title == 'Surf Break');
-      final other =
-          (await app.db.watchAlbumTracks('Lafleur Surf').first).single;
+      final other = (await albumNamed('Lafleur Surf')).single;
       await waitFor(
         tester,
         () async =>
