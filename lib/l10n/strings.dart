@@ -568,6 +568,7 @@ class Strings {
   String get nextTrack => _t('Morceau suivant', 'Next track');
   String get playPause => _t('Lecture / pause', 'Play / pause');
   String get wheelSelect => _t('Choisir', 'Select');
+  String get wheel => _t('Molette', 'Wheel');
   // plan 6 : Mode Classic, le menu (maquette 6 A)
   String get classicMusic => _t('MUSIQUE', 'MUSIC');
   String get classicPlaylists => 'Playlists';

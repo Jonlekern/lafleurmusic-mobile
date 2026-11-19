@@ -7,12 +7,14 @@ import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/ui/classic/classic_menu.dart';
 import 'package:lafleurmusic/ui/classic/classic_now.dart';
 import 'package:lafleurmusic/ui/classic/classic_shell.dart';
+import 'package:lafleurmusic/ui/classic/click_wheel.dart';
 import 'package:lafleurmusic/ui/phone/accounts_screen.dart';
 import 'package:lafleurmusic/ui/phone/home_screen.dart';
 import 'package:lafleurmusic/ui/phone/now_screen.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart' show AdaptiveHome;
 import 'package:lafleurmusic/ui/tablet.dart';
 
+import '../fake_player.dart';
 import '../fonts.dart';
 import '../phone_fixture.dart';
 import 'classic_shell_test.dart' show press, rotate, rotateTo, selected;
@@ -168,11 +170,12 @@ void main() {
 
   testWidgets('rien en cours : la carte vide, rien ne casse', (tester) async {
     final fx = await pumpPhone(tester, home: const ClassicShell());
+    // (« En cours » est estompé dans le menu : ouvert directement)
+    await rotateTo(tester, 'En cours');
     fx.player
       ..queue = null
       ..current = const PlayerState();
-    await rotateTo(tester, 'En cours');
-    await press(tester, 'select');
+    openClassicNow(tester.element(find.byType(ClassicMenu)));
     await tester.pumpAndSettle();
     expect(find.text('EN COURS'), findsOneWidget);
     expect(find.textContaining(' sur '), findsNothing);
@@ -366,17 +369,132 @@ void main() {
       expect(fx.player.calls.where((c) => c == 'seek').length, 1);
     });
 
-    testWidgets('écran fermé avec un seek en attente : annulé, rien ne casse', (
+    testWidgets('écran fermé avec un seek en attente : il part, une fois', (
       tester,
     ) async {
       final fx = await openClassic(tester);
       await press(tester, 'select');
       await rotate(tester, 1);
       await tester.pumpWidget(const SizedBox()); // ClassicNow défait
+      expect(fx.player.calls.where((c) => c == 'seek').length, 1);
+      expect(fx.player.lastSeek, const Duration(seconds: 98));
       await tester.pump(_debounce * 2);
-      expect(fx.player.calls, isNot(contains('seek')));
+      expect(fx.player.calls.where((c) => c == 'seek').length, 1);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('MENU juste après un cran : le seek part quand même', (
+      tester,
+    ) async {
+      final fx = await openClassic(tester);
+      await press(tester, 'select');
+      await rotate(tester, 2);
+      await press(tester, 'menu');
+      await tester.pumpAndSettle();
+      expect(find.byType(ClassicNow), findsNothing);
+      expect(fx.player.calls.where((c) => c == 'seek').length, 1);
+      expect(fx.player.lastSeek, const Duration(seconds: 103));
+    });
+
+    Future<void> report(WidgetTester tester, FakePlayer fx, int ms) async {
+      fx.show(
+        PlayerState(
+          track: fx.current.track,
+          position: Duration(milliseconds: ms),
+          duration: const Duration(seconds: 245),
+          playing: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets(
+      'retour au volume : la progression reste au losange jusqu’à ce que le lecteur y soit',
+      (tester) async {
+        final fx = await openClassic(tester);
+        await press(tester, 'select');
+        await rotate(tester, 3);
+        await press(tester, 'select'); // retour au volume, le seek part
+        expect(fx.player.lastSeek, const Duration(seconds: 108));
+        expect(find.text('1:48'), findsOneWidget); // pas de retour à 1:33
+        // le lecteur n'a pas encore suivi : la barre ne recule pas
+        await report(tester, fx.player, 93500);
+        expect(find.text('1:48'), findsOneWidget);
+        // il y est : la suite vient de la lecture
+        await report(tester, fx.player, 108200);
+        await report(tester, fx.player, 112000);
+        expect(find.text('1:52'), findsOneWidget);
+      },
+    );
+
+    testWidgets('le lecteur ne suit pas : la progression ne reste pas collée', (
+      tester,
+    ) async {
+      final fx = await openClassic(tester);
+      await press(tester, 'select');
+      await rotate(tester, 3);
+      await press(tester, 'select');
+      expect(find.text('1:48'), findsOneWidget);
+      await tester.pump(ClassicNow.seekSettle);
+      await tester.pump();
+      expect(find.text('1:33'), findsOneWidget);
+      expect(fx.player.calls.where((c) => c == 'seek').length, 1);
+    });
+
+    testWidgets('un autre morceau : la progression part de sa position', (
+      tester,
+    ) async {
+      final fx = await openClassic(tester);
+      await press(tester, 'select');
+      await rotate(tester, 3);
+      await press(tester, 'select');
+      fx.player.show(
+        PlayerState(
+          track: fx.player.queue!.order.last,
+          position: const Duration(seconds: 2),
+          duration: const Duration(seconds: 200),
+          playing: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('0:02'), findsOneWidget);
+    });
+  });
+
+  testWidgets('lecteur d’écran : le losange n’est pas lu', (tester) async {
+    final h = tester.ensureSemantics();
+    await openClassic(tester);
+    await press(tester, 'select');
+    expect(
+      tester.getSemantics(find.text(_scrubCaption)),
+      isSemantics(label: 'Tourne pour avancer dans le morceau'),
+    );
+    h.dispose();
+  });
+
+  testWidgets('lecteur d’écran : la molette dit le volume, ou la position', (
+    tester,
+  ) async {
+    final h = tester.ensureSemantics();
+    await openClassic(tester);
+    expect(
+      tester.getSemantics(find.byType(ClickWheel)),
+      isSemantics(label: 'Molette', value: '75 %'),
+    );
+    await rotate(tester, 1);
+    expect(
+      tester.getSemantics(find.byType(ClickWheel)),
+      isSemantics(label: 'Molette', value: '80 %'),
+    );
+    await press(tester, 'select');
+    await rotate(tester, 1);
+    expect(
+      tester.getSemantics(find.byType(ClickWheel)),
+      isSemantics(label: 'Molette', value: '1:38 / 4:05'),
+    );
+    h.dispose();
   });
 
   testWidgets('lecteur d\'écran : la progression et le volume se disent', (

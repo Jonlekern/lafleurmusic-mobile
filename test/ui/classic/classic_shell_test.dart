@@ -2,17 +2,20 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/models.dart';
+import 'package:lafleurmusic/player/player.dart';
 import 'package:lafleurmusic/ui/classic/classic_menu.dart';
 import 'package:lafleurmusic/ui/classic/classic_now.dart';
 import 'package:lafleurmusic/ui/classic/classic_shell.dart';
 import 'package:lafleurmusic/ui/classic/click_wheel.dart';
 import 'package:lafleurmusic/ui/coverflow_screen.dart';
 import 'package:lafleurmusic/ui/phone/accounts_screen.dart';
+import 'package:lafleurmusic/ui/phone/album_screen.dart';
 import 'package:lafleurmusic/ui/phone/home_screen.dart';
 import 'package:lafleurmusic/ui/phone/mini_player.dart';
 import 'package:lafleurmusic/ui/phone/now_screen.dart';
@@ -439,6 +442,163 @@ void main() {
       expect(find.byType(CoverflowScreen), findsNothing);
       expect(find.byType(ClassicMenu), findsOneWidget);
     });
+
+    testWidgets(
+      'couché, « Ouvrir l’album » : relevé, l’album dans le menu (pas l’écran du mode normal)',
+      (tester) async {
+        await pumpPhone(tester, home: const ClassicShell());
+        await tester.tap(find.text('Artistes'));
+        await settle(tester);
+        await turn(tester, landscape: true);
+        await tester.tap(find.text('Ouvrir l’album'));
+        await tester.pumpAndSettle();
+        await settle(tester);
+        expect(find.byType(AlbumScreen), findsNothing);
+        // le Cover Flow reste jusqu'au redressement
+        expect(find.byType(CoverflowScreen), findsOneWidget);
+        await turn(tester, landscape: false);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        expect(find.byType(AlbumScreen), findsNothing);
+        expect(find.byType(MiniPlayer), findsNothing);
+        expect(find.text('STUDIO LAFLEUR'), findsOneWidget);
+        expect(selected(tester), 'Ocean Drive');
+        // MENU revient où on était
+        await press(tester, 'menu');
+        expect(find.text('ARTISTES'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'couché, « Ouvrir l’album » depuis Réglages : relevé, l’album dans le menu',
+      (tester) async {
+        await pumpPhone(tester, home: const ClassicShell());
+        await rotateTo(tester, 'Réglages');
+        await press(tester, 'select');
+        await tester.pumpAndSettle();
+        expect(find.byType(AccountsScreen), findsOneWidget);
+        await turn(tester, landscape: true);
+        await tester.tap(find.text('Ouvrir l’album'));
+        await tester.pumpAndSettle();
+        await settle(tester);
+        await turn(tester, landscape: false);
+        await tester.pumpAndSettle();
+        expect(find.byType(AccountsScreen), findsNothing);
+        expect(find.text('STUDIO LAFLEUR'), findsOneWidget);
+      },
+    );
+
+    testWidgets('mode normal : « Ouvrir l’album » ouvre l’album, comme avant', (
+      tester,
+    ) async {
+      await pumpPhone(tester);
+      await turn(tester, landscape: true);
+      await tester.tap(find.text('Ouvrir l’album'));
+      await tester.pumpAndSettle();
+      await settle(tester);
+      expect(find.byType(AlbumScreen), findsOneWidget);
+      expect(find.byType(CoverflowScreen), findsNothing);
+    });
+
+    testWidgets(
+      'retour d’Android sous le Cover Flow : rien dans une liste, quitte à la racine',
+      (tester) async {
+        final pops = <String>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'SystemNavigator.pop') pops.add(call.method);
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        await pumpPhone(tester, home: const ClassicShell());
+        await tester.tap(find.text('Albums'));
+        await settle(tester);
+        await turn(tester, landscape: true);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(pops, isEmpty); // l'appli ne part pas
+        expect(find.byType(CoverflowScreen), findsOneWidget);
+        await turn(tester, landscape: false);
+        // rien défait sans qu'on le voie
+        expect(find.text('ALBUMS'), findsOneWidget);
+        // un album ouvert depuis le Cover Flow : pas la racine non plus
+        await press(tester, 'menu');
+        expect(find.text('MUSIQUE'), findsOneWidget);
+        await turn(tester, landscape: true);
+        await tester.tap(find.text('Ouvrir l’album'));
+        await tester.pumpAndSettle();
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(pops, isEmpty);
+        await turn(tester, landscape: false);
+        expect(find.text('STUDIO LAFLEUR'), findsOneWidget);
+        // à la racine : comme le mode normal sur l'Accueil, l'appli passe en arrière-plan
+        await press(tester, 'menu');
+        await turn(tester, landscape: true);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(pops, ['SystemNavigator.pop']);
+      },
+    );
+  });
+
+  group('« En cours » sans morceau', () {
+    testWidgets('estompée, sans effet ; active dès qu’un morceau joue', (
+      tester,
+    ) async {
+      final h = tester.ensureSemantics();
+      final fx = await pumpPhone(tester, home: const ClassicShell());
+      fx.player.show(const PlayerState());
+      await tester.pump(); // l'annonce du lecteur
+      await tester.pump(); // l'image qui suit
+      expect(row(tester, 'En cours').dim, isTrue);
+      expect(row(tester, 'En cours').onTap, isNull);
+      expect(
+        tester.getSemantics(find.text('En cours')),
+        isSemantics(label: 'En cours', isButton: false, hasTapAction: false),
+      );
+      await rotateTo(tester, 'En cours');
+      await press(tester, 'select');
+      await tester.pumpAndSettle();
+      expect(find.byType(ClassicNow), findsNothing);
+
+      fx.player.show(
+        PlayerState(
+          track: DemoLibrary.playing,
+          duration: Duration(milliseconds: DemoLibrary.playing.durationMs),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(row(tester, 'En cours').dim, isFalse);
+      await press(tester, 'select');
+      await tester.pumpAndSettle();
+      expect(find.byType(ClassicNow), findsOneWidget);
+      h.dispose();
+    });
+  });
+
+  testWidgets('lecteur d’écran : la molette dit la ligne choisie', (
+    tester,
+  ) async {
+    final h = tester.ensureSemantics();
+    await pumpPhone(tester, home: const ClassicShell());
+    expect(
+      tester.getSemantics(find.byType(ClickWheel)),
+      isSemantics(label: 'Molette', value: 'Cover Flow'),
+    );
+    await rotate(tester, 2);
+    expect(
+      tester.getSemantics(find.byType(ClickWheel)),
+      isSemantics(label: 'Molette', value: 'Albums'),
+    );
+    h.dispose();
   });
 
   testWidgets('le réglage change l\'écran à chaud, sans toucher au lecteur', (

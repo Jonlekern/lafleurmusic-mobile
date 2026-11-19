@@ -315,6 +315,33 @@ void main() {
     },
   );
 
+  testWidgets('VoiceOver / TalkBack : la molette a un nom et une valeur', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: ClickWheel(
+            onRotate: (_) {},
+            semanticLabel: 'Wheel',
+            semanticValue: 'Albums',
+          ),
+        ),
+      ),
+    );
+    expect(
+      tester.getSemantics(find.byType(ClickWheel)),
+      isSemantics(
+        label: 'Wheel',
+        value: 'Albums',
+        hasIncreaseAction: true,
+        hasDecreaseAction: true,
+      ),
+    );
+    handle.dispose();
+  });
+
   testWidgets(
     'tourner la molette dans une liste ne fait pas défiler la liste',
     (tester) async {

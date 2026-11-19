@@ -20,7 +20,17 @@ class ClickWheel extends StatefulWidget {
     this.onPrevious,
     this.onNext,
     this.onPlayPause,
+    this.semanticLabel,
+    this.semanticValue,
+    this.semanticIncreasedValue,
+    this.semanticDecreasedValue,
   });
+
+  /// VoiceOver / TalkBack : le nom de la molette, et ce qu'elle règle (la ligne choisie, le volume…).
+  final String? semanticLabel, semanticValue;
+
+  /// La valeur après un cran dans un sens ou dans l'autre (sans : la même).
+  final String? semanticIncreasedValue, semanticDecreasedValue;
 
   /// Appelé une fois par cran, avec +1 (sens des aiguilles) ou -1.
   final void Function(int steps) onRotate;
@@ -166,6 +176,14 @@ class _ClickWheelState extends State<ClickWheel> {
     // VoiceOver / TalkBack : balayer vers le haut / le bas fait tourner d'un cran.
     return Semantics(
       container: true,
+      label: widget.semanticLabel,
+      value: widget.semanticValue,
+      increasedValue: widget.semanticValue == null
+          ? null
+          : widget.semanticIncreasedValue ?? widget.semanticValue,
+      decreasedValue: widget.semanticValue == null
+          ? null
+          : widget.semanticDecreasedValue ?? widget.semanticValue,
       onIncrease: () => widget.onRotate(1),
       onDecrease: () => widget.onRotate(-1),
       child: RawGestureDetector(

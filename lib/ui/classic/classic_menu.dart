@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../app_scope.dart';
 import '../../l10n/strings.dart';
 import '../../library/models.dart';
+import '../../player/player.dart';
 import '../../theme/colors.dart';
 import '../coverflow_screen.dart';
 import '../keep_actions.dart' show onIphone, say;
@@ -33,10 +34,27 @@ const _screenPad = 8.0; // en haut et en bas de l'écran
 /// milieu l'ouvre, MENU remonte d'un niveau ; ⏮ ⏭ ▶︎❙❙ commandent le lecteur. Un toucher sur une
 /// ligne la choisit et l'ouvre. Les listes sont celles du mode normal (mêmes requêtes).
 class ClassicMenu extends StatefulWidget {
-  const ClassicMenu({super.key});
+  const ClassicMenu({super.key, this.controller});
+
+  /// Pour la vue téléphone, dont le Cover Flow couché est posé sur le menu.
+  final ClassicMenuController? controller;
 
   @override
   State<ClassicMenu> createState() => _ClassicMenuState();
+}
+
+/// Le lien entre la vue téléphone et le menu : couché, le Cover Flow est posé sur le menu,
+/// qui n'est pas fait d'écrans empilés (ses niveaux ne sont pas des routes).
+class ClassicMenuController {
+  /// Vrai à la racine (MUSIQUE) : il n'y a rien à remonter.
+  final atRoot = ValueNotifier<bool>(true);
+  _ClassicMenuState? _menu;
+
+  /// Un album ouvert depuis le Cover Flow couché : le menu l'ouvre comme une liste, à la place
+  /// de l'écran ouvert depuis le menu (on le voit en relevant le téléphone).
+  void openAlbum(Album album) => _menu?._openFromFlow(album);
+
+  void dispose() => atRoot.dispose();
 }
 
 /// Un niveau de menu : sa liste, la ligne choisie et où la liste était défilée. Les textes
@@ -75,12 +93,40 @@ class _ClassicMenuState extends State<ClassicMenu> {
   final _levels = <_Level>[];
   var _scroll = ScrollController(keepScrollOffset: false);
   Listenable? _service;
+  StreamSubscription<PlayerState>? _playing;
+  bool _idle = false; // rien en cours : « En cours » est estompé
 
   _Level get _current => _levels.last;
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller?._menu = this;
+  }
+
+  @override
+  void didUpdateWidget(ClassicMenu old) {
+    super.didUpdateWidget(old);
+    if (identical(old.controller, widget.controller)) return;
+    if (identical(old.controller?._menu, this)) old.controller?._menu = null;
+    widget.controller
+      ?.._menu = this
+      ..atRoot.value = _levels.length < 2;
+  }
+
+  void _syncRoot() => widget.controller?.atRoot.value = _levels.length < 2;
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_playing == null) {
+      final player = AppScope.of(context).player;
+      _idle = player.current.track == null;
+      _playing = player.state.listen((st) {
+        final idle = st.track == null;
+        if (mounted && idle != _idle) setState(() => _idle = idle);
+      });
+    }
     if (_levels.isEmpty) _levels.add(_root());
     // copies ou comptes changés : « jouable ? » se relit (comme PhoneTrackRows)
     if (_service == null) {
@@ -92,6 +138,9 @@ class _ClassicMenuState extends State<ClassicMenu> {
   @override
   void dispose() {
     _service?.removeListener(_accountsChanged);
+    _playing?.cancel();
+    final c = widget.controller;
+    if (c != null && identical(c._menu, this)) c._menu = null;
     for (final l in _levels) {
       l.sub?.cancel();
     }
@@ -114,6 +163,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
     final app = AppScope.of(context);
     final lib = app.library;
     String name(Strings s, String n) => n.isEmpty ? s.unknownArtist : n;
+    void openNow() => openClassicNow(context);
     final rows = <(String Function(Strings), VoidCallback?)>[
       ((s) => s.coverFlow, _openCoverflow),
       (
@@ -172,18 +222,20 @@ class _ClassicMenuState extends State<ClassicMenu> {
             ? null
             : () => pushPhone(context, const OnDeviceScreen()),
       ),
-      ((s) => s.classicNowPlaying, () => openClassicNow(context)),
+      ((s) => s.classicNowPlaying, openNow),
       (
         (s) => s.classicSettings,
         () => pushPhone(context, const AccountsScreen()),
       ),
     ];
+    // sans effet : sans téléchargeur, ou « En cours » quand rien n'est en cours
+    bool off(int i) => rows[i].$2 == null || (_idle && rows[i].$2 == openNow);
     return _Level((s) => s.classicMusic)
       ..loaded = true
       ..count = rows.length
       ..label = ((s, i) => rows[i].$1(s))
-      ..dim = ((i) => rows[i].$2 == null)
-      ..choose = ((i) => rows[i].$2?.call());
+      ..dim = off
+      ..choose = ((i) => off(i) ? null : rows[i].$2?.call());
   }
 
   /// Une liste qui suit [stream] (les mêmes flux que le mode normal). Quand la liste change,
@@ -309,6 +361,14 @@ class _ClassicMenuState extends State<ClassicMenu> {
     openClassicNow(context);
   }
 
+  /// Couché, « Ouvrir l'album » du Cover Flow : l'écran ouvert depuis le menu se ferme, l'album
+  /// s'ouvre dans le menu (comme la ligne Cover Flow).
+  void _openFromFlow(Album a) {
+    if (!mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    _push(_album(a));
+  }
+
   void _openCoverflow() => openCoverflow(
     context,
     // le Cover Flow se ferme lui-même, puis l'album s'ouvre dans le menu
@@ -335,6 +395,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
       _levels.add(level);
       _swapScroll(0);
     });
+    _syncRoot();
   }
 
   /// MENU : un niveau plus haut ; à la racine, rien.
@@ -344,6 +405,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
       _levels.removeLast().sub?.cancel();
       _swapScroll(_current.offset);
     });
+    _syncRoot();
   }
 
   void _rotate(int steps) {
@@ -383,6 +445,13 @@ class _ClassicMenuState extends State<ClassicMenu> {
     final app = AppScope.of(context);
     final player = app.player;
     final level = _current;
+    // lecteur d'écran : la ligne choisie, et celle d'un cran plus loin
+    String? wheelValue(int step) => level.count > 0
+        ? level.label(
+            app.strings,
+            (level.selected + step).clamp(0, level.count - 1),
+          )
+        : null;
     return PopScope(
       // retour d'Android : comme MENU, tant qu'on n'est pas à la racine
       canPop: _levels.length < 2,
@@ -403,6 +472,10 @@ class _ClassicMenuState extends State<ClassicMenu> {
           onPrevious: player.previous,
           onNext: player.next,
           onPlayPause: player.toggle,
+          semanticLabel: app.strings.wheel,
+          semanticValue: wheelValue(0),
+          semanticIncreasedValue: wheelValue(1),
+          semanticDecreasedValue: wheelValue(-1),
         ),
       ),
     );

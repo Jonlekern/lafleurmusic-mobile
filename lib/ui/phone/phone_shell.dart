@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../../app_scope.dart';
 import '../../library/merge.dart';
 import '../../library/models.dart';
+import '../../player/player.dart';
 import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
 import '../classic/classic_shell.dart';
@@ -41,11 +42,14 @@ class AdaptiveHome extends StatefulWidget {
 class _AdaptiveHomeState extends State<AdaptiveHome> {
   bool? _tablet;
   ValueNotifier<bool>? _classic;
+  PlayerController? _player;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final classic = AppScope.of(context).classicMode;
+    final app = AppScope.of(context);
+    _player = app.player;
+    final classic = app.classicMode;
     if (identical(classic, _classic)) return;
     _classic?.removeListener(_modeChanged);
     _classic = classic?..addListener(_modeChanged);
@@ -54,8 +58,8 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
   /// Retour au mode normal : il n'a pas de volume, celui de l'appli revient à fond
   /// (la molette du Mode Classic a pu le baisser).
   void _modeChanged() {
-    if (_classic?.value ?? true) return;
-    final player = AppScope.of(context).player;
+    final player = _player;
+    if ((_classic?.value ?? true) || player == null) return;
     if (player.volume != 100) player.setVolume(100);
   }
 
@@ -110,7 +114,17 @@ class PhoneShell extends StatefulWidget {
     this.debugStart,
     this.debugScreens,
     this.home = const HomeScreen(),
+    this.onFlowOpen,
+    this.homeAtRoot,
   });
+
+  /// Couché, « Ouvrir l'album » du Cover Flow : à la place de l'écran Album (Mode Classic : l'album
+  /// s'ouvre dans le menu, le Cover Flow reste jusqu'au redressement).
+  final void Function(Album album)? onFlowOpen;
+
+  /// Le premier écran n'a rien à remonter (le menu du Mode Classic, à sa racine) : sous le Cover Flow,
+  /// retour quitte l'appli seulement alors. Sans : toujours vrai.
+  final ValueListenable<bool>? homeAtRoot;
 
   /// Le premier écran : l'Accueil, ou le menu du Mode Classic.
   final Widget home;
@@ -224,6 +238,8 @@ class _PhoneShellState extends State<PhoneShell> {
   }
 
   void _openFromFlow(Album a) {
+    final open = widget.onFlowOpen;
+    if (open != null) return open(a);
     final ctx = _nav.currentContext;
     if (ctx == null) return;
     setState(() {
@@ -266,23 +282,31 @@ class _PhoneShellState extends State<PhoneShell> {
     final key = now != null ? albumKeyOf(now) : _lastAlbumKey;
     final i = _albums.indexWhere((a) => a.key == key);
     // le Cover Flow se pose sur l'écran ; dessous, le navigateur reste où il était
-    return PopScope(
-      canPop: !flow || _routes.depth <= 1,
-      child: Stack(
-        children: [
-          Positioned.fill(child: nav),
-          if (flow)
-            Positioned.fill(
-              child: CoverflowScreen(
-                phone: true,
-                albums: _albums,
-                initial: i < 0 ? 0 : i,
-                onOpen: _openFromFlow,
-              ),
+    final stack = Stack(
+      children: [
+        Positioned.fill(child: nav),
+        if (flow)
+          Positioned.fill(
+            child: CoverflowScreen(
+              phone: true,
+              albums: _albums,
+              initial: i < 0 ? 0 : i,
+              onOpen: _openFromFlow,
             ),
-        ],
-      ),
+          ),
+      ],
     );
+    Widget scope(bool homeAtRoot) => PopScope(
+      canPop: !flow || (_routes.depth <= 1 && homeAtRoot),
+      child: stack,
+    );
+    final root = widget.homeAtRoot;
+    return root == null
+        ? scope(true)
+        : ValueListenableBuilder<bool>(
+            valueListenable: root,
+            builder: (_, atRoot, _) => scope(atRoot),
+          );
   }
 }
 

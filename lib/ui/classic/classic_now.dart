@@ -51,6 +51,9 @@ class ClassicNow extends StatefulWidget {
   /// Le lecteur est arrivé au losange à ce temps près : le cran suivant part de la lecture.
   static const reached = Duration(seconds: 1);
 
+  /// Le lecteur n'a pas dit être arrivé au losange après ce temps : le temps revient à la lecture.
+  static const seekSettle = Duration(seconds: 2);
+
   @override
   State<ClassicNow> createState() => _ClassicNowState();
 }
@@ -65,6 +68,7 @@ class _ClassicNowState extends State<ClassicNow> {
   Duration? _target; // où la molette a envoyé le morceau (le losange y reste)
   Timer? _idle;
   Timer? _seekTimer; // le seek vers [_target], en attente
+  Timer? _settle; // le seek est parti : [_target] ne reste pas plus longtemps
 
   @override
   void didChangeDependencies() {
@@ -80,13 +84,13 @@ class _ClassicNowState extends State<ClassicNow> {
       if (!mounted) return;
       setState(() {
         // un autre morceau : le losange repart de sa position
-        if (st.track?.path != _st.track?.path) _target = null;
+        if (st.track?.path != _st.track?.path) _clearTarget();
         // le lecteur est arrivé au losange : la suite part de la lecture, le temps la suit
         final t = _target;
         if (t != null &&
             _seekTimer == null &&
             (st.position - t).abs() <= ClassicNow.reached) {
-          _target = null;
+          _clearTarget();
         }
         _st = st;
       });
@@ -100,7 +104,10 @@ class _ClassicNowState extends State<ClassicNow> {
   @override
   void dispose() {
     _idle?.cancel();
+    // MENU juste après un cran : le dernier seek n'est pas perdu
+    if (_seekTimer?.isActive ?? false) _sendSeek();
     _seekTimer?.cancel();
+    _settle?.cancel();
     _stateSub?.cancel();
     _queueSub?.cancel();
     super.dispose();
@@ -137,7 +144,19 @@ class _ClassicNowState extends State<ClassicNow> {
     _seekTimer?.cancel();
     _seekTimer = null;
     final t = _target;
-    if (t != null) _player?.seek(t);
+    if (t == null) return;
+    _player?.seek(t);
+    _settle?.cancel();
+    _settle = Timer(ClassicNow.seekSettle, () {
+      if (mounted && _seekTimer == null) setState(_clearTarget);
+    });
+  }
+
+  /// Le temps suit de nouveau la lecture.
+  void _clearTarget() {
+    _target = null;
+    _settle?.cancel();
+    _settle = null;
   }
 
   /// Le rond du milieu : volume ↔ avancer dans le morceau (rien à avancer sans morceau).
@@ -158,10 +177,24 @@ class _ClassicNowState extends State<ClassicNow> {
     _idle = null;
     if (_seekTimer != null) _sendSeek(); // le dernier cran n'est pas perdu
     if (!mounted) return;
-    setState(() {
-      _scrub = false;
-      _target = null;
-    });
+    // le temps reste au losange jusqu'à ce que le lecteur y soit (voir l'écoute du lecteur)
+    setState(() => _scrub = false);
+  }
+
+  /// Lecteur d'écran : ce que règle la molette, [step] crans plus loin.
+  String _wheelValue(int step) {
+    if (_scrub) {
+      final total = _st.duration;
+      var at = (_target ?? _st.position) + ClassicNow.seekStep * step;
+      if (at < Duration.zero) at = Duration.zero;
+      if (total > Duration.zero && at > total) at = total;
+      return '${clock(at)} / ${clock(total)}';
+    }
+    final v = (_vol + ClassicNow.volumeStep * step).clamp(
+      0.0,
+      ClassicNow.maxVolume,
+    );
+    return '${v.round()} %';
   }
 
   @override
@@ -201,6 +234,11 @@ class _ClassicNowState extends State<ClassicNow> {
         onPrevious: player.previous,
         onNext: player.next,
         onPlayPause: player.toggle,
+        semanticLabel: app.strings.wheel,
+        // tourner règle le volume, ou la position dans le morceau
+        semanticValue: _wheelValue(0),
+        semanticIncreasedValue: _wheelValue(1),
+        semanticDecreasedValue: _wheelValue(-1),
       ),
     );
   }
@@ -320,6 +358,8 @@ class _Card extends StatelessWidget {
           if (scrub)
             Text(
               s.classicScrub,
+              // le losange se voit, il ne se lit pas
+              semanticsLabel: s.classicScrub.replaceFirst('◆', '').trim(),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: LafleurColors.pink,
