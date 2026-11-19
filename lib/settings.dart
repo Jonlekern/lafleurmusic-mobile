@@ -34,6 +34,7 @@ class AppSettings {
     this.confirmRemove = true,
     this.albumSort = AlbumSort.name,
     this.classicMode = false,
+    this.localOnly = false,
     List<String>? customAccounts,
   }) : customAccounts = customAccounts ?? [],
        equalizer = equalizer ?? Equalizer.named('flat');
@@ -62,6 +63,7 @@ class AppSettings {
   List<String> customAccounts; // les comptes montrés quand displayMode = custom
   AlbumSort albumSort; // tri de la liste des albums
   bool confirmRemove; // « Retirer du téléphone » demande d'abord confirmation
+  bool localOnly; // « Juste la musique de mon iPhone » : pas de compte, l'écran du compte ne revient pas au lancement
   bool classicMode; // téléphone : Mode Classic (menu et molette) au lieu du mode normal
 
   static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
@@ -119,6 +121,7 @@ class AppSettings {
             orElse: () => AlbumSort.name,
           ),
           classicMode: j['classicMode'] == true,
+          localOnly: j['localOnly'] == true,
           customAccounts: j['customAccounts'] is List
               ? [
                   for (final a in j['customAccounts']! as List)
@@ -165,6 +168,7 @@ class AppSettings {
         'confirmRemove': confirmRemove,
         'albumSort': albumSort.name,
         'classicMode': classicMode,
+        'localOnly': localOnly,
       }),
     );
     await tmp.rename(f.path);

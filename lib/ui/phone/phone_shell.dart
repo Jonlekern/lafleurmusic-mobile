@@ -383,6 +383,13 @@ class _StartState extends State<_Start> {
     if (_mobile) _accounts = AppScope.of(context).accounts?.watch();
   }
 
+  void _chooseLocalOnly() {
+    final app = AppScope.of(context);
+    app.settings?.localOnly = true;
+    app.saveSettings?.call();
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final stream = _accounts;
@@ -392,8 +399,10 @@ class _StartState extends State<_Start> {
       builder: (_, snap) {
         final list = snap.data;
         if (list == null) return const ColoredBox(color: LafleurColors.bg);
-        return list.isEmpty
-            ? const AccountFormScreen(first: true)
+        final app = AppScope.of(context);
+        // sans compte : le formulaire une fois, puis « juste la musique du téléphone » est un choix gardé
+        return list.isEmpty && !(app.settings?.localOnly ?? false)
+            ? AccountFormScreen(first: true, onLocalOnly: _chooseLocalOnly)
             : widget.home;
       },
     );

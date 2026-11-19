@@ -16,6 +16,7 @@ import 'accounts_screen.dart';
 import 'album_screen.dart';
 import 'display_choice.dart';
 import 'names_screen.dart';
+import 'no_music.dart';
 import 'on_device_screen.dart';
 import 'albums_screen.dart';
 import 'phone_shell.dart';
@@ -31,9 +32,45 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _query = '';
+  Stream<List<Account>>? _accounts; // abonnés une fois, pas à chaque image
+  Stream<List<Track>>? _tracks;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_tracks != null) return;
+    final app = AppScope.of(context);
+    _accounts = app.accounts?.watch();
+    _tracks = app.library.allTracks();
+  }
 
   @override
   Widget build(BuildContext context) {
+    // sans compte ni morceau : où poser ses fichiers (maquette 16, écran B) ; dès qu'il y en a, l'Accueil habituel
+    final accounts = _accounts;
+    if (accounts == null) return _home(context);
+    return StreamBuilder<List<Account>>(
+      stream: accounts,
+      builder: (context, a) => StreamBuilder<List<Track>>(
+        stream: _tracks,
+        builder: (context, t) =>
+            (a.data?.isEmpty ?? false) && (t.data?.isEmpty ?? false)
+            ? PhoneScaffold(
+                header: PhoneHeader(
+                  trailing: HeaderButton(
+                    icon: Icons.settings_rounded,
+                    size: 16,
+                    onTap: () => pushPhone(context, const AccountsScreen()),
+                  ),
+                ),
+                body: const NoMusicBody(),
+              )
+            : _home(context),
+      ),
+    );
+  }
+
+  Widget _home(BuildContext context) {
     final app = AppScope.of(context);
     final s = app.strings;
     void open(Widget screen) => pushPhone(context, screen);

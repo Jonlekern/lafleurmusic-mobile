@@ -3,12 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../l10n/strings.dart';
 import '../../sources/account_service.dart';
 import '../../sources/accounts.dart';
 import '../../sources/source.dart';
 import '../../theme/colors.dart';
 import '../../theme/widgets.dart';
 import 'display_choice.dart';
+import 'no_music.dart' show PinkOutlineButton;
 import 'phone_shell.dart';
 import 'plex_link_screen.dart';
 
@@ -24,10 +26,14 @@ class AccountFormScreen extends StatefulWidget {
     super.key,
     this.editing,
     this.first = false,
+    this.onLocalOnly,
     this.initial,
   });
   final Account? editing;
   final bool first;
+
+  /// Premier lancement : « Juste la musique de mon iPhone » (sans compte) ; sans cette fonction, pas de bouton.
+  final VoidCallback? onLocalOnly;
 
   /// Formulaire déjà rempli (nouveau compte) : images de référence, mode démo.
   final AccountDraft? initial;
@@ -359,6 +365,42 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     if (mounted) Navigator.of(context).maybePop();
   }
 
+  /// « OU », puis « Juste la musique de mon iPhone » (maquette 16, écran A).
+  Widget _localOnly(Strings s) => Padding(
+    padding: const EdgeInsets.only(top: 22),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            const Expanded(child: Divider(color: Color(0xFF333333))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                s.orLine,
+                style: const TextStyle(
+                  color: Color(0xFF999999),
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const Expanded(child: Divider(color: Color(0xFF333333))),
+          ],
+        ),
+        const SizedBox(height: 18),
+        PinkOutlineButton(
+          s.justThePhoneMusic(defaultTargetPlatform == TargetPlatform.iOS),
+          key: const Key('justThePhoneMusic'),
+          wide: true,
+          onTap: _locked ? () {} : widget.onLocalOnly!,
+        ),
+        const SizedBox(height: 12),
+        Text(s.noServerReassure, textAlign: TextAlign.center, style: phoneHint),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context).strings;
@@ -495,6 +537,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                 ),
               ),
             ),
+          if (widget.first && widget.onLocalOnly != null) _localOnly(s),
           if (widget.editing != null)
             Padding(
               padding: const EdgeInsets.only(top: 36),

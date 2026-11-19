@@ -438,6 +438,34 @@ class Strings {
     'Ajoute ton serveur de musique pour commencer.',
     'Add your music server to get started.',
   );
+  // plan 9 : utiliser l'appli sans serveur (maquette 16)
+  String get orLine => _t('OU', 'OR');
+  String justThePhoneMusic(bool iphone) {
+    final d = _Dev(iphone, false);
+    return _t(
+      'Juste la musique de ${d.frMy}',
+      'Just the music on my ${d.enName}',
+    );
+  }
+
+  String get noServerReassure => _t(
+    'Pas de serveur ? Pas de souci. Tu pourras ajouter un compte plus tard.',
+    'No server? No worries. You can add an account later.',
+  );
+  String get noMusicYet => _t('Pas encore de musique', 'No music yet');
+  // iPhone : le chemin de l'appli Fichiers ; Android : le dossier choisi
+  String get putFilesInFilesApp => _t(
+    'Mets tes fichiers dans l’app Fichiers › ',
+    'Put your files in the Files app › ',
+  );
+  String get filesPutIn => _t('Mets tes fichiers dans ', 'Put your files in ');
+  String get filesAppearByThemselves => _t(
+    'Ils apparaissent ici tout seuls.',
+    'They show up here by themselves.',
+  );
+  String get chooseAnotherFolder =>
+      _t('Choisir un autre dossier', 'Choose another folder');
+  String get addAnAccount => _t('Ajouter un compte', 'Add an account');
   String get deleteAccount => _t('Supprimer le compte', 'Delete account');
   String deleteAccountQuestion(String name) =>
       _t('Supprimer « $name » ?', 'Delete “$name”?');

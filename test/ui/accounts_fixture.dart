@@ -9,6 +9,8 @@ import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/library_view.dart';
 import 'package:lafleurmusic/library/sync.dart';
+import 'package:lafleurmusic/offline/device.dart';
+import 'package:lafleurmusic/offline/local_folder.dart';
 import 'package:lafleurmusic/player/equalizer.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/settings.dart';
@@ -124,6 +126,10 @@ Future<AccountsFixture> pumpAccounts(
   bool fr = true,
   bool view = false,
   PlexLink Function(String clientId)? plexLink,
+  void Function(AppSettings)?
+  configure, // réglages au départ (avant le premier affichage)
+  Device? device,
+  LocalFolder? localFolder,
 }) async {
   phoneSize(tester);
   final db = LibraryDb(
@@ -180,6 +186,7 @@ Future<AccountsFixture> pumpAccounts(
       );
     }
   });
+  configure?.call(f.settings);
   if (results != null) f.results.addAll(results(list));
   // view : les listes suivent le mode d'affichage comme dans l'appli
   final libraryView = view ? LibraryView(db, settings: f.settings) : null;
@@ -198,6 +205,8 @@ Future<AccountsFixture> pumpAccounts(
       libraryView: libraryView,
       accounts: accounts,
       accountService: service,
+      device: device,
+      localFolder: localFolder,
       child: MaterialApp(
         theme: lafleurTheme(),
         home: home?.call() ?? const PhoneShell(),
