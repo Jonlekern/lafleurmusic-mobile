@@ -29,30 +29,31 @@ Future<void> _expectV4(LibraryDb db) async {
   // clé de fusion recalculée pour les morceaux existants, et indexée
   final rows = await db.select(db.tracks).get();
   for (final r in rows) {
-    expect(
-      r.mergeKey,
-      mergeKey(
-        Track(
-          path: r.path,
-          title: r.title,
-          artist: r.artist,
-          albumArtist: r.albumArtist,
-          album: r.album,
-          trackNo: r.trackNo,
-          durationMs: r.durationMs,
-          hasCover: r.hasCover,
-          size: r.size,
-        ),
-      ),
+    final t = Track(
+      path: r.path,
+      title: r.title,
+      artist: r.artist,
+      albumArtist: r.albumArtist,
+      album: r.album,
+      trackNo: r.trackNo,
+      durationMs: r.durationMs,
+      hasCover: r.hasCover,
+      size: r.size,
     );
+    expect(r.mergeKey, mergeKey(t));
     expect(r.mergeKey, isNotEmpty);
+    expect(r.albumMergeKey, albumMergeKey(t));
+    expect(r.albumMergeKey, isNotEmpty);
   }
   final idx = await db
       .customSelect(
         "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'tracks'",
       )
       .get();
-  expect(idx.map((i) => i.read<String>('name')), contains('tracks_merge_key'));
+  expect(
+    idx.map((i) => i.read<String>('name')),
+    containsAll(['tracks_merge_key', 'tracks_album_merge_key']),
+  );
   // les tables nouvelles existent, vides, et servent
   expect(await db.select(db.playlists).get(), isEmpty);
   expect(await db.select(db.playlistItems).get(), isEmpty);

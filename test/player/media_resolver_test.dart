@@ -403,6 +403,112 @@ void main() {
       expect(s.artwork, MediaSessionArtwork.embedded);
     });
   });
+
+  group('MediaResolver: the same song on several accounts (best source)', () {
+    Track song(String acc, String id) => Track(
+      path: acc == 'local' ? '/m/$id.mp3' : 'subsonic://$acc/$id',
+      accountId: acc,
+      remoteId: id,
+      title: 'Night Swim',
+      artist: 'Lafleur Surf',
+      album: 'Summer Mix',
+      durationMs: 1000,
+      hasCover: false,
+      size: 1,
+    );
+    final a = song('A', 'a1'), b = song('B', 'b1');
+    late Set<String> absent;
+    late Map<String, String> copies;
+    late List<String> asked;
+    late MediaResolver r;
+    setUp(() {
+      absent = {};
+      copies = {};
+      asked = [];
+      r = MediaResolver(
+        (id) async {
+          asked.add(id);
+          return source(id);
+        },
+        localCopy: (p) async => copies[p],
+        twinsOf: (p) async => [a, b], // A first in the order of screen 6
+      )..reachable = (id) => !absent.contains(id);
+    });
+
+    test('both answer: the first account, counted there', () async {
+      final m = await r.media(b.path);
+      expect(Uri.parse(m.uri).queryParameters['id'], 'a1');
+      expect(r.playedKey(b.path), a.path);
+      expect(asked, ['A']);
+    });
+
+    test('A absent: plays from B, the listen goes to B', () async {
+      absent = {'A'};
+      final m = await r.media(a.path);
+      expect(Uri.parse(m.uri).queryParameters['id'], 'b1');
+      expect(m.httpHeaders, {'CF-Access-Client-Id': 'id1'});
+      expect(r.playedKey(a.path), b.path);
+      expect(asked, ['B']);
+    });
+
+    test('a kept copy on B wins, even with A answering', () async {
+      copies = {b.path: '/root/Lafleur Surf/Summer Mix/01 Night Swim.mp3'};
+      final m = await r.media(a.path);
+      expect(m.uri, '/root/Lafleur Surf/Summer Mix/01 Night Swim.mp3');
+      expect(m.httpHeaders, isNull);
+      expect(r.playedKey(a.path), b.path);
+      expect(asked, isEmpty);
+    });
+
+    test(
+      'both absent, nothing kept: its own stream (fails, skipped)',
+      () async {
+        absent = {'A', 'B'};
+        final m = await r.media(b.path);
+        expect(Uri.parse(m.uri).queryParameters['id'], 'b1');
+        expect(r.playedKey(b.path), b.path);
+      },
+    );
+
+    test(
+      'a file of the same song on the phone plays before any stream',
+      () async {
+        final tmp = Directory.systemTemp.createTempSync('twin');
+        addTearDown(() => tmp.deleteSync(recursive: true));
+        final f = File('${tmp.path}/x.mp3')..writeAsBytesSync([1]);
+        final local = Track(
+          path: f.path,
+          title: 'Night Swim',
+          artist: 'Lafleur Surf',
+          album: 'Summer Mix',
+          durationMs: 1000,
+          hasCover: false,
+          size: 1,
+        );
+        final withFile = MediaResolver(
+          (id) async => source(id),
+          twinsOf: (p) async => [local, a, b],
+        );
+        final m = await withFile.media(a.path);
+        expect(m.uri, f.path);
+        expect(withFile.playedKey(a.path), f.path);
+        f.deleteSync(); // gone: the stream again
+        final s = await withFile.media(a.path);
+        expect(Uri.parse(s.uri).queryParameters['id'], 'a1');
+        expect(withFile.playedKey(a.path), a.path);
+      },
+    );
+
+    test('twins unreadable (database closed): its own source', () async {
+      final broken = MediaResolver(
+        (id) async => source(id),
+        twinsOf: (p) async => throw StateError('closed'),
+      );
+      final m = await broken.media(b.path);
+      expect(Uri.parse(m.uri).queryParameters['id'], 'b1');
+      expect(broken.playedKey(b.path), b.path);
+    });
+  });
 }
 
 class _ClosingSource implements MusicSource {

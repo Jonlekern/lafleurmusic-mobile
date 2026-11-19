@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../library/merge.dart';
 import '../../library/models.dart';
 import '../../player/player.dart';
 import '../../sources/accounts.dart';
@@ -77,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (searching)
               FutureBuilder<List<Track>>(
                 key: ValueKey(_query),
-                future: app.db.search(_query),
+                future: app.library.search(_query),
                 builder: (_, snap) => Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: PhoneTrackRows(
@@ -94,7 +95,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   // Cover Flow se ferme lui-même, puis l'album s'ouvre
                   onOpen: (a) => WidgetsBinding.instance.addPostFrameCallback(
-                    (_) => context.mounted ? openAlbum(context, a) : null,
+                    (_) => context.mounted
+                        ? openAlbum(context, a.name, a.key)
+                        : null,
                   ),
                 ),
               ),
@@ -105,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     back: s.home,
                     label: s.library,
                     title: s.songs,
-                    tracks: app.db.watchAllTracks(),
+                    tracks: app.library.allTracks(),
                   ),
                 ),
               ),
@@ -114,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () => open(
                   NamesScreen(
                     title: s.artists,
-                    names: app.db.watchArtists(),
+                    names: app.library.artists(),
                     artists: true,
                   ),
                 ),
@@ -122,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
               PhoneItem(
                 label: s.genres,
                 onTap: () => open(
-                  NamesScreen(title: s.genres, names: app.db.watchGenres()),
+                  NamesScreen(title: s.genres, names: app.library.genres()),
                 ),
               ),
               PhoneItem(
@@ -132,8 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     back: s.home,
                     label: s.topLabel,
                     title: s.mostPlayed,
-                    tracks: app.db
-                        .watchTop(100)
+                    tracks: app.library
+                        .top(100)
                         .map((l) => [for (final (t, _) in l) t]),
                     empty: s.topEmpty,
                   ),
@@ -148,34 +151,35 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               PhoneSection(s.playlists),
               StreamBuilder<List<Album>>(
-                stream: app.db.watchAlbums(),
+                stream: app.library.albums(),
                 builder: (context, albums) => StreamBuilder<Set<String>>(
                   stream: app.downloader == null
                       ? null
-                      : app.db.watchKeptAlbums(),
+                      : app.library.keptAlbums(),
                   builder: (context, keptSnap) => StreamBuilder<PlayerState>(
                     stream: app.player.state,
                     initialData: app.player.current,
                     builder: (context, st) {
-                      final playing = st.data?.track?.album;
+                      final now = st.data?.track;
+                      final playing = now == null ? null : albumMergeKey(now);
                       final kept = keptSnap.data ?? const <String>{};
                       return Column(
                         children: [
                           for (final a in albums.data ?? const <Album>[])
                             PhoneItem(
-                              kept: kept.contains(a.name),
+                              kept: kept.contains(a.key),
                               leading: CoverImage(
                                 trackPath: a.coverTrackPath,
                                 size: 30,
                               ),
                               label: a.name.isEmpty ? s.unknownArtist : a.name,
-                              selected: a.name == playing,
-                              onTap: () => openAlbum(context, a.name),
+                              selected: a.key == playing,
+                              onTap: () => openAlbum(context, a.name, a.key),
                               onLongPress: () => showTrackSheet(
                                 context,
                                 title: a.name,
                                 tracks: () =>
-                                    app.db.watchAlbumTracks(a.name).first,
+                                    app.library.albumTracks(a.key).first,
                               ),
                             ),
                         ],

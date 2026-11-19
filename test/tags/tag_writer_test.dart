@@ -4,6 +4,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_taglib/flutter_taglib.dart' show Picture;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/merge.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/tags/tag_writer.dart';
 
@@ -20,6 +21,19 @@ Track t(String path, String title, int no) => Track(
   hasCover: false,
   mtime: 1,
   size: 1,
+);
+
+/// [Album.key] of a local album (no album artist) named [name].
+String albumKey(String name) => albumMergeKey(
+  Track(
+    path: '',
+    title: '',
+    artist: '',
+    album: name,
+    durationMs: 0,
+    hasCover: false,
+    size: 0,
+  ),
 );
 
 void main() {
@@ -59,7 +73,10 @@ void main() {
       TagEdit(path: '/m/2.flac', cover: Uint8List.fromList([1, 2, 3])),
     ]);
     expect(io.pictures['/m/2.flac']!.single.bytes, [1, 2, 3]);
-    expect((await db.watchAlbumTracks('Alb').first)[1].hasCover, isTrue);
+    expect(
+      (await db.watchAlbumTracks(albumKey('Alb')).first)[1].hasCover,
+      isTrue,
+    );
   });
 
   test('fichier en lecture seule : échec propre, rien de changé', () async {
@@ -90,7 +107,7 @@ void main() {
     ]);
     expect(await w.undo(), isTrue);
     expect(io.files['/m/1.flac']!.album, 'Alb');
-    expect((await db.watchAlbumTracks('Alb').first).length, 5);
+    expect((await db.watchAlbumTracks(albumKey('Alb')).first).length, 5);
     expect(await w.undo(), isFalse);
   });
 

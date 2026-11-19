@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../library/db.dart';
 import '../library/models.dart';
+import '../offline/paths.dart' show fileOrPlaceholderExists;
 import '../sources/source.dart';
 
 const _scheme = 'subsonic://';
@@ -45,7 +46,22 @@ class MediaResolver {
     this.sourceTimeout = const Duration(seconds: 10),
     this.localCopy,
     this.localPath,
+    this.twinsOf,
   }) : _clock = clock ?? DateTime.now;
+
+  /// Every row of the same song (see [LibraryDb.twinsOf]): local files first, then the
+  /// accounts in the order of the accounts screen. Null: each track plays from its own account.
+  final Future<List<Track>> Function(String path)? twinsOf;
+
+  /// Can [accountId] be asked now? (main: not found unreachable, P8). Null: every account.
+  bool Function(String accountId)? reachable;
+
+  // track asked → the row that really played (a twin), when it is another one
+  final _played = <String, String>{};
+
+  /// The row whose file or stream played for [path] the last time it was opened: the
+  /// listen is counted and sent there ([PlayCounter]).
+  String playedKey(String path) => _played[path] ?? path;
 
   /// The kept copy of a server track (see [keptFile]); null: play the stream.
   final Future<String?> Function(String trackPath)? localCopy;
@@ -59,7 +75,8 @@ class MediaResolver {
       _clock = DateTime.now,
       sourceTimeout = const Duration(seconds: 10),
       localCopy = null,
-      localPath = null;
+      localPath = null,
+      twinsOf = null;
 
   /// A failed account (password missing, database error…) is not asked again before this.
   static const retryAfter = Duration(minutes: 1);
@@ -112,24 +129,68 @@ class MediaResolver {
         return Media(path);
       }
     }
+    // the same song on other rows: a kept copy of any of them, else a file on the phone,
+    // else the first account that answers, in the order of the accounts screen
+    var twins = const <Track>[];
     try {
-      final copy = await localCopy?.call(path);
-      if (copy != null) return Media(copy); // the file itself: no network, no headers
+      twins = await twinsOf?.call(path) ?? const [];
     } on Object {
-      // database or folder unreadable: the stream still works
+      // database unreadable: its own account
     }
+    final remote = [
+      path,
+      for (final t in twins)
+        if (t.path != path && parseRemoteKey(t.path) != null) t.path,
+    ];
+    for (final r in remote) {
+      try {
+        final copy = await localCopy?.call(r);
+        if (copy != null) {
+          _note(path, r);
+          return Media(copy); // the file itself: no network, no headers
+        }
+      } on Object {
+        // database or folder unreadable: the stream still works
+      }
+    }
+    for (final t in twins) {
+      if (parseRemoteKey(t.path) != null) continue;
+      try {
+        final file = await localPath?.call(t.path) ?? t.path;
+        if (fileOrPlaceholderExists(file)) {
+          _note(path, t.path);
+          return Media(file);
+        }
+      } on Object {
+        // unreadable: the next one
+      }
+    }
+    final ordered = [
+      for (final t in twins)
+        if (parseRemoteKey(t.path) != null) t.path,
+    ];
+    final ok = reachable;
+    final chosen = (ordered.isEmpty ? [path] : ordered).firstWhere(
+      (r) => ok == null || ok(parseRemoteKey(r)!.$1),
+      orElse: () => path,
+    );
+    _note(path, chosen);
+    final id = parseRemoteKey(chosen)!;
     final MusicSource s;
     try {
-      s = await source(key.$1).timeout(sourceTimeout);
+      s = await source(id.$1).timeout(sourceTimeout);
     } on Object {
       // account gone, unusable or too slow: mpv fails on the raw key and the track is skipped like an unreadable file
-      return Media(path);
+      return Media(chosen);
     }
     return Media(
-      s.streamUri(key.$2).toString(),
+      s.streamUri(id.$2).toString(),
       httpHeaders: s.headers.isEmpty ? null : s.headers,
     );
   }
+
+  void _note(String asked, String played) =>
+      played == asked ? _played.remove(asked) : _played[asked] = played;
 }
 
 /// Server cover bytes (GET coverUri with the account headers); null if the server has none.

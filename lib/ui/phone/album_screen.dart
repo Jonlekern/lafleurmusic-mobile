@@ -14,8 +14,8 @@ import '../keep_actions.dart';
 import '../track_menu.dart';
 import 'phone_shell.dart';
 
-/// Ouvre un album (depuis l'Accueil : retour « ‹ Albums »).
-Future<void> openAlbum(BuildContext context, String album) {
+/// Ouvre l'album [key] ([Album.key]), nommé [album] (depuis l'Accueil : retour « ‹ Albums »).
+Future<void> openAlbum(BuildContext context, String album, String key) {
   final app = AppScope.of(context);
   final s = app.strings;
   return pushPhone(
@@ -24,7 +24,7 @@ Future<void> openAlbum(BuildContext context, String album) {
       back: s.albumsBack,
       label: s.playlistLabel,
       title: album.isEmpty ? s.unknownArtist : album,
-      tracks: app.db.watchAlbumTracks(album),
+      tracks: app.library.albumTracks(key),
       isAlbum: true,
     ),
   );

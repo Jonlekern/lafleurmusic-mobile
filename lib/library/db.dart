@@ -11,6 +11,7 @@ part 'db.g.dart';
 
 @DataClassName('TrackRow')
 @TableIndex(name: 'tracks_merge_key', columns: {#mergeKey})
+@TableIndex(name: 'tracks_album_merge_key', columns: {#albumMergeKey})
 class Tracks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get path => text().unique()();
@@ -37,6 +38,8 @@ class Tracks extends Table {
   TextColumn get searchKey => text()();
   // même morceau sur plusieurs comptes = même clé (voir merge.dart)
   TextColumn get mergeKey => text().withDefault(const Constant(''))();
+  // même album sur plusieurs comptes = même clé (voir merge.dart)
+  TextColumn get albumMergeKey => text().withDefault(const Constant(''))();
 }
 
 /// Écoutes (Top 100) : une ligne par fichier écouté.
@@ -182,6 +185,8 @@ class LibraryDb extends _$LibraryDb {
       if (from < 4) {
         await m.addColumn(tracks, tracks.mergeKey);
         await m.createIndex(tracksMergeKey);
+        await m.addColumn(tracks, tracks.albumMergeKey);
+        await m.createIndex(tracksAlbumMergeKey);
         await m.createTable(playlists);
         await m.createTable(playlistItems);
         await m.createTable(keptPlaylists);
@@ -193,9 +198,13 @@ class LibraryDb extends _$LibraryDb {
         final rows = await select(tracks).get();
         await batch((b) {
           for (final r in rows) {
+            final t = _fromRow(r);
             b.update(
               tracks,
-              TracksCompanion(mergeKey: Value(mergeKey(_fromRow(r)))),
+              TracksCompanion(
+                mergeKey: Value(mergeKey(t)),
+                albumMergeKey: Value(albumMergeKey(t)),
+              ),
               where: (t) => t.id.equals(r.id),
             );
           }
@@ -446,6 +455,7 @@ class LibraryDb extends _$LibraryDb {
         album: t.album,
         albumKey: sortKey(t.album),
         mergeKey: Value(mergeKey(t)),
+        albumMergeKey: Value(albumMergeKey(t)),
         genre: Value(t.genre),
         trackNo: Value(t.trackNo),
         durationMs: t.durationMs,
@@ -601,17 +611,27 @@ class LibraryDb extends _$LibraryDb {
   );
 
   /// Les [limit] plus écoutés (morceaux absents du disque cachés) avec leur nombre d'écoutes.
-  Stream<List<(Track, int)>> watchTop(int limit) =>
-      _topQuery(limit).watch().map(_topRows);
+  /// [accounts] : seulement ces comptes et les fichiers du téléphone (null : tous).
+  Stream<List<(Track, int)>> watchTop(int limit, {Set<String>? accounts}) =>
+      _topQuery(limit, accounts).watch().map(_topRows);
 
   /// Le même classement, une fois (le Top 100 gardé sur le téléphone).
   Future<List<(Track, int)>> top(int limit) async =>
       _topRows(await _topQuery(limit).get());
 
-  JoinedSelectStatement<HasResultSet, dynamic> _topQuery(int limit) =>
+  JoinedSelectStatement<HasResultSet, dynamic> _topQuery(
+    int limit, [
+    Set<String>? accounts,
+  ]) =>
       select(tracks)
           .join([innerJoin(playCounts, playCounts.path.equalsExp(tracks.path))])
-        ..where(tracks.missing.equals(false))
+        ..where(
+          tracks.missing.equals(false) &
+              (accounts == null
+                  ? const Constant(true)
+                  : tracks.accountId.equals('local') |
+                        tracks.accountId.isIn(accounts)),
+        )
         ..orderBy([
           OrderingTerm.desc(playCounts.count + playCounts.imported),
           OrderingTerm.desc(playCounts.lastPlayed),
@@ -749,70 +769,123 @@ class LibraryDb extends _$LibraryDb {
         TracksCompanion(missing: Value(missing)),
       );
 
-  Stream<List<Album>> watchAlbums() {
-    final count = tracks.id.count();
-    final dur = tracks.durationMs.sum();
-    final cover = tracks.path.min();
-    final q = selectOnly(tracks)
-      ..addColumns([tracks.album, tracks.albumKey, count, dur, cover])
-      ..groupBy([tracks.album, tracks.albumKey])
-      ..orderBy([
-        OrderingTerm.asc(tracks.albumKey),
-        OrderingTerm.asc(tracks.album),
-      ]);
-    return q.watch().map(
-      (rows) => rows
-          .map(
-            (r) => Album(
-              name: r.read(tracks.album)!,
-              trackCount: r.read(count)!,
-              durationMs: r.read(dur) ?? 0,
-              coverTrackPath: r.read(cover),
-            ),
-          )
-          .toList(),
+  /// One row per song, the same song on several accounts shown once (see [LibraryView]):
+  /// the tracks of [accounts] (null: every account) and every local file, as the SQL of a
+  /// `reps` table (with `offline_state`) for [_shown]. Among the twins (same `merge_key`) the
+  /// row shown is the one kept on the phone, else one with a copy under way, else the first
+  /// account in the order of the accounts screen. A file on the phone stands for its server
+  /// twins; local files are never merged together (each one always shows), nor two rows of
+  /// one account (the server's own duplicates: its 2nd one pairs with the other account's 2nd).
+  (String, List<Variable<Object>>) _reps(Set<String>? accounts) {
+    final ids = accounts?.toList() ?? const <String>[];
+    final filter = accounts == null
+        ? ''
+        : ids.isEmpty
+        ? "WHERE t.account_id = 'local' "
+        : "WHERE t.account_id = 'local' OR t.account_id IN "
+              '(${List.filled(ids.length, '?').join(', ')}) ';
+    return (
+      'WITH occ AS (SELECT t.*, ROW_NUMBER() OVER '
+          '(PARTITION BY t.account_id, t.merge_key ORDER BY t.path) AS n '
+          'FROM tracks t $filter), '
+          'ranked AS (SELECT t.*, o.state AS offline_state, '
+          'ROW_NUMBER() OVER (PARTITION BY CASE '
+          "WHEN t.account_id = 'local' OR t.merge_key = '' THEN t.path "
+          'ELSE t.merge_key END, t.n ORDER BY '
+          'CASE WHEN o.state = ? THEN 0 WHEN o.track_path IS NOT NULL THEN 1 ELSE 2 END, '
+          'COALESCE(a.position, 2147483647), t.path) AS rn '
+          'FROM occ t LEFT JOIN offline o ON o.track_path = t.path '
+          'LEFT JOIN accounts a ON a.id = t.account_id), '
+          'reps AS (SELECT * FROM ranked r WHERE r.rn = 1 AND ('
+          "r.account_id = 'local' OR r.merge_key = '' OR NOT EXISTS ("
+          "SELECT 1 FROM tracks l WHERE l.account_id = 'local' "
+          'AND l.missing = 0 AND l.merge_key = r.merge_key))) ',
+      [
+        // in the order of the `?` above
+        for (final i in ids) Variable.withString(i),
+        Variable.withString(OfflineState.done.name),
+      ],
     );
   }
 
-  /// Albums whose every server track has a finished copy (⬇ rose de l'Accueil).
-  Stream<Set<String>> watchKeptAlbums() => customSelect(
-    'SELECT t.album AS album FROM tracks t '
-    'LEFT JOIN offline o ON o.track_path = t.path AND o.state = ? '
-    "WHERE t.path LIKE 'subsonic://%' "
-    'GROUP BY t.album HAVING COUNT(*) = COUNT(o.track_path)',
-    variables: [Variable(OfflineState.done.name)],
-    readsFrom: {tracks, offline},
-  ).watch().map((rows) => {for (final r in rows) r.read<String>('album')});
-
-  Stream<List<Track>> watchAlbumTracks(String album) =>
-      (select(tracks)
-            ..where((t) => t.album.equals(album))
-            ..orderBy([
-              (t) => OrderingTerm(
-                expression: t.trackNo.isNull(),
-                mode: OrderingMode.asc,
-              ),
-              (t) => OrderingTerm.asc(t.trackNo),
-              (t) => OrderingTerm.asc(t.title),
-            ]))
-          .watch()
-          .map((rows) => rows.map(_fromRow).toList());
-
-  Future<List<Track>> search(String q) async {
-    final k = sortKey(q.trim());
-    if (k.isEmpty) return [];
-    final rows =
-        await (select(tracks)
-              ..where((t) => t.searchKey.contains(k))
-              ..limit(200))
-            .get();
-    return rows.map(_fromRow).toList();
+  Selectable<QueryRow> _shown(
+    Set<String>? accounts,
+    String select, [
+    List<Variable<Object>> vars = const [],
+  ]) {
+    final (sql, v) = _reps(accounts);
+    return customSelect(
+      '$sql$select',
+      variables: [...v, ...vars],
+      readsFrom: {tracks, offline, accountRows},
+    );
   }
 
-  Stream<List<Track>> watchAllTracks() =>
-      (select(tracks)..orderBy([(t) => OrderingTerm.asc(t.searchKey)]))
-          .watch()
-          .map((rows) => rows.map(_fromRow).toList());
+  Selectable<Track> _shownTracks(
+    Set<String>? accounts, {
+    String where = '1',
+    List<Variable<Object>> vars = const [],
+    required String order,
+    int? limit,
+  }) => _shown(
+    accounts,
+    'SELECT * FROM reps WHERE $where ORDER BY $order, id'
+    '${limit == null ? '' : ' LIMIT $limit'}',
+    vars,
+  ).map((r) => _fromRow(tracks.map(r.data)));
+
+  /// The albums shown (one per [albumMergeKey], whatever the account): name, songs, length.
+  Stream<List<Album>> watchAlbums({Set<String>? accounts}) =>
+      _shown(
+        accounts,
+        'SELECT album_merge_key AS k, MIN(album) AS name, MIN(album_key) AS sk, '
+        'COUNT(*) AS c, SUM(duration_ms) AS d, MIN(path) AS cover FROM reps '
+        'GROUP BY album_merge_key ORDER BY sk, name, k',
+      ).watch().map(
+        (rows) => [
+          for (final r in rows)
+            Album(
+              key: r.read<String>('k'),
+              name: r.read<String>('name'),
+              trackCount: r.read<int>('c'),
+              durationMs: r.read<int?>('d') ?? 0,
+              coverTrackPath: r.read<String?>('cover'),
+            ),
+        ],
+      );
+
+  /// Albums ([Album.key]) whose every server track shown has a finished copy (⬇ rose de l'Accueil).
+  Stream<Set<String>> watchKeptAlbums({Set<String>? accounts}) => _shown(
+    accounts,
+    "SELECT album_merge_key AS k FROM reps WHERE path LIKE 'subsonic://%' "
+    'GROUP BY album_merge_key '
+    'HAVING COUNT(*) = SUM(CASE WHEN offline_state = ? THEN 1 ELSE 0 END)',
+    [Variable.withString(OfflineState.done.name)],
+  ).watch().map((rows) => {for (final r in rows) r.read<String>('k')});
+
+  /// The songs of album [key] ([Album.key]), by number, those without one at the end.
+  Stream<List<Track>> watchAlbumTracks(String key, {Set<String>? accounts}) =>
+      _shownTracks(
+        accounts,
+        where: 'album_merge_key = ?',
+        vars: [Variable.withString(key)],
+        order: 'track_no IS NULL, track_no, title',
+      ).watch();
+
+  Future<List<Track>> search(String q, {Set<String>? accounts}) async {
+    final k = sortKey(q.trim());
+    if (k.isEmpty) return [];
+    return _shownTracks(
+      accounts,
+      where: 'instr(search_key, ?) > 0',
+      vars: [Variable.withString(k)],
+      order: 'search_key',
+      limit: 200,
+    ).get();
+  }
+
+  Stream<List<Track>> watchAllTracks({Set<String>? accounts}) =>
+      _shownTracks(accounts, order: 'search_key').watch();
 
   Stream<bool> watchAnyMissing() {
     final c = tracks.id.count();
@@ -823,37 +896,101 @@ class LibraryDb extends _$LibraryDb {
         .map((r) => (r.read(c) ?? 0) > 0);
   }
 
-  Stream<List<(String, int)>> _names(GeneratedColumn<String> col) {
-    final c = tracks.id.count();
-    final q = selectOnly(tracks)
-      ..addColumns([col, c])
-      ..where(col.equals('').not())
-      ..groupBy([col]);
-    return q.watch().map((rows) {
-      final list = [for (final r in rows) (r.read(col)!, r.read(c)!)];
-      list.sort((a, b) => sortKey(a.$1).compareTo(sortKey(b.$1)));
-      return list;
-    });
-  }
+  Stream<List<(String, int)>> _names(String col, Set<String>? accounts) =>
+      _shown(
+        accounts,
+        "SELECT $col AS n, COUNT(*) AS c FROM reps WHERE $col <> '' GROUP BY $col",
+      ).watch().map((rows) {
+        final list = [
+          for (final r in rows) (r.read<String>('n'), r.read<int>('c')),
+        ];
+        list.sort((a, b) => sortKey(a.$1).compareTo(sortKey(b.$1)));
+        return list;
+      });
 
-  Stream<List<(String, int)>> watchArtists() => _names(tracks.artist);
-  Stream<List<(String, int)>> watchGenres() => _names(tracks.genre);
+  Stream<List<(String, int)>> watchArtists({Set<String>? accounts}) =>
+      _names('artist', accounts);
+  Stream<List<(String, int)>> watchGenres({Set<String>? accounts}) =>
+      _names('genre', accounts);
 
-  Stream<List<Track>> _tracksWhere(
-    Expression<bool> Function($TracksTable t) where,
-  ) =>
-      (select(tracks)
-            ..where(where)
-            ..orderBy([
-              (t) => OrderingTerm.asc(t.albumKey),
-              (t) => OrderingTerm.asc(t.trackNo),
-              (t) => OrderingTerm.asc(t.title),
-            ]))
+  Stream<List<Track>> watchArtistTracks(
+    String artist, {
+    Set<String>? accounts,
+  }) => _shownTracks(
+    accounts,
+    where: 'artist = ?',
+    vars: [Variable.withString(artist)],
+    order: 'album_key, track_no, title',
+  ).watch();
+
+  Stream<List<Track>> watchGenreTracks(String genre, {Set<String>? accounts}) =>
+      _shownTracks(
+        accounts,
+        where: 'genre = ?',
+        vars: [Variable.withString(genre)],
+        order: 'album_key, track_no, title',
+      ).watch();
+
+  /// Every row of the song of [path] (same `merge_key` on the phone or another account,
+  /// [path] included): local files first, then the accounts in the order of the accounts
+  /// screen. Rows of a removed account are left out. Empty when [path] is not in the library.
+  Future<List<Track>> twinsOf(String path) => customSelect(
+    'SELECT t.* FROM tracks t LEFT JOIN accounts a ON a.id = t.account_id '
+    "WHERE t.merge_key <> '' "
+    'AND t.merge_key = (SELECT merge_key FROM tracks WHERE path = ?) '
+    'AND (t.path = ? OR t.account_id <> '
+    '(SELECT account_id FROM tracks WHERE path = ?)) '
+    "AND (t.account_id = 'local' OR a.id IS NOT NULL) "
+    "ORDER BY t.account_id <> 'local', COALESCE(a.position, 0), t.path",
+    variables: [for (var i = 0; i < 3; i++) Variable.withString(path)],
+    readsFrom: {tracks, accountRows},
+  ).map((r) => _fromRow(tracks.map(r.data))).get();
+
+  /// Songs on more than one row: `merge_key` → (path, account) in [twinsOf]'s order
+  /// (rows of one account included: the reader keeps the other accounts' ones).
+  Stream<Map<String, List<(String, String)>>> watchTwins() =>
+      customSelect(
+        'SELECT t.path AS p, t.account_id AS acc, t.merge_key AS k FROM tracks t '
+        'LEFT JOIN accounts a ON a.id = t.account_id '
+        'WHERE t.merge_key IN (SELECT merge_key FROM tracks '
+        "WHERE merge_key <> '' GROUP BY merge_key HAVING COUNT(*) > 1) "
+        "AND (t.account_id = 'local' OR a.id IS NOT NULL) "
+        "ORDER BY t.merge_key, t.account_id <> 'local', "
+        'COALESCE(a.position, 0), t.path',
+        readsFrom: {tracks, accountRows},
+      ).watch().map((rows) {
+        final m = <String, List<(String, String)>>{};
+        for (final r in rows) {
+          (m[r.read<String>('k')] ??= []).add((
+            r.read<String>('p'),
+            r.read<String>('acc'),
+          ));
+        }
+        return m;
+      });
+
+  /// The finished or queued copy of another row of the song of [path], if any (a
+  /// « Garder » makes no second copy of the same song).
+  Future<OfflineRow?> twinOffline(String path) => customSelect(
+    'SELECT o.* FROM offline o JOIN tracks t ON t.path = o.track_path '
+    "WHERE t.merge_key <> '' "
+    'AND t.merge_key = (SELECT merge_key FROM tracks WHERE path = ?) '
+    'AND t.account_id <> (SELECT account_id FROM tracks WHERE path = ?) '
+    'AND o.state IN (?, ?) '
+    'ORDER BY o.state = ? DESC, o.track_path LIMIT 1',
+    variables: [
+      Variable.withString(path),
+      Variable.withString(path),
+      Variable.withString(OfflineState.done.name),
+      Variable.withString(OfflineState.queued.name),
+      Variable.withString(OfflineState.done.name),
+    ],
+    readsFrom: {tracks, offline},
+  ).map((r) => offline.map(r.data)).getSingleOrNull();
+
+  /// The accounts' ids in the order of the accounts screen.
+  Stream<List<String>> watchAccountIds() =>
+      (select(accountRows)..orderBy([(a) => OrderingTerm.asc(a.position)]))
           .watch()
-          .map((rows) => rows.map(_fromRow).toList());
-
-  Stream<List<Track>> watchArtistTracks(String artist) =>
-      _tracksWhere((t) => t.artist.equals(artist));
-  Stream<List<Track>> watchGenreTracks(String genre) =>
-      _tracksWhere((t) => t.genre.equals(genre));
+          .map((rows) => [for (final r in rows) r.id]);
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app_scope.dart';
 import '../../l10n/strings.dart';
 import '../../library/db.dart' show OfflineRow;
+import '../../library/merge.dart';
 import '../../library/models.dart';
 import '../../offline/downloader.dart' show unknownTrackSize;
 import '../../settings.dart';
@@ -67,18 +68,18 @@ class _KeepScreenState extends State<KeepScreen> {
   }
 
   Future<void> _load() async {
-    final db = AppScope.of(context).db;
-    final albums = await db.watchAlbums().first;
-    final all = await db.watchAllTracks().first;
+    final library = AppScope.of(context).library;
+    final albums = await library.albums().first;
+    final all = await library.allTracks().first;
     final by = <String, List<Track>>{};
     for (final t in all.where(isRemote)) {
-      (by[t.album] ??= []).add(t);
+      (by[albumMergeKey(t)] ??= []).add(t);
     }
     if (!mounted) return;
     setState(() {
       _entries = [
         for (final a in albums)
-          if (by[a.name] != null) _Entry(a, by[a.name]!),
+          if (by[a.key] != null) _Entry(a, by[a.key]!),
       ];
     });
   }

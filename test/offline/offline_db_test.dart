@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/merge.dart';
 import 'package:lafleurmusic/library/models.dart';
 
 void main() {
@@ -129,8 +130,11 @@ void main() {
     for (final p in ['subsonic://a/1', 'subsonic://a/2', 'subsonic://a/3']) {
       await db.markOfflineDone(p, 'f', 1);
     }
-    expect(await db.watchKeptAlbums().first, {'Full'});
+    expect(await db.watchKeptAlbums().first, {albumMergeKey(t('', 'Full'))});
     await db.markOfflineDone('subsonic://a/5', 'f', 1);
-    expect(await db.watchKeptAlbums().first, {'Full', 'Queued'});
+    expect(await db.watchKeptAlbums().first, {
+      albumMergeKey(t('', 'Full')),
+      albumMergeKey(t('', 'Queued')),
+    });
   });
 }

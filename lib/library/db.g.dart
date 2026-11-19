@@ -275,6 +275,18 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _albumMergeKeyMeta = const VerificationMeta(
+    'albumMergeKey',
+  );
+  @override
+  late final GeneratedColumn<String> albumMergeKey = GeneratedColumn<String>(
+    'album_merge_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -301,6 +313,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     toRepair,
     searchKey,
     mergeKey,
+    albumMergeKey,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -476,6 +489,15 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         mergeKey.isAcceptableOrUnknown(data['merge_key']!, _mergeKeyMeta),
       );
     }
+    if (data.containsKey('album_merge_key')) {
+      context.handle(
+        _albumMergeKeyMeta,
+        albumMergeKey.isAcceptableOrUnknown(
+          data['album_merge_key']!,
+          _albumMergeKeyMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -581,6 +603,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}merge_key'],
       )!,
+      albumMergeKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}album_merge_key'],
+      )!,
     );
   }
 
@@ -615,6 +641,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final bool toRepair;
   final String searchKey;
   final String mergeKey;
+  final String albumMergeKey;
   const TrackRow({
     required this.id,
     required this.path,
@@ -640,6 +667,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.toRepair,
     required this.searchKey,
     required this.mergeKey,
+    required this.albumMergeKey,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -678,6 +706,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     map['to_repair'] = Variable<bool>(toRepair);
     map['search_key'] = Variable<String>(searchKey);
     map['merge_key'] = Variable<String>(mergeKey);
+    map['album_merge_key'] = Variable<String>(albumMergeKey);
     return map;
   }
 
@@ -715,6 +744,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       toRepair: Value(toRepair),
       searchKey: Value(searchKey),
       mergeKey: Value(mergeKey),
+      albumMergeKey: Value(albumMergeKey),
     );
   }
 
@@ -748,6 +778,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       toRepair: serializer.fromJson<bool>(json['toRepair']),
       searchKey: serializer.fromJson<String>(json['searchKey']),
       mergeKey: serializer.fromJson<String>(json['mergeKey']),
+      albumMergeKey: serializer.fromJson<String>(json['albumMergeKey']),
     );
   }
   @override
@@ -778,6 +809,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'toRepair': serializer.toJson<bool>(toRepair),
       'searchKey': serializer.toJson<String>(searchKey),
       'mergeKey': serializer.toJson<String>(mergeKey),
+      'albumMergeKey': serializer.toJson<String>(albumMergeKey),
     };
   }
 
@@ -806,6 +838,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     bool? toRepair,
     String? searchKey,
     String? mergeKey,
+    String? albumMergeKey,
   }) => TrackRow(
     id: id ?? this.id,
     path: path ?? this.path,
@@ -831,6 +864,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     toRepair: toRepair ?? this.toRepair,
     searchKey: searchKey ?? this.searchKey,
     mergeKey: mergeKey ?? this.mergeKey,
+    albumMergeKey: albumMergeKey ?? this.albumMergeKey,
   );
   TrackRow copyWithCompanion(TracksCompanion data) {
     return TrackRow(
@@ -864,6 +898,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       toRepair: data.toRepair.present ? data.toRepair.value : this.toRepair,
       searchKey: data.searchKey.present ? data.searchKey.value : this.searchKey,
       mergeKey: data.mergeKey.present ? data.mergeKey.value : this.mergeKey,
+      albumMergeKey: data.albumMergeKey.present
+          ? data.albumMergeKey.value
+          : this.albumMergeKey,
     );
   }
 
@@ -893,7 +930,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('missing: $missing, ')
           ..write('toRepair: $toRepair, ')
           ..write('searchKey: $searchKey, ')
-          ..write('mergeKey: $mergeKey')
+          ..write('mergeKey: $mergeKey, ')
+          ..write('albumMergeKey: $albumMergeKey')
           ..write(')'))
         .toString();
   }
@@ -924,6 +962,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     toRepair,
     searchKey,
     mergeKey,
+    albumMergeKey,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -952,7 +991,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.missing == this.missing &&
           other.toRepair == this.toRepair &&
           other.searchKey == this.searchKey &&
-          other.mergeKey == this.mergeKey);
+          other.mergeKey == this.mergeKey &&
+          other.albumMergeKey == this.albumMergeKey);
 }
 
 class TracksCompanion extends UpdateCompanion<TrackRow> {
@@ -980,6 +1020,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<bool> toRepair;
   final Value<String> searchKey;
   final Value<String> mergeKey;
+  final Value<String> albumMergeKey;
   const TracksCompanion({
     this.id = const Value.absent(),
     this.path = const Value.absent(),
@@ -1005,6 +1046,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.toRepair = const Value.absent(),
     this.searchKey = const Value.absent(),
     this.mergeKey = const Value.absent(),
+    this.albumMergeKey = const Value.absent(),
   });
   TracksCompanion.insert({
     this.id = const Value.absent(),
@@ -1031,6 +1073,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.toRepair = const Value.absent(),
     required String searchKey,
     this.mergeKey = const Value.absent(),
+    this.albumMergeKey = const Value.absent(),
   }) : path = Value(path),
        title = Value(title),
        artist = Value(artist),
@@ -1065,6 +1108,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<bool>? toRepair,
     Expression<String>? searchKey,
     Expression<String>? mergeKey,
+    Expression<String>? albumMergeKey,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1091,6 +1135,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (toRepair != null) 'to_repair': toRepair,
       if (searchKey != null) 'search_key': searchKey,
       if (mergeKey != null) 'merge_key': mergeKey,
+      if (albumMergeKey != null) 'album_merge_key': albumMergeKey,
     });
   }
 
@@ -1119,6 +1164,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<bool>? toRepair,
     Value<String>? searchKey,
     Value<String>? mergeKey,
+    Value<String>? albumMergeKey,
   }) {
     return TracksCompanion(
       id: id ?? this.id,
@@ -1145,6 +1191,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       toRepair: toRepair ?? this.toRepair,
       searchKey: searchKey ?? this.searchKey,
       mergeKey: mergeKey ?? this.mergeKey,
+      albumMergeKey: albumMergeKey ?? this.albumMergeKey,
     );
   }
 
@@ -1223,6 +1270,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (mergeKey.present) {
       map['merge_key'] = Variable<String>(mergeKey.value);
     }
+    if (albumMergeKey.present) {
+      map['album_merge_key'] = Variable<String>(albumMergeKey.value);
+    }
     return map;
   }
 
@@ -1252,7 +1302,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('missing: $missing, ')
           ..write('toRepair: $toRepair, ')
           ..write('searchKey: $searchKey, ')
-          ..write('mergeKey: $mergeKey')
+          ..write('mergeKey: $mergeKey, ')
+          ..write('albumMergeKey: $albumMergeKey')
           ..write(')'))
         .toString();
   }
@@ -4058,6 +4109,10 @@ abstract class _$LibraryDb extends GeneratedDatabase {
     'tracks_merge_key',
     'CREATE INDEX tracks_merge_key ON tracks (merge_key)',
   );
+  late final Index tracksAlbumMergeKey = Index(
+    'tracks_album_merge_key',
+    'CREATE INDEX tracks_album_merge_key ON tracks (album_merge_key)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4074,6 +4129,7 @@ abstract class _$LibraryDb extends GeneratedDatabase {
     playlistItems,
     keptPlaylists,
     tracksMergeKey,
+    tracksAlbumMergeKey,
   ];
 }
 
@@ -4102,6 +4158,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<bool> toRepair,
   required String searchKey,
   Value<String> mergeKey,
+  Value<String> albumMergeKey,
 });
 typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> id,
@@ -4128,6 +4185,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<bool> toRepair,
   Value<String> searchKey,
   Value<String> mergeKey,
+  Value<String> albumMergeKey,
 });
 
 class $$TracksTableFilterComposer extends Composer<_$LibraryDb, $TracksTable> {
@@ -4255,6 +4313,11 @@ class $$TracksTableFilterComposer extends Composer<_$LibraryDb, $TracksTable> {
 
   ColumnFilters<String> get mergeKey => $composableBuilder(
     column: $table.mergeKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get albumMergeKey => $composableBuilder(
+    column: $table.albumMergeKey,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -4387,6 +4450,11 @@ class $$TracksTableOrderingComposer
     column: $table.mergeKey,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get albumMergeKey => $composableBuilder(
+    column: $table.albumMergeKey,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TracksTableAnnotationComposer
@@ -4475,6 +4543,11 @@ class $$TracksTableAnnotationComposer
 
   GeneratedColumn<String> get mergeKey =>
       $composableBuilder(column: $table.mergeKey, builder: (column) => column);
+
+  GeneratedColumn<String> get albumMergeKey => $composableBuilder(
+    column: $table.albumMergeKey,
+    builder: (column) => column,
+  );
 }
 
 class $$TracksTableTableManager
@@ -4529,6 +4602,7 @@ class $$TracksTableTableManager
                 Value<bool> toRepair = const Value.absent(),
                 Value<String> searchKey = const Value.absent(),
                 Value<String> mergeKey = const Value.absent(),
+                Value<String> albumMergeKey = const Value.absent(),
               }) => TracksCompanion(
                 id: id,
                 path: path,
@@ -4554,6 +4628,7 @@ class $$TracksTableTableManager
                 toRepair: toRepair,
                 searchKey: searchKey,
                 mergeKey: mergeKey,
+                albumMergeKey: albumMergeKey,
               ),
           createCompanionCallback:
               ({
@@ -4581,6 +4656,7 @@ class $$TracksTableTableManager
                 Value<bool> toRepair = const Value.absent(),
                 required String searchKey,
                 Value<String> mergeKey = const Value.absent(),
+                Value<String> albumMergeKey = const Value.absent(),
               }) => TracksCompanion.insert(
                 id: id,
                 path: path,
@@ -4606,6 +4682,7 @@ class $$TracksTableTableManager
                 toRepair: toRepair,
                 searchKey: searchKey,
                 mergeKey: mergeKey,
+                albumMergeKey: albumMergeKey,
               ),
           withReferenceMapper: (p0) => p0
               .map(

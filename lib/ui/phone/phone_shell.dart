@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../app_scope.dart';
+import '../../library/merge.dart';
 import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
 import '../library_screen.dart';
@@ -63,9 +64,9 @@ class _PhoneShellState extends State<PhoneShell> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final ctx = _nav.currentContext;
         if (ctx == null) return;
-        final album = AppScope.of(ctx).player.current.track?.album;
-        if (start == 'album' && album != null) {
-          openAlbum(ctx, album);
+        final playing = AppScope.of(ctx).player.current.track;
+        if (start == 'album' && playing != null) {
+          openAlbum(ctx, playing.album, albumMergeKey(playing));
         } else if (start == 'now') {
           openNow(ctx);
         }

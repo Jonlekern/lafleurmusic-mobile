@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
+import '../library/merge.dart';
 import '../library/models.dart';
 import '../theme/colors.dart';
 import '../theme/widgets.dart';
@@ -21,7 +22,7 @@ class CoverflowScreen extends StatefulWidget {
   });
   final List<Album> albums;
   final int initial;
-  final void Function(String album)? onOpen;
+  final void Function(Album album)? onOpen;
 
   @override
   State<CoverflowScreen> createState() => _CoverflowScreenState();
@@ -95,8 +96,8 @@ class _CoverflowScreenState extends State<CoverflowScreen>
   Future<void> _play() async {
     if (_count == 0) return;
     final app = AppScope.of(context);
-    final tracks = await app.db
-        .watchAlbumTracks(widget.albums[_current].name)
+    final tracks = await app.library
+        .albumTracks(widget.albums[_current].key)
         .first;
     if (tracks.isNotEmpty) await app.player.playTracks(tracks, 0);
   }
@@ -237,7 +238,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
                             PillButton(
                               label: s.openPlaylist,
                               onPressed: () {
-                                widget.onOpen?.call(album.name);
+                                widget.onOpen?.call(album);
                                 Navigator.of(context).maybePop();
                               },
                             ),
@@ -337,13 +338,14 @@ class _CoverflowScreenState extends State<CoverflowScreen>
 /// Ouvre le Cover Flow sur l'album en cours (ou le premier).
 Future<void> openCoverflow(
   BuildContext context, {
-  void Function(String album)? onOpen,
+  void Function(Album album)? onOpen,
 }) async {
   final app = AppScope.of(context);
-  final albums = await app.db.watchAlbums().first;
+  final albums = await app.library.albums().first;
   if (!context.mounted || albums.isEmpty) return;
-  final playing = app.player.current.track?.album;
-  final i = albums.indexWhere((a) => a.name == playing);
+  final now = app.player.current.track;
+  final playing = now == null ? null : albumMergeKey(now);
+  final i = albums.indexWhere((a) => a.key == playing);
   await Navigator.of(context).push(
     PageRouteBuilder<void>(
       pageBuilder: (_, _, _) => CoverflowScreen(

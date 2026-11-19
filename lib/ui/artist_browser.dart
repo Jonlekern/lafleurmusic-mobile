@@ -62,7 +62,7 @@ class ArtistBrowser extends StatelessWidget {
                             onSecondaryTapUp: (d) => showTracksMenu(
                               context,
                               d.globalPosition,
-                              () => app.db.watchArtistTracks(list[i].$1).first,
+                              () => app.library.artistTracks(list[i].$1).first,
                             ),
                             child: _Cell(
                               name: list[i].$1,
@@ -78,7 +78,7 @@ class ArtistBrowser extends StatelessWidget {
                             onSecondaryTapUp: (d) => showTracksMenu(
                               context,
                               d.globalPosition,
-                              () => app.db.watchArtistTracks(list[i].$1).first,
+                              () => app.library.artistTracks(list[i].$1).first,
                             ),
                             child: _Line(
                               name: list[i].$1,

@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/merge.dart';
 import 'package:lafleurmusic/library/models.dart';
 
 Track t(
@@ -24,6 +25,19 @@ Track t(
   size: 1,
 );
 
+/// [Album.key] of a local album (no album artist) named [name].
+String albumKey(String name) => albumMergeKey(
+  Track(
+    path: '',
+    title: '',
+    artist: '',
+    album: name,
+    durationMs: 0,
+    hasCover: false,
+    size: 0,
+  ),
+);
+
 void main() {
   late LibraryDb db;
   setUp(() => db = LibraryDb(NativeDatabase.memory()));
@@ -44,14 +58,14 @@ void main() {
     await db.upsertTrack(t('/m/b.flac', title: 'B', no: 2));
     await db.upsertTrack(t('/m/z.flac', title: 'Z'));
     await db.upsertTrack(t('/m/a.flac', title: 'A', no: 1));
-    final tracks = await db.watchAlbumTracks('A').first;
+    final tracks = await db.watchAlbumTracks(albumKey('A')).first;
     expect(tracks.map((x) => x.title), ['A', 'B', 'Z']);
   });
 
   test('upsert remplace le même chemin', () async {
     await db.upsertTrack(t('/m/a.flac', title: 'old'));
     await db.upsertTrack(t('/m/a.flac', title: 'new'));
-    final tracks = await db.watchAlbumTracks('A').first;
+    final tracks = await db.watchAlbumTracks(albumKey('A')).first;
     expect(tracks.single.title, 'new');
   });
 
@@ -66,7 +80,7 @@ void main() {
   test('dossier absent : pistes gardées et marquées', () async {
     await db.upsertTrack(t('/nas/1.flac'));
     await db.markMissing(1, true);
-    final tracks = await db.watchAlbumTracks('A').first;
+    final tracks = await db.watchAlbumTracks(albumKey('A')).first;
     expect(tracks.single.missing, true);
   });
 

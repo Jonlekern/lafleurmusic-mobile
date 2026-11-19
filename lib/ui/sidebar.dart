@@ -19,8 +19,8 @@ class Sidebar extends StatelessWidget {
     required this.onView,
   });
   final LibraryView view;
-  final String? album;
-  final void Function(String album) onAlbum;
+  final String? album; // [Album.key] de l'album choisi
+  final void Function(Album album) onAlbum;
   final void Function(LibraryView view) onView;
 
   @override
@@ -35,7 +35,7 @@ class Sidebar extends StatelessWidget {
       ),
       padding: const EdgeInsets.fromLTRB(12, 18, 12, 12),
       child: StreamBuilder<List<Album>>(
-        stream: app.db.watchAlbums(),
+        stream: app.library.albums(),
         builder: (context, snap) {
           final albums = snap.data ?? const <Album>[];
           return ListView(
@@ -77,13 +77,13 @@ class Sidebar extends StatelessWidget {
                   onSecondaryTapUp: (d) => showTracksMenu(
                     context,
                     d.globalPosition,
-                    () => app.db.watchAlbumTracks(a.name).first,
+                    () => app.library.albumTracks(a.key).first,
                   ),
                   child: _Item(
                     leading: CoverImage(trackPath: a.coverTrackPath, size: 26),
                     label: a.name.isEmpty ? s.unknownArtist : a.name,
-                    selected: view == LibraryView.album && a.name == album,
-                    onTap: () => onAlbum(a.name),
+                    selected: view == LibraryView.album && a.key == album,
+                    onTap: () => onAlbum(a),
                   ),
                 ),
             ],

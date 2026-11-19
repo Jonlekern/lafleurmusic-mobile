@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../app_scope.dart';
+import '../library/merge.dart';
 import '../library/models.dart';
 import '../theme/colors.dart';
 import '../theme/widgets.dart';
@@ -26,7 +27,8 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   LibraryView _view = LibraryView.album;
-  String? _album;
+  String? _album; // [Album.key] de l'album choisi
+  String _albumName = '';
   String? _name; // artiste ou genre choisi
   String _query = '';
   final _search = TextEditingController();
@@ -98,14 +100,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Stream<List<Track>> _tracks(AppScope app) {
     if (_query.trim().isNotEmpty) {
-      return Stream.fromFuture(app.db.search(_query));
+      return Stream.fromFuture(app.library.search(_query));
     }
     return switch (_view) {
-      LibraryView.songs => app.db.watchAllTracks(),
+      LibraryView.songs => app.library.allTracks(),
       LibraryView.album =>
         _album == null ? const Stream.empty() : _albumTracks(app, _album!),
-      LibraryView.artists => app.db.watchArtistTracks(_name ?? ''),
-      LibraryView.genres => app.db.watchGenreTracks(_name ?? ''),
+      LibraryView.artists => app.library.artistTracks(_name ?? ''),
+      LibraryView.genres => app.library.genreTracks(_name ?? ''),
       LibraryView.top => const Stream.empty(), // TopScreen lit le Top lui-même
     };
   }
@@ -115,11 +117,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
   List<String> _shown = const [];
 
   Stream<List<Track>> _albumTracks(AppScope app, String album) async* {
-    await for (final list in app.db.watchAlbumTracks(album)) {
+    await for (final list in app.library.albumTracks(album)) {
       if (list.isEmpty && _shown.isNotEmpty) {
         final moved = await app.db.trackByPath(_shown.first);
-        if (moved != null && moved.album != album) {
-          if (mounted) setState(() => _album = moved.album);
+        if (moved != null && albumMergeKey(moved) != album) {
+          if (mounted) {
+            setState(() {
+              _album = albumMergeKey(moved);
+              _albumName = moved.album;
+            });
+          }
           return;
         }
       }
@@ -147,7 +154,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (_query.trim().isNotEmpty) return '« ${_query.trim()} »';
     return switch (_view) {
       LibraryView.songs => s.songs,
-      LibraryView.album => (_album ?? '').isEmpty ? s.unknownArtist : _album!,
+      LibraryView.album => _albumName.isEmpty ? s.unknownArtist : _albumName,
       LibraryView.artists || LibraryView.genres => _name ?? '',
       LibraryView.top => s.mostPlayed,
     };
@@ -226,13 +233,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
               child: Row(
                 children: [
                   StreamBuilder<List<Album>>(
-                    stream: app.db.watchAlbums(),
+                    stream: app.library.albums(),
                     builder: (_, snap) {
                       final albums = snap.data ?? const <Album>[];
                       if (_album == null && albums.isNotEmpty) {
                         WidgetsBinding.instance.addPostFrameCallback(
                           (_) => mounted
-                              ? setState(() => _album = albums.first.name)
+                              ? setState(() {
+                                  _album = albums.first.key;
+                                  _albumName = albums.first.name;
+                                })
                               : null,
                         );
                       }
@@ -243,7 +253,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           _name = null;
                           _keys.requestFocus();
                           _view = LibraryView.album;
-                          _album = a;
+                          _album = a.key;
+                          _albumName = a.name;
                           _shown = const [];
                           _query = '';
                           _search.clear();
@@ -267,11 +278,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               _query.trim().isEmpty
                         ? (_view == LibraryView.artists
                               ? ArtistBrowser(
-                                  names: app.db.watchArtists(),
+                                  names: app.library.artists(),
                                   onPick: (n) => setState(() => _name = n),
                                 )
                               : NameList(
-                                  names: app.db.watchGenres(),
+                                  names: app.library.genres(),
                                   title: s.genres,
                                   onPick: (n) => setState(() => _name = n),
                                 ))

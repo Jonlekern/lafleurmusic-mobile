@@ -210,6 +210,32 @@ void main() {
         expect(scrobbles, [('acc1', 's9', DateTime(2026, 10, 17))]);
       });
 
+      test(
+        'played from a twin (A absent → B): counted and sent on B',
+        () async {
+          final states = StreamController<PlayerState>();
+          final viaB = PlayCounter(
+            states.stream,
+            db,
+            now: () => DateTime(2026, 10, 17),
+            sourceOf: (id) async => _ScrobbleSource(id, scrobbles),
+            playedAs: (p) => p == 'subsonic://acc1/s9' ? 'subsonic://B/b9' : p,
+          );
+          addTearDown(viaB.dispose);
+          states
+            ..add(s(server('s9'), 10))
+            ..add(s(server('s9'), 150));
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          expect(scrobbles, [('B', 'b9', DateTime(2026, 10, 17))]);
+          final top = await db.watchTop(10).first;
+          expect(top, isEmpty, reason: 'B row not in the library: hidden');
+          final row = await (db.select(
+            db.playCounts,
+          )..where((p) => p.path.equals('subsonic://B/b9'))).getSingle();
+          expect(row.count, 1);
+        },
+      );
+
       test('morceau local → pas de scrobble', () async {
         rctrl
           ..add(s(t('/a'), 10))

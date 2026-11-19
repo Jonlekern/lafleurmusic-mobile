@@ -5,7 +5,6 @@ import '../player/player.dart';
 import '../sources/source.dart';
 import '../sources/subsonic.dart';
 import 'db.dart';
-import 'models.dart';
 
 /// Le serveur ne connaît pas ce morceau (Subsonic 70) : renvoyer l'écoute ne servirait à rien.
 bool scrobbleRefused(Object e) => e is SubsonicException && e.code == 70;
@@ -18,12 +17,17 @@ class PlayCounter {
     this.db, {
     DateTime Function()? now,
     this.sourceOf,
+    this.playedAs,
   }) : _now = now ?? DateTime.now {
     _sub = states.listen(_on);
   }
 
   final LibraryDb db;
   final Future<MusicSource> Function(String accountId)? sourceOf;
+
+  /// The row that really played the track (the same song on another account, or its
+  /// kept copy: [MediaResolver.playedKey]); the listen is counted and sent there.
+  final String Function(String path)? playedAs;
   final DateTime Function() _now;
   late final StreamSubscription<PlayerState> _sub;
   String? _path;
@@ -56,13 +60,14 @@ class PlayCounter {
     } else if (_armed) {
       _counted = true;
       final at = _now();
-      unawaited(db.addPlay(t.path, at));
-      unawaited(_scrobble(t, at));
+      final played = playedAs?.call(t.path) ?? t.path;
+      unawaited(db.addPlay(played, at));
+      unawaited(_scrobble(played, at));
     }
   }
 
-  Future<void> _scrobble(Track t, DateTime at) async {
-    final key = parseRemoteKey(t.path), of = sourceOf;
+  Future<void> _scrobble(String path, DateTime at) async {
+    final key = parseRemoteKey(path), of = sourceOf;
     if (key == null || of == null) return;
     try {
       await (await of(key.$1)).scrobble(key.$2, at);

@@ -14,6 +14,7 @@ import 'demo/demo_app.dart';
 import 'l10n/strings.dart';
 import 'library/covers.dart';
 import 'library/db.dart';
+import 'library/library_view.dart';
 import 'library/play_counter.dart';
 import 'offline/device.dart';
 import 'offline/downloader.dart';
@@ -78,6 +79,8 @@ Future<LafleurApp> buildLafleurApp({
     accounts.source,
     localCopy: keptCopy,
     localPath: device.absolutePath,
+    twinsOf:
+        db.twinsOf, // le même morceau sur un autre compte, ou sur le téléphone
   );
   final covers = Covers(
     cacheDir: Directory(p.join(support.path, 'covers')),
@@ -155,6 +158,10 @@ Future<LafleurApp> buildLafleurApp({
       // dossier illisible : la prochaine annonce réessaie
     }
   });
+  // le même morceau sur plusieurs comptes : joué depuis le premier qui répond (P8)
+  resolver.reachable = (id) =>
+      accountService.stateOf(id) != AccountState.absent;
+  final library = LibraryView(db, settings: settings);
   final player = LafleurPlayer(resolver: resolver)
     // écran verrouillé : la pochette du serveur en octets, jamais une URL
     // serveur perdu : on saute aux morceaux gardés
@@ -188,6 +195,7 @@ Future<LafleurApp> buildLafleurApp({
       loudness.gainOf; // le 2e lecteur du fondu démarre au bon niveau
   return LafleurApp(
     db: db,
+    library: library,
     loudness: loudness,
     covers: covers,
     resolver: resolver,
@@ -212,6 +220,7 @@ class LafleurApp extends StatefulWidget {
   const LafleurApp({
     super.key,
     required this.db,
+    required this.library,
     required this.covers,
     required this.player,
     required this.strings,
@@ -245,6 +254,7 @@ class LafleurApp extends StatefulWidget {
   final VoidCallback saveSettings;
   final ValueNotifier<bool> artistGrid;
   final LibraryDb db;
+  final LibraryView library;
   final Covers covers;
   final LafleurPlayer player;
   final Strings strings;
@@ -266,6 +276,7 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
       widget.db,
       sourceOf:
           widget.resolver.source, // écoute d'un morceau du serveur → scrobble
+      playedAs: widget.resolver.playedKey, // …sur le compte qui a joué
     );
     unawaited(widget.localFolder.rescan());
     // au lancement : la bibliothèque des serveurs est remise à jour en arrière-plan
@@ -296,6 +307,7 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) => AppScope(
     db: widget.db,
+    libraryView: widget.library,
     player: widget.player,
     covers: widget.covers,
     strings: widget.strings,

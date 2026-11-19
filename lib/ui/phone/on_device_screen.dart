@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../../app_scope.dart';
 import '../../l10n/strings.dart';
 import '../../library/db.dart' show OfflineRow;
+import '../../library/merge.dart';
 import '../../library/models.dart';
 import '../../offline/device.dart';
 import '../../offline/downloader.dart'
@@ -28,9 +29,10 @@ const _dim = Color(0xFF666666);
 
 /// Un album gardé (ou en partie) : ce qui est fini, ce que ça pèse.
 class _Kept {
-  _Kept(this.name, this.coverPath);
+  _Kept(this.name, this.coverPath, this.key);
   final String name;
   final String? coverPath;
+  final String key; // [Album.key] : l'album gardé en entier ?
   final paths =
       <String>[]; // les copies finies ou en file : ce que « Retirer » oublie
   int done = 0, bytes = 0, durationMs = 0;
@@ -123,9 +125,13 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       switch (r.state) {
         case 'queued':
           queued.add(r);
-          (kept[t.album] ??= _Kept(t.album, t.path)).paths.add(r.trackPath);
+          (kept[t.album] ??= _Kept(
+            t.album,
+            t.path,
+            albumMergeKey(t),
+          )).paths.add(r.trackPath);
         case 'done':
-          final k = kept[t.album] ??= _Kept(t.album, t.path);
+          final k = kept[t.album] ??= _Kept(t.album, t.path, albumMergeKey(t));
           k.paths.add(r.trackPath);
           k.done++;
           k.bytes += r.size;
@@ -143,7 +149,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       queued: queued,
       kept: [
         for (final k in kept.values)
-          if (k.done > 0) k..full = fullAlbums.contains(k.name),
+          if (k.done > 0) k..full = fullAlbums.contains(k.key),
       ],
       failed: failed.values.toList(),
       used: used,

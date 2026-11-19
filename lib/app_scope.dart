@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'l10n/strings.dart';
 import 'library/covers.dart';
 import 'library/db.dart';
+import 'library/library_view.dart';
 import 'library/models.dart';
 import 'offline/device.dart';
 import 'offline/downloader.dart';
@@ -34,6 +35,7 @@ class AppScope extends InheritedWidget {
     this.device,
     this.localFolder,
     this.home,
+    this.libraryView,
     required super.child,
   }) : _eq = equalizer;
   final LibraryDb db;
@@ -62,6 +64,13 @@ class AppScope extends InheritedWidget {
 
   /// « À la maison » (Wi-Fi et un serveur qui répond) : le Top 100 se garde alors tout seul.
   final HomeState? home;
+
+  /// La bibliothèque comme les écrans la montrent : les comptes du mode d'affichage et les
+  /// fichiers du téléphone, un morceau présent sur plusieurs comptes une seule fois.
+  final LibraryView? libraryView;
+
+  /// [libraryView], ou sans elle (tests, Mac) tous les comptes.
+  LibraryView get library => libraryView ?? LibraryView.of(db);
 
   /// Ce morceau peut-il partir maintenant ? (copie gardée, ou serveur qui répond ; fichier présent)
   /// Sans service de comptes (tests, Mac) : oui. Lit le disque : à appeler une fois par construction.

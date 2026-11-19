@@ -40,8 +40,8 @@ class NamesScreen extends StatelessWidget {
                     title: name.isEmpty ? s.unknownArtist : name,
                     artist: artists ? name : null,
                     tracks: artists
-                        ? app.db.watchArtistTracks(name)
-                        : app.db.watchGenreTracks(name),
+                        ? app.library.artistTracks(name)
+                        : app.library.genreTracks(name),
                   ),
                 ),
               ),

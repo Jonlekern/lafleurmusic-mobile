@@ -175,16 +175,18 @@ class Downloader extends ChangeNotifier {
     ];
     final batch = _albumOrder(remote);
     final fresh = <Track>[]; // ni terminés ni déjà en file
-    final toQueue = <Track>[];
+    final toQueue = <String>[];
     final done = <String>[];
     for (final t in batch) {
-      final state = (await db.offlineOf(t.path))?.state;
-      if (state == OfflineState.done.name) {
-        done.add(t.path);
+      // le même morceau sur un autre compte, déjà gardé ou en file : pas de seconde copie
+      final row = await db.offlineOf(t.path) ?? await db.twinOffline(t.path);
+      final path = row?.trackPath ?? t.path;
+      if (row?.state == OfflineState.done.name) {
+        done.add(path);
         continue;
       }
-      toQueue.add(t);
-      if (state != OfflineState.queued.name) fresh.add(t);
+      toQueue.add(path);
+      if (row?.state != OfflineState.queued.name) fresh.add(t);
     }
     // une copie déjà faite par le Top 100 devient celle de l'utilisateur : plus jamais retirée toute seule
     await db.queueOffline(done, reason);
@@ -216,11 +218,9 @@ class Downloader extends ChangeNotifier {
         return KeepResult.tooBig(over > need - free ? over : need - free);
       }
     }
-    await db.queueOffline([for (final t in toQueue) t.path], reason);
+    await db.queueOffline(toQueue, reason);
     // un « Garder » de l'utilisateur lève le blocage du Top 100
-    if (reason == OfflineReason.user) {
-      await db.unblockAutoKeep([for (final t in toQueue) t.path]);
-    }
+    if (reason == OfflineReason.user) await db.unblockAutoKeep(toQueue);
     _accessDenied = false;
     if (reason == OfflineReason.user) _userPaused = false;
     start();

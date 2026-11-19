@@ -165,11 +165,29 @@ class AccountService extends ChangeNotifier {
   String? _root, _docs;
   CopyRoot? _copyRoot; // the reachable copies' folder, as of the last [refreshRoot]
   StreamSubscription<Map<String, OfflineRow>>? _keptSub;
+  // songs on several rows: merge key → (path, account), local files then the accounts' order
+  Map<String, List<(String, String)>> _twins = const {};
+  // the same, by path of each row (playableNow runs for every row of a list)
+  Map<String, List<(String, String)>> _twinsOf = const {};
+  StreamSubscription<Map<String, List<(String, String)>>>? _twinsSub;
 
   /// Follows the offline rows so [playableNow] can answer at once. The folder is read on
   /// [refreshRoot] only (a folder change calls it); an emit of the same rows notifies nobody.
   Future<void> watchOffline() async {
     await refreshRoot();
+    await _twinsSub?.cancel();
+    _twinsSub = _db.watchTwins().listen((m) {
+      // a sync writes often: the same twins notify nobody
+      final same =
+          m.length == _twins.length &&
+          m.entries.every((e) => listEquals(e.value, _twins[e.key]));
+      _twins = m;
+      _twinsOf = {
+        for (final rows in m.values)
+          for (final r in rows) r.$1: rows,
+      };
+      if (!same && !_disposed) notifyListeners();
+    });
     await _keptSub?.cancel();
     _keptSub = _db.watchOffline().listen((m) async {
       if (mapEquals(m, _kept)) return;
@@ -208,31 +226,49 @@ class AccountService extends ChangeNotifier {
       ? p.join(_docs!, path.substring(docsScheme.length))
       : path;
 
-  /// Can this track start now? A local file: it exists. A server track: its finished copy
-  /// exists, or its account hasn't been found unreachable. The track playing is never
-  /// asked: it finishes if it is in memory; only the NEXT choice uses this.
+  /// Can this track start now? A local file: it exists. A server track: one of its rows
+  /// (the same song on other accounts, a file on the phone: [MediaResolver.media]) can — a
+  /// finished copy that exists, a file that exists, or an account not found unreachable.
+  /// The track playing is never asked: it finishes if it is in memory; only the NEXT
+  /// choice uses this.
   bool playableNow(Track t) {
     // a file iCloud put aside (`.name.icloud`) counts: iOS fetches it on open (online)
     if (parseRemoteKey(t.path) == null) {
       return fileOrPlaceholderExists(_absolute(t.path));
     }
-    final row = _kept[t.path];
+    final rows = [
+      (t.path, t.accountId),
+      // the same song elsewhere (another row of its own account is another song)
+      for (final r in _twinsOf[t.path] ?? const <(String, String)>[])
+        if (r.$2 != t.accountId) r,
+    ];
+    if (rows.any((r) => r.$2 != 'local' && _keptCopyExists(r.$1))) return true;
+    if (rows.any(
+      (r) => r.$2 == 'local' && fileOrPlaceholderExists(_absolute(r.$1)),
+    )) {
+      return true;
+    }
+    return rows.any(
+      (r) => r.$2 != 'local' && stateOf(r.$2) != AccountState.absent,
+    );
+  }
+
+  bool _keptCopyExists(String path) {
+    final row = _kept[path];
     final rel = row?.filePath;
     final root = _root;
-    if (row != null &&
+    return row != null &&
         row.state == OfflineState.done.name &&
         rel != null &&
         root != null &&
-        fileOrPlaceholderExists(p.join(root, rel))) {
-      return true;
-    }
-    return stateOf(t.accountId) != AccountState.absent;
+        fileOrPlaceholderExists(p.join(root, rel));
   }
 
   @override
   void dispose() {
     _disposed = true;
     _keptSub?.cancel();
+    _twinsSub?.cancel();
     super.dispose();
   }
 

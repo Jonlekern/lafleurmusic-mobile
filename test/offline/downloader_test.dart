@@ -239,6 +239,26 @@ void main() {
     expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
   });
 
+  test('keep the row shown; a twin already kept or queued: no second copy, '
+      'and a Top 100 copy of the twin becomes the user\'s', () async {
+    final d = make();
+    await add(_t('1'));
+    await add(_t('1', acc: 'B')); // the same song on B
+    await add(_t('2', no: 2));
+    await add(_t('2', acc: 'B', no: 2));
+    await add(_t('3', no: 3));
+    await db.queueOffline(['subsonic://B/1'], OfflineReason.top100);
+    await db.markOfflineDone('subsonic://B/1', 'Art/Alb/01.mp3', 4);
+    await db.queueOffline(['subsonic://B/2'], OfflineReason.user);
+    final r = await d.keep([_t('1'), _t('2', no: 2), _t('3', no: 3)]);
+    expect(r.count, 1, reason: 'only acc/3 is new');
+    await d.whenIdle();
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    expect(await db.offlineOf('subsonic://acc/2'), isNull);
+    expect(await db.offlineOf('subsonic://acc/3'), isNotNull);
+    expect((await db.offlineOf('subsonic://B/1'))!.reason, 'user');
+  });
+
   test(
     'cancelAuto drops the top100 download in flight, user rows go on',
     () async {

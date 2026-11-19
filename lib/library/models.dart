@@ -47,11 +47,15 @@ class Track {
 /// Un album = une playlist (les albums compilés de Johnny).
 class Album {
   const Album({
+    required this.key,
     required this.name,
     required this.trackCount,
     required this.durationMs,
     this.coverTrackPath,
   });
+
+  /// Son identité, la même sur tous les comptes (`albumMergeKey`) : ce qu'on demande pour ses morceaux.
+  final String key;
   final String name;
   final int trackCount;
   final int durationMs;

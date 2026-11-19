@@ -54,7 +54,7 @@ void main() {
 
   Future<List<String>> paths() async => [
     for (final a in await db.watchAlbums().first)
-      ...(await db.watchAlbumTracks(a.name).first).map((t) => t.path),
+      ...(await db.watchAlbumTracks(a.key).first).map((t) => t.path),
   ];
 
   test('seulement les extensions de musique, sans ._ ni .DS_Store', () async {

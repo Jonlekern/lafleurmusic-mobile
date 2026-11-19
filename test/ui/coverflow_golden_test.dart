@@ -11,6 +11,7 @@ import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/covers.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/merge.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/theme/lafleur_theme.dart';
 import 'package:lafleurmusic/ui/cover_image.dart';
@@ -53,6 +54,17 @@ Future<FakePlayer> pump(WidgetTester tester, {int count = 7}) async {
   final albums = [
     for (var i = 0; i < count; i++)
       Album(
+        key: albumMergeKey(
+          Track(
+            path: '',
+            title: '',
+            artist: '',
+            album: names[i % 7],
+            durationMs: 0,
+            hasCover: false,
+            size: 0,
+          ),
+        ),
         name: names[i % 7],
         trackCount: 9,
         durationMs: 1,

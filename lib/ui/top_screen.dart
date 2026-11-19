@@ -18,7 +18,7 @@ class TopScreen extends StatelessWidget {
     final app = AppScope.of(context);
     final s = app.strings;
     return StreamBuilder<List<(Track, int)>>(
-      stream: app.db.watchTop(100),
+      stream: app.library.top(100),
       builder: (context, snap) {
         final rows = snap.data ?? const <(Track, int)>[];
         final tracks = [for (final r in rows) r.$1];

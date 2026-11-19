@@ -290,6 +290,47 @@ void main() {
         expect(service.playableNow(tr('${tmp.path}/x.mp3')), isTrue);
       });
 
+      test('the same song on two accounts: playable while one twin is; '
+          'both absent and nothing kept: not playable', () async {
+        final b = await accounts.add(
+          type: AccountType.subsonic,
+          name: 'M',
+          base: Uri.parse('http://h2'),
+          user: 'u',
+          password: 'pw',
+        );
+        Track song(String acc, String id) => Track(
+          path: 'subsonic://$acc/$id',
+          accountId: acc,
+          remoteId: id,
+          title: 'Night Swim',
+          artist: 'Lafleur Surf',
+          albumArtist: 'Lafleur Surf',
+          album: 'Summer Mix',
+          trackNo: 1,
+          durationMs: 1,
+          hasCover: false,
+          size: 1,
+        );
+        final ta = song(a.id, 's1'), tb = song(b.id, 't1');
+        await db.upsertTracks([ta, tb]);
+        await pumpEventQueue();
+        await service.checkAll([
+          a.id,
+        ]); // A absent, B never checked (P8: reachable)
+        expect(service.playableNow(ta), isTrue);
+        await service.checkAll([b.id]);
+        expect(service.playableNow(ta), isFalse);
+        expect(service.playableNow(tb), isFalse);
+        await db.queueOffline([tb.path], OfflineReason.user);
+        await db.markOfflineDone(tb.path, 'L/t1.mp3', 1);
+        File('${tmp.path}/L/t1.mp3')
+          ..createSync(recursive: true)
+          ..writeAsBytesSync([1]);
+        await pumpEventQueue();
+        expect(service.playableNow(ta), isTrue, reason: 'kept copy of B');
+      });
+
       test('an offline emit does not read the folder again; same rows: no notification', () async {
         final k = 'subsonic://${a.id}/s1';
         await db.queueOffline([k], OfflineReason.user);
