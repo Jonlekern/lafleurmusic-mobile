@@ -56,5 +56,5 @@
 
 ### Task 4: Bout en bout et documents
 
-- [x] Step 1: essai d'intégration : passer en Classic, choisir un album à la molette, jouer, revenir en mode normal ; simulateur iPhone + job Android ; CI verte.
+- [ ] Step 1: essai d'intégration : passer en Classic, choisir un album à la molette, jouer, revenir en mode normal ; simulateur iPhone + job Android ; CI verte.
 - [x] Step 2: README et checklist. Commit `docs: plan 6 Classic mode status`.

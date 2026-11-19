@@ -5,9 +5,9 @@
 //
 // Home → Settings → Classic mode → the Classic menu shows → with the wheel (real finger turns on
 // the ring, presses in the middle): Albums → the album → its second song → Classic Now Playing
-// shows and the song plays past 1 s → MENU back to the menu → Settings row → Normal mode →
-// Home shows and the same song keeps playing (repeated: the test song is short), the volume
-// back to full.
+// shows and the song plays past 1 s → the wheel turns the volume down → MENU back to the menu
+// → Settings row → Normal mode → Home shows and the same song keeps playing, not started again
+// (same player, no new stream; repeated: the test song is short), the volume back to full.
 //
 // Same clean start as the other runs (own library folder deleted first, own keychain / Keystore
 // namespace emptied first and last) and the same safe cleanup (`mountGuarded`).
@@ -76,12 +76,13 @@ Future<void> pressMenu(WidgetTester tester) async {
   await settle(tester);
 }
 
-/// The chosen (pink) row of the Classic list on screen.
+/// The chosen (pink) row of the Classic list on screen; null while a page slides (two lists).
 String? chosen(WidgetTester tester) {
   final rows = tester
-      .widgetList<ClassicRow>(find.byType(ClassicRow))
-      .where((r) => r.selected);
-  return rows.isEmpty ? null : rows.single.label;
+      .widgetList<ClassicRow>(find.byType(ClassicRow).hitTestable())
+      .where((r) => r.selected)
+      .toList();
+  return rows.length == 1 ? rows.single.label : null;
 }
 
 /// Waits until the chosen row is [label].
@@ -137,6 +138,10 @@ void main() {
       );
       final s = app.strings;
       final player = app.player;
+      // passing or not, the sound stops at the end
+      addTearDown(() async {
+        if (player.current.playing) await player.toggle();
+      });
       await tester.pumpWidget(app);
       await tester.pump(const Duration(seconds: 1));
       expect(app.classicMode.value, isFalse); // normal mode by default
@@ -184,17 +189,26 @@ void main() {
 
       // Classic Now Playing, and the song really plays past 1 s
       await pumpUntil(tester, find.byType(ClassicNow));
-      // the test song is about 3 s long: repeat it, so it is still playing at the switch
+      // the test song is about 3 s long: once it is the current song, repeat it, so it is
+      // still playing at the switch
+      final queued = DateTime.now().add(const Duration(seconds: 30));
+      while (player.queue == null ||
+          player.current.track?.title != 'Surf Break') {
+        if (DateTime.now().isAfter(queued)) {
+          fail('Surf Break not current: ${player.current.track?.title}');
+        }
+        await tester.pump(const Duration(milliseconds: 50));
+      }
       for (var i = 0; i < 3 && player.queue?.repeat != Repeat.one; i++) {
         await player.cycleRepeat();
       }
       expect(player.queue?.repeat, Repeat.one);
-      final end = DateTime.now().add(const Duration(seconds: 10));
+      final end = DateTime.now().add(const Duration(seconds: 30));
       while (!(player.current.track?.title == 'Surf Break' &&
           player.current.position > const Duration(seconds: 1))) {
         if (DateTime.now().isAfter(end)) {
           fail(
-            'Not past 1 s within 10 s: ${player.current.track?.title} '
+            'Not past 1 s within 30 s: ${player.current.track?.title} '
             'at ${player.current.position}; server saw ${server.requests}',
           );
         }
@@ -207,6 +221,11 @@ void main() {
         'PREUVE Classic : ${player.current.track?.title} à '
         '${player.current.position} ; serveur : ${server.requests}',
       );
+
+      // turning on Now Playing is the volume: three notches up the other way → 85
+      expect(player.volume, 100);
+      await turn(tester, -3);
+      expect(player.volume, 100 - 3 * ClassicNow.volumeStep);
 
       // MENU → the song list, MENU again → Albums, again → the top menu
       await pressMenu(tester);
@@ -225,6 +244,9 @@ void main() {
 
       // Normal mode: Home again, the same song still playing
       final queue = [for (final t in player.queue!.order) t.path];
+      int streamCount() =>
+          server.requests.where((r) => r.method == 'stream').length;
+      final streamsBefore = streamCount();
       await tapSetting(tester, find.text(s.normalMode));
       await settle(tester);
       await pumpUntil(tester, find.byType(HomeScreen));
@@ -243,18 +265,18 @@ void main() {
         }
         await tester.pump(const Duration(milliseconds: 100));
       }
+      // not started again: the same player, no new stream asked of the server
+      expect(identical(app.player, player), isTrue);
+      expect(streamCount(), streamsBefore);
       expect(player.current.track?.title, 'Surf Break');
       expect(player.current.playing, isTrue);
       expect([for (final t in player.queue!.order) t.path], queue);
-      expect(player.volume, 100);
+      expect(player.volume, 100); // back to full: normal mode has no volume
       expect(server.requests.where((r) => r.status != 200), isEmpty);
       debugPrint(
         'PREUVE retour au mode normal : ${player.current.track?.title} à '
-        '${player.current.position}',
+        '${player.current.position} ; streams : ${streamCount()}',
       );
-
-      await player.toggle(); // pause
-      await tester.pump(const Duration(milliseconds: 200));
     },
   );
 }
