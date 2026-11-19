@@ -173,6 +173,10 @@ abstract interface class SongResolving {
   /// `PlexException` with status 404: this song only is refused). [batch]: a run over many
   /// songs (offline copies): the rest of the song's album may be read at once.
   Future<void> resolveSong(String songId, {bool batch = false});
+
+  /// The server refused the file found for [songId] (404: it was rescanned): forgets that
+  /// address, and the album's, so the next [resolveSong] asks the server again.
+  Future<void> forgetSong(String songId);
 }
 
 /// A source reached over HTTP: its client also fetches the covers (same connection pool, mockable in tests).

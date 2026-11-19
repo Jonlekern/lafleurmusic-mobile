@@ -65,7 +65,12 @@ class KeepResult {
 /// comme un échec. Un autre refus pour ce morceau (5xx, 429, 401/403, page de proxy,
 /// compte sans source) l'envoie derrière, sans compter, et son compte attend le tour
 /// suivant ; le réseau et le disque arrêtent la file.
-class _Refusal implements Exception {}
+class _Refusal implements Exception {
+  _Refusal({this.fileGone = false});
+
+  /// The server answered 404 for the file's address (not for the song itself).
+  final bool fileGone;
+}
 
 /// Ce que la boucle fait après un morceau.
 enum _Next { go, skipAccount, stop }
@@ -601,7 +606,10 @@ class Downloader extends ChangeNotifier {
     final done = Completer<void>();
     active.done = done.future;
     try {
-      await _download(row, active); // null : abandonné (pause), reste en file
+      await _downloadRetrying(
+        row,
+        active,
+      ); // null : abandonné (pause), reste en file
       return _Next.go;
     } catch (e) {
       if (active.cancelled) return _Next.go; // pause ou oubli : pas un échec
@@ -635,6 +643,21 @@ class Downloader extends ChangeNotifier {
       e is TimeoutException ||
       e is http.ClientException ||
       e is SourceNetworkException;
+
+  /// [_download], and when the server says 404 to a Plex file address (it was rescanned: the
+  /// Part key changed), the address is looked up again and the file asked once more.
+  Future<String?> _downloadRetrying(OfflineRow row, _Active active) async {
+    try {
+      return await _download(row, active);
+    } on _Refusal catch (e) {
+      final key = parseRemoteKey(row.trackPath);
+      if (!e.fileGone || key == null || active.cancelled) rethrow;
+      final source = await resolver.source(key.$1);
+      if (source is! SongResolving) rethrow;
+      await (source as SongResolving).forgetSong(key.$2);
+      return _download(row, active);
+    }
+  }
 
   /// Télécharge le morceau ; renvoie le chemin relatif, null si abandonné.
   Future<String?> _download(OfflineRow row, _Active active) async {
@@ -824,7 +847,7 @@ class Downloader extends ChangeNotifier {
     } else {
       await res.stream.drain<void>().timeout(requestTimeout);
     }
-    throw notFound ? _Refusal() : StateError('server refused');
+    throw notFound ? _Refusal(fileGone: true) : StateError('server refused');
   }
 
   /// `Artiste/Album/NN Titre.ext`, sans écraser un fichier existant ni un nom déjà donné.

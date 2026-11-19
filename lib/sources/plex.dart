@@ -34,6 +34,7 @@ class PlexSource
     this.timeout = requestTimeout,
     this.probeTimeout = plexProbeTimeout,
     DateTime Function()? now,
+    this._partsMax = 20000,
   }) : _now = now ?? DateTime.now,
        _custom = Map.unmodifiable(headers),
        _client = client ?? newServerClient(),
@@ -81,6 +82,7 @@ class PlexSource
     _cooldownUntil.clear();
     _refreshingNow.clear();
     _forgotten.clear();
+    onTokenRefused = null;
   }
 
   /// The background read of the addresses from plex.tv running for this account, if any.
@@ -264,7 +266,16 @@ class PlexSource
     }
   }
 
-  static PlexException _relink() => PlexException(
+  /// Called with the account's id whenever the server refuses its token (a 401, or no token):
+  /// the accounts screen then shows « À reconnecter » at once. Set by the account service.
+  static void Function(String accountId)? onTokenRefused;
+
+  PlexException _relink() {
+    onTokenRefused?.call(accountId);
+    return _refusedToken();
+  }
+
+  static PlexException _refusedToken() => PlexException(
     'Plex refused the token: a new code is needed',
     statusCode: 401,
     tokenRefused: true,
@@ -560,16 +571,21 @@ class PlexSource
     });
   }
 
-  /// How long a looked-up file address is trusted (the server may re-analyse its files).
+  /// How long a looked-up file address, and an album read, are trusted (the server may
+  /// re-analyse its files).
   static const partTtl = Duration(minutes: 30);
-  static const _partsMax = 20000;
-  final _parts = <String, ({String key, DateTime at})>{};
-  final _albumsRead = <String>{};
 
-  String? _partOf(String songId) {
+  /// A song looked up for playback is asked again after this: nothing can retry inside mpv,
+  /// so a stale address must not outlive one play.
+  static const playbackFresh = Duration(minutes: 1);
+  final int _partsMax;
+  final _parts = <String, ({String key, DateTime at})>{};
+  final _albumsRead = <String, DateTime>{};
+
+  String? _partOf(String songId, [Duration ttl = partTtl]) {
     final p = _parts[songId];
     if (p == null) return null;
-    if (_now().difference(p.at) >= partTtl) {
+    if (_now().difference(p.at) >= ttl) {
       _parts.remove(songId);
       return null;
     }
@@ -579,21 +595,30 @@ class PlexSource
   void _remember(String songId, Map m) {
     final key = _str(_firstPart(m)?['key']);
     if (key.isEmpty) return;
-    if (_parts.length >= _partsMax) {
+    if (_parts.length >= _partsMax && !_parts.containsKey(songId)) {
       _parts.clear();
       _albumsRead.clear();
     }
     _parts[songId] = (key: key, at: _now());
   }
 
+  @override
+  Future<void> forgetSong(String songId) async {
+    // a rescan changes the keys of the whole album, and which album it was is not kept
+    _parts.clear();
+    _albumsRead.clear();
+  }
+
   /// Looks the file of [songId] up (`GET /library/metadata/{id}`; its first Part). [batch]:
-  /// the song's album is then read once (`/children`, one request for all its songs) so
-  /// the next songs of that album cost nothing; if that fails, songs are read one by one.
-  /// A song the server doesn't have, or without a file, is a 404 [PlexException].
+  /// a download run: what the song's album gave is used, and the album is then read once
+  /// (`/children`, one request for all its songs) so the next songs cost nothing; if that
+  /// fails, songs are read one by one. Playback ([batch] false) asks again when its answer
+  /// is older than [playbackFresh]. A song the server doesn't have, or without a file, is a
+  /// 404 [PlexException].
   @override
   Future<void> resolveSong(String songId, {bool batch = false}) async {
     await prepare();
-    if (_partOf(songId) != null) return;
+    if (_partOf(songId, batch ? partTtl : playbackFresh) != null) return;
     final d = await _get('library/metadata/$songId');
     final raw = d['Metadata'];
     final m = raw is List && raw.isNotEmpty && raw.first is Map
@@ -602,12 +627,17 @@ class PlexSource
     if (m == null) {
       throw PlexException('song not found', statusCode: 404);
     }
+    _parts.remove(songId);
     _remember(songId, m);
     if (_partOf(songId) == null) {
       throw PlexException('song has no file', statusCode: 404);
     }
     final album = _str(m['parentRatingKey']);
-    if (batch && album.isNotEmpty && _albumsRead.add(album)) {
+    final read = _albumsRead[album];
+    if (batch &&
+        album.isNotEmpty &&
+        (read == null || _now().difference(read) >= partTtl)) {
+      _albumsRead[album] = _now();
       try {
         await for (final items in _pages('library/metadata/$album/children')) {
           for (final t in items) {

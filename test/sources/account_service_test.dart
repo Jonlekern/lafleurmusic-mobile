@@ -12,6 +12,7 @@ import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
+import 'package:lafleurmusic/sources/plex.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/sources/subsonic.dart';
 
@@ -119,6 +120,24 @@ void main() {
     Future<List<String>> trackAccounts() async => [
       for (final t in await db.watchAllTracks().first) t.accountId,
     ];
+
+    test('a Plex token refused while playing or downloading flips the account to « À reconnecter » at once', () async {
+      final service = AccountService(
+        accounts,
+        db: db,
+        sourceOf: (_) async => _CountingSource(a.id),
+        wait: (_) => Completer<void>().future,
+      );
+      var notified = 0;
+      service.addListener(() => notified++);
+      expect(PlexSource.onTokenRefused, isNotNull);
+      PlexSource.onTokenRefused!(a.id);
+      expect(service.stateOf(a.id), AccountState.relink);
+      expect(service.mayAnswer(a.id), isFalse);
+      expect(notified, 1);
+      service.dispose();
+      expect(PlexSource.onTokenRefused, isNull);
+    });
 
     test(
       'an edit never changes the type: a Subsonic account stays Subsonic',

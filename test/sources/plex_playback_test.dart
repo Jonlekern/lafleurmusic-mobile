@@ -1,116 +1,10 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:lafleurmusic/library/play_counter.dart' show scrobbleRefused;
 import 'package:lafleurmusic/sources/plex.dart';
 import 'package:lafleurmusic/sources/plex_link.dart';
 import 'package:lafleurmusic/sources/source.dart';
 
 import 'fake_plex.dart';
-import 'fake_secret_store.dart';
-
-const albumOf = {
-  '101': '11',
-  '102': '11',
-  '121': '12',
-  '122': '12',
-  '211': '21',
-};
-
-/// A fake Plex Media Server: songs (`/library/metadata/{id}`), albums' children, listens.
-class Pms {
-  final pms = FakePms();
-  final log = <http.Request>[];
-  Set<String> gone = {}; // songs the server doesn't have
-  Set<String> noPart = {}; // songs that have no file
-  Set<String> childrenFailing = {};
-  Map<String, int> scrobbleStatus = {}; // per key
-  int songStatus = 200; // forced status for a song read
-  bool twoParts = false;
-
-  Map song(String id) {
-    final file = File('test/fixtures/plex/children_${albumOf[id]}.json');
-    final items =
-        (jsonDecode(file.readAsStringSync())['MediaContainer']['Metadata']
-                as List)
-            .cast<Map>();
-    final m = Map.of(items.firstWhere((m) => m['ratingKey'] == id));
-    m['parentRatingKey'] = albumOf[id];
-    if (noPart.contains(id)) {
-      m['Media'] = [<String, Object?>{}];
-    } else if (twoParts) {
-      final media = Map.of((m['Media'] as List).first as Map);
-      media['Part'] = [
-        ...(media['Part'] as List),
-        {'id': 9, 'key': '/library/parts/9/1/file.wav', 'size': 1},
-      ];
-      m['Media'] = [media];
-    }
-    return m;
-  }
-
-  bool isDown(http.Request r) => pms.down.contains(r.url.host);
-
-  Future<http.Response> handle(http.Request r) async {
-    final p = r.url.path;
-    if (isDown(r)) throw const SocketException('no route to host');
-    if (r.url.host == homeLocal || r.url.host == homeRemote) {
-      final one = RegExp(r'^/library/metadata/(\d+)$').firstMatch(p);
-      if (one != null) {
-        log.add(r);
-        final id = one.group(1)!;
-        if (songStatus != 200) return http.Response('', songStatus);
-        if (gone.contains(id) || !albumOf.containsKey(id)) {
-          return http.Response('', 404);
-        }
-        return jsonResponse(
-          jsonEncode({
-            'MediaContainer': {
-              'size': 1,
-              'Metadata': [song(id)],
-            },
-          }),
-        );
-      }
-      final kids = RegExp(r'^/library/metadata/(\d+)/children$').firstMatch(p);
-      if (kids != null) {
-        log.add(r);
-        final id = kids.group(1)!;
-        if (childrenFailing.contains(id)) return http.Response('', 500);
-        final f = File('test/fixtures/plex/children_$id.json');
-        return f.existsSync()
-            ? jsonResponse(f.readAsStringSync())
-            : http.Response('', 404);
-      }
-      if (p == '/:/scrobble') {
-        log.add(r);
-        final k = r.url.queryParameters['key'];
-        final code = scrobbleStatus[k] ?? 200;
-        return http.Response('', code);
-      }
-    }
-    return pms.handle(r);
-  }
-
-  PlexSource source({FakeSecretStore? secrets}) {
-    final s = secrets ?? FakeSecretStore();
-    s.data[PlexSource.tokenKey('acc1')] = 'server-token-home';
-    return PlexSource(
-      accountId: 'acc1',
-      server: PlexServer.fromResource(resourceJson(homeResource))!,
-      clientId: 'client-abc',
-      client: MockClient(handle),
-      secrets: s,
-      deviceName: 'iPhone',
-      platform: 'iOS',
-    );
-  }
-
-  List<String> get paths => [for (final r in log) r.url.path];
-}
 
 void main() {
   setUp(PlexSource.resetStateForTests);
@@ -225,21 +119,84 @@ void main() {
       () async {
         var now = DateTime(2026, 1, 1);
         final f = Pms();
-        final s = PlexSource(
-          accountId: 'acc1',
-          server: PlexServer.fromResource(resourceJson(homeResource))!,
-          clientId: 'c',
-          client: MockClient(f.handle),
-          secrets: FakeSecretStore()
-            ..data[PlexSource.tokenKey('acc1')] = 'server-token-home',
-          now: () => now,
-        );
+        final s = f.source(now: () => now);
         await s.resolveSong('101');
         now = now.add(const Duration(hours: 2));
         await s.resolveSong('101');
         expect(f.paths, ['/library/metadata/101', '/library/metadata/101']);
       },
     );
+
+    test(
+      'the album read is repeated once it is older than the delay',
+      () async {
+        var now = DateTime(2026, 1, 1);
+        final f = Pms();
+        final s = f.source(now: () => now);
+        await s.resolveSong('101', batch: true);
+        now = now.add(PlexSource.partTtl + const Duration(minutes: 1));
+        await s.resolveSong('102', batch: true); // its entry expired too
+        expect(f.paths.where((p) => p.endsWith('/children')), hasLength(2));
+        expect(
+          f.paths.where((p) => p == '/library/metadata/102'),
+          hasLength(1),
+        );
+      },
+    );
+
+    test('a download run uses what the album gave; a single stream re-reads after a minute', () async {
+      var now = DateTime(2026, 1, 1);
+      final f = Pms();
+      final s = f.source(now: () => now);
+      await s.resolveSong('101', batch: true);
+      now = now.add(const Duration(minutes: 5));
+      await s.resolveSong(
+        '102',
+        batch: true,
+      ); // from the album read: no request
+      expect(f.paths, [
+        '/library/metadata/101',
+        '/library/metadata/11/children',
+      ]);
+      await s.resolveSong(
+        '102',
+      ); // playback: asks again (the server may have rescanned)
+      expect(f.paths.last, '/library/metadata/102');
+    });
+
+    test(
+      'forgetSong drops the song and its album: the next look-up asks again',
+      () async {
+        final f = Pms();
+        final s = f.source();
+        await s.resolveSong('101', batch: true);
+        await s.forgetSong('101');
+        expect(() => s.streamUri('101'), throwsStateError);
+        await s.resolveSong('102', batch: true);
+        expect(f.paths.where((p) => p.endsWith('/children')), hasLength(2));
+      },
+    );
+
+    test('the cache is cleared when it reaches its cap', () async {
+      final f = Pms();
+      final s = f.source(partsMax: 2);
+      await s.resolveSong('101');
+      await s.resolveSong('102');
+      await s.resolveSong('121'); // full: cleared, then 121 only
+      expect(s.streamUri('121').path, contains('/library/parts/'));
+      expect(() => s.streamUri('101'), throwsStateError);
+      expect(() => s.streamUri('102'), throwsStateError);
+    });
+
+    test('a token refusal is reported to the account', () async {
+      final f = Pms()..songStatus = 401;
+      final seen = <String>[];
+      PlexSource.onTokenRefused = seen.add;
+      final s = f.source();
+      await expectLater(s.resolveSong('101'), throwsA(isA<PlexException>()));
+      await expectLater(s.renewAuth(), throwsA(isA<PlexException>()));
+      expect(seen, ['acc1', 'acc1']);
+    });
 
     test(
       '404 is a refusal of this song; 401 asks for a new code; 500 is neither',

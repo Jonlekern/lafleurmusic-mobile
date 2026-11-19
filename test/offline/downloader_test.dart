@@ -19,9 +19,8 @@ import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/tags/tag_reader.dart';
 import 'package:lafleurmusic/tags/tag_writer.dart';
 
-import '../sources/fake_plex.dart' show homeLocal;
+import '../sources/fake_plex.dart' show Pms, homeLocal;
 import '../sources/fake_secret_store.dart';
-import '../sources/plex_playback_test.dart' show Pms;
 
 const _mb = 1024 * 1024;
 
@@ -995,6 +994,47 @@ void main() {
       await d.whenIdle();
       final row = (await db.offlineOf('plex://acc1/101'))!;
       expect((row.state, row.failures), ('queued', 0));
+    });
+
+    test('404 on the file after a rescan: the address is looked up again, once, and the copy is made', () async {
+      var gone = 2; // the original, then the stream
+      handler = (r) async {
+        if (r.url.path.contains('/1010/') && gone > 0) {
+          gone--;
+          return _ok([], code: 404); // the old Part key
+        }
+        return _ok([1, 2, 3, 4], type: 'audio/flac');
+      };
+      final d = makePlex(plex());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      final row = (await db.offlineOf('plex://acc1/101'))!;
+      expect((row.state, row.failures), ('done', 0));
+      expect(pms.paths.where((p) => p == '/library/metadata/101'), hasLength(2));
+    });
+
+    test('404 on the file again after the second look-up: refused, counted', () async {
+      handler = (r) async => _ok([], code: 404);
+      final d = makePlex(plex());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      expect((await db.offlineOf('plex://acc1/101'))!.failures, greaterThan(0));
+      // each try: original + stream, then once more after a new look-up
+      expect(seen.length % 4, 0);
+    });
+
+    test('a revoked token is reported to the account at once', () async {
+      handler = (r) async => _ok([], code: 401);
+      final refused = <String>[];
+      PlexSource.onTokenRefused = refused.add;
+      addTearDown(PlexSource.resetStateForTests);
+      final d = makePlex(pms.source());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      expect(refused.toSet(), {'acc1'});
     });
 
     test('the server unreachable stops the queue, nothing counted', () async {

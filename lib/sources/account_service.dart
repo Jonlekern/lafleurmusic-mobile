@@ -113,7 +113,18 @@ class AccountService extends ChangeNotifier {
            LibrarySync(
              db,
              copyRoot: device == null ? null : () => _copyRootOf(device),
-           ).run;
+           ).run {
+    PlexSource.onTokenRefused = markTokenRefused;
+  }
+
+  /// A Plex token was refused while playing or downloading: « À reconnecter » at once (the
+  /// next check would find it too), so the downloads don't silently skip the account.
+  void markTokenRefused(String id) {
+    if (_disposed || _removed.contains(id)) return;
+    if (_results[id] == TestResult.tokenRevoked) return;
+    _results[id] = TestResult.tokenRevoked;
+    notifyListeners();
+  }
 
   final LibraryDb _db;
   final PlexLink Function(String clientId)? _plexLink;
@@ -339,6 +350,9 @@ class AccountService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    if (PlexSource.onTokenRefused == markTokenRefused) {
+      PlexSource.onTokenRefused = null;
+    }
     for (final id in _timers.keys.toList()) {
       _stopTimers(id);
     }

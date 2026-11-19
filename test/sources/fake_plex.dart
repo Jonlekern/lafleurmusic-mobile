@@ -4,7 +4,10 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lafleurmusic/sources/plex.dart';
 import 'package:lafleurmusic/sources/plex_link.dart';
+
+import 'fake_secret_store.dart';
 
 /// A fake plex.tv and fake Plex Media Servers (never the real ones). Addresses are
 /// documentation ranges (RFC 5737) dressed as plex.direct names.
@@ -197,3 +200,109 @@ class FakePlexTv {
 
 /// Decoded JSON of a resource above.
 Map resourceJson(String r) => jsonDecode(r) as Map;
+
+const albumOf = {
+  '101': '11',
+  '102': '11',
+  '121': '12',
+  '122': '12',
+  '211': '21',
+};
+
+/// A fake Plex Media Server: songs (`/library/metadata/{id}`), albums' children, listens.
+class Pms {
+  final pms = FakePms();
+  final log = <http.Request>[];
+  Set<String> gone = {}; // songs the server doesn't have
+  Set<String> noPart = {}; // songs that have no file
+  Set<String> childrenFailing = {};
+  Map<String, int> scrobbleStatus = {}; // per key
+  int songStatus = 200; // forced status for a song read
+  bool twoParts = false;
+
+  Map song(String id) {
+    final file = File('test/fixtures/plex/children_${albumOf[id]}.json');
+    final items =
+        (jsonDecode(file.readAsStringSync())['MediaContainer']['Metadata']
+                as List)
+            .cast<Map>();
+    final m = Map.of(items.firstWhere((m) => m['ratingKey'] == id));
+    m['parentRatingKey'] = albumOf[id];
+    if (noPart.contains(id)) {
+      m['Media'] = [<String, Object?>{}];
+    } else if (twoParts) {
+      final media = Map.of((m['Media'] as List).first as Map);
+      media['Part'] = [
+        ...(media['Part'] as List),
+        {'id': 9, 'key': '/library/parts/9/1/file.wav', 'size': 1},
+      ];
+      m['Media'] = [media];
+    }
+    return m;
+  }
+
+  bool isDown(http.Request r) => pms.down.contains(r.url.host);
+
+  Future<http.Response> handle(http.Request r) async {
+    final p = r.url.path;
+    if (isDown(r)) throw const SocketException('no route to host');
+    if (r.url.host == homeLocal || r.url.host == homeRemote) {
+      final one = RegExp(r'^/library/metadata/(\d+)$').firstMatch(p);
+      if (one != null) {
+        log.add(r);
+        final id = one.group(1)!;
+        if (songStatus != 200) return http.Response('', songStatus);
+        if (gone.contains(id) || !albumOf.containsKey(id)) {
+          return http.Response('', 404);
+        }
+        return jsonResponse(
+          jsonEncode({
+            'MediaContainer': {
+              'size': 1,
+              'Metadata': [song(id)],
+            },
+          }),
+        );
+      }
+      final kids = RegExp(r'^/library/metadata/(\d+)/children$').firstMatch(p);
+      if (kids != null) {
+        log.add(r);
+        final id = kids.group(1)!;
+        if (childrenFailing.contains(id)) return http.Response('', 500);
+        final f = File('test/fixtures/plex/children_$id.json');
+        return f.existsSync()
+            ? jsonResponse(f.readAsStringSync())
+            : http.Response('', 404);
+      }
+      if (p == '/:/scrobble') {
+        log.add(r);
+        final k = r.url.queryParameters['key'];
+        final code = scrobbleStatus[k] ?? 200;
+        return http.Response('', code);
+      }
+    }
+    return pms.handle(r);
+  }
+
+  PlexSource source({
+    FakeSecretStore? secrets,
+    DateTime Function()? now,
+    int? partsMax,
+  }) {
+    final s = secrets ?? FakeSecretStore();
+    s.data[PlexSource.tokenKey('acc1')] = 'server-token-home';
+    return PlexSource(
+      accountId: 'acc1',
+      server: PlexServer.fromResource(resourceJson(homeResource))!,
+      clientId: 'client-abc',
+      client: MockClient(handle),
+      secrets: s,
+      deviceName: 'iPhone',
+      platform: 'iOS',
+      now: now,
+      partsMax: partsMax ?? 20000,
+    );
+  }
+
+  List<String> get paths => [for (final r in log) r.url.path];
+}
