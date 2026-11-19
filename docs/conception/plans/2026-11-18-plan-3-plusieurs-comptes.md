@@ -60,6 +60,19 @@
 - [ ] Step 1: tests : même album sur A et B → une fois ; A absent → joue B ; copie gardée sur B → fichier ; mode Un compte = seulement A (+ local) ; Perso = cochés ; l'écoute part sur le compte qui a joué.
 - [ ] Step 2: échec, implémentation, verts. Commit `feat: merged library view and best-source playback`.
 
+### Task 2b: Chargement fiable après l'ajout d'un compte (retour de Johnny, 19.11.2026)
+
+Johnny a ajouté son compte Navidrome dans la 0.2.0 : « connecté », mais aucune musique ; il a fallu tirer la liste vers le bas pour qu'elle apparaisse.
+
+**Files:** Modify `lib/sources/account_service.dart`, `lib/library/sync.dart` · Test `test/sources/account_service_test.dart`, `test/library/sync_test.dart`
+
+**Interfaces:**
+- Produces : après l'ajout (ou la modification) d'un compte, une synchro tout de suite, **puis une deuxième 30 secondes plus tard** (demande de Johnny), et encore une si la précédente n'était pas complète (au plus 3 essais rapprochés) ; rien en double si une synchro tourne déjà.
+- Produces : un album qui ne se lit pas (`albumSongs` en erreur, réponse bizarre) est sauté ; les autres sont enregistrés ; la synchro est marquée incomplète (rien n'est effacé, règle R3) et réessayée.
+- Produces : la cause de l'échec de la première synchro est cherchée et notée dans le rapport (permission réseau local iOS refusée au premier essai ? synchro lancée avant la fin de l'enregistrement du compte ?).
+
+- [ ] Step 1: tests (synchro relancée après 30 s avec une horloge simulée ; un album en erreur n'empêche pas les autres ; pas de double synchro). Échec, implémentation, verts. Commit `fix: load the library reliably after adding an account`.
+
 ### Task 3: Nombres d'écoutes fusionnés
 
 **Files:** Modify `lib/library/db.dart` (`raisePlayCounts`, `addPlay`, `_topQuery`), `lib/library/sync.dart` · Test `test/library/plays_test.dart`, `test/library/sync_test.dart`
