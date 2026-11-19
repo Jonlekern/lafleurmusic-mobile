@@ -7,8 +7,8 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Écrans : reprendre ceux du Mac, empilés
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
-- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes » et 4 « Jellyfin » écrits et codés ; plans 5 à 7 ensuite
-- ⬜ Code (plans 1, 2, 3 et 4 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
+- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes », 4 « Jellyfin » et 6 « Mode Classic » écrits et codés ; plans 5 et 7 ensuite
+- ⬜ Code (plans 1, 2, 3, 4 et 6 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 
@@ -62,6 +62,8 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ En plus : section « Playlists du serveur » sous les albums (lecture seule, gardables) ; garder une playlist écrit un fichier `.m3u8` dans `Playlists/` (l'appli n'efface que ses propres fichiers)
 - ✅ Plan 3 fait : Cover Flow en couché (comptes et playlists compris), tablette = colonnes côte à côte
 - ✅ Plan 3 : visuels de la tablette, texte « Ouvrir l'album » du Cover Flow et texte « Morceau absent » validés par Johnny (19.11.2026)
+- ✅ Plan 6 fait : Mode Classic, un menu comme l'iPod et une molette à tourner du doigt ; En cours : tourner = volume, appui au milieu = avancer dans le morceau ; au choix dans Réglages › Affichage
+- ✅ Plan 6 essayé de bout en bout (faux serveur) : passer en Mode Classic, choisir un album et un morceau à la molette → il joue ; revenir au Mode normal → la musique continue
 
 ## Mode clair
 - ✅ L'affichage actuel = mode sombre
