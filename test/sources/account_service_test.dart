@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -308,37 +309,90 @@ void main() {
       const draft = AccountDraft(address: 'h:1', user: 'u', password: 'pw');
       Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 20));
 
-      test('remove cancels the pending 30 s pause (default timer)', () async {
-        final src = _CountingSource('x');
-        final service = AccountService(accounts, db: db, sourceOf: (_) async => src);
-        await service.save(draft, editing: a);
-        await settle();
+      test('remove cancels the pending 30 s pause (default timer)', () {
+        fakeAsync((fa) {
+          final src = _CountingSource('x');
+          final service = AccountService(accounts, db: db, sourceOf: (_) async => src);
+          service.save(draft, editing: a);
+          fa.flushMicrotasks();
+          fa.elapse(const Duration(milliseconds: 100));
+          expect(src.runs, 1);
+          service.remove(a.id);
+          fa.elapse(const Duration(seconds: 31));
+          fa.flushMicrotasks();
+          expect(src.runs, 1); // the pause was cancelled, no 2nd sync
+        });
+      });
+
+      test('default timer: without a remove the 2nd sync fires after 30 s; dispose cancels it', () {
+        fakeAsync((fa) {
+          final src = _CountingSource('x');
+          final service = AccountService(accounts, db: db, sourceOf: (_) async => src);
+          service.save(draft, editing: a);
+          fa.elapse(const Duration(seconds: 31));
+          expect(src.runs, 2);
+          final other = AccountService(accounts, db: db, sourceOf: (_) async => src);
+          other.save(draft, editing: a);
+          fa.elapse(const Duration(milliseconds: 100));
+          other.dispose();
+          fa.elapse(const Duration(seconds: 31));
+          expect(src.runs, 3); // `other`'s first sync only
+        });
+      });
+
+      AccountService svc(_CountingSource src, MediaResolver? r, DateTime Function() clock) =>
+          AccountService(accounts, db: db, resolver: r, sourceOf: r?.source ?? (_) async => src, clock: clock, wait: (_) => Completer<void>().future);
+
+      test('live server + one bad album: a later ok check does not sync again', () async {
+        final src = _CountingSource('x', failAlbums: true);
+        var now = DateTime(2026);
+        final service = svc(src, null, () => now);
+        await service.sync(a.id); // incomplete, but the server answers
         expect(src.runs, 1);
-        await service.remove(a.id);
-        service.dispose(); // cancels what is left
+        now = now.add(const Duration(hours: 1));
+        await service.checkAll([a.id]);
         await settle();
         expect(src.runs, 1);
       });
 
-      test('never completed a sync + later successful check: invalidates the source and syncs', () async {
-        final src = _CountingSource('x', failAlbums: true);
+      test('unreachable at sync time, then an ok check: fresh source and sync (iOS prompt)', () async {
+        final src = _CountingSource('x', failAlbums: true)..answer = TestResult.unreachable;
         var built = 0;
         final resolver = MediaResolver((id) async {
           built++;
           return src;
         });
-        final service = AccountService(accounts, db: db, resolver: resolver, wait: (_) => Completer<void>().future);
-        await service.sync(a.id); // incomplete
+        var now = DateTime(2026);
+        final service = svc(src, resolver, () => now);
+        await service.sync(a.id);
         expect(src.runs, 1);
         final before = built;
         src.failAlbums = false;
+        src.answer = TestResult.ok;
+        now = now.add(const Duration(minutes: 11));
         await service.checkAll([a.id]);
         await settle();
-        expect(src.runs, 2); // the check started a sync
-        expect(built, greaterThan(before)); // fresh source
+        expect(src.runs, 2);
+        expect(built, greaterThan(before));
         await service.checkAll([a.id]);
         await settle();
-        expect(src.runs, 2); // complete now: a check doesn't sync again
+        expect(src.runs, 2); // complete now
+      });
+
+      test('floor: no check-triggered sync within 10 min of the last sync start', () async {
+        final src = _CountingSource('x', failAlbums: true)..answer = TestResult.unreachable;
+        var now = DateTime(2026);
+        final service = svc(src, null, () => now);
+        await service.sync(a.id);
+        src.answer = TestResult.ok;
+        now = now.add(const Duration(minutes: 9));
+        await service.checkAll([a.id]);
+        await settle();
+        expect(src.runs, 1);
+        now = now.add(const Duration(minutes: 2));
+        await service.checkAll([a.id]);
+        await settle();
+        expect(src.runs, 2); // the retry was kept for later
       });
     });
 
@@ -797,12 +851,13 @@ class _CountingSource implements MusicSource {
   @override
   final String accountId;
   bool failAlbums;
+  TestResult answer = TestResult.ok;
   final bool gated;
   final gate = Completer<void>();
   int runs = 0, active = 0, maxActive = 0;
 
   @override
-  Future<TestResult> test() async => TestResult.ok;
+  Future<TestResult> test() async => answer;
 
   @override
   Stream<List<SourceAlbum>> albums({int pageSize = 500}) async* {

@@ -97,7 +97,9 @@ class AccountService extends ChangeNotifier {
     this.forgetCovers,
     this.device,
     Future<void> Function(Duration)? wait,
-  }) : _wait = wait, // ignore: prefer_initializing_formals
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now,
+       _wait = wait, // ignore: prefer_initializing_formals
        _db = db,
        _sourceOf = sourceOf ?? resolver?.source ?? accounts.source,
        _sync =
@@ -111,6 +113,16 @@ class AccountService extends ChangeNotifier {
 
   /// Pause between the quick syncs after a save (a fake clock in tests).
   final Future<void> Function(Duration)? _wait;
+  final DateTime Function() _clock;
+
+  /// A check that finds the server answering restarts a sync no sooner than this after the
+  /// last sync began.
+  static const checkSyncFloor = Duration(minutes: 10);
+
+  // accounts whose last sync was incomplete while the server did NOT answer (network down,
+  // iOS local-network prompt…): the next check that finds it answering syncs again
+  final _retryOnOk = <String>{};
+  final _lastStart = <String, DateTime>{};
   final _timers = <String, Set<Timer>>{};
 
   void _stopTimers(String id) {
@@ -435,6 +447,7 @@ class AccountService extends ChangeNotifier {
     _removed.add(id);
     _bump(id);
     _rerun.remove(id);
+    _retryOnOk.remove(id);
     _chain[id] = (_chain[id] ?? 0) + 1; // no follow-up sync after the removal
     _stopTimers(id);
     _cancel[id]?.cancelled = true;
@@ -477,9 +490,12 @@ class AccountService extends ChangeNotifier {
       await _flushPending(id);
       // The server answers now but the last sync did not finish (the iOS local-network prompt was
       // answered late, say): drop the source built meanwhile and sync.
-      if (_lastComplete[id] == false &&
+      final last = _lastStart[id];
+      if (_retryOnOk.contains(id) &&
           !_removed.contains(id) &&
-          !_syncing.containsKey(id)) {
+          !_syncing.containsKey(id) &&
+          (last == null || _clock().difference(last) >= checkSyncFloor)) {
+        _retryOnOk.remove(id);
         resolver?.invalidate(id);
         unawaited(sync(id));
       }
@@ -551,6 +567,7 @@ class AccountService extends ChangeNotifier {
   Future<void> _syncOnce(String id) async {
     final gen = _genOf(id);
     final flag = _cancel[id] = _CancelFlag();
+    _lastStart[id] = _clock();
     TestResult r;
     try {
       final s = _CancellableSource(await _sourceOf(id), flag);
@@ -558,8 +575,13 @@ class AccountService extends ChangeNotifier {
       if (flag.cancelled) return;
       _lastComplete[id] = done.complete;
       r = done.complete ? TestResult.ok : await _timed(s);
+      if (done.complete || r == TestResult.ok) {
+        _retryOnOk.remove(id);
+      }
+      if (!done.complete && r != TestResult.ok) _retryOnOk.add(id);
     } catch (_) {
       _lastComplete[id] = false;
+      _retryOnOk.add(id);
       r = TestResult.unreachable;
     }
     _record(id, gen, r);

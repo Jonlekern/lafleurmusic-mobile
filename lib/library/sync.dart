@@ -28,7 +28,7 @@ class LibrarySync {
 
   static Future<bool> _answers(MusicSource s) async {
     try {
-      return await s.test() == TestResult.ok;
+      return await s.test().timeout(const Duration(seconds: 10)) == TestResult.ok;
     } on Object {
       return false;
     }
