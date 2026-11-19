@@ -188,7 +188,9 @@ class LibraryDb extends _$LibraryDb {
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
-    onUpgrade: (m, from, to) async {
+    // tout ou rien : drift n'ouvre pas de transaction ici, et une appli tuée au milieu
+    // laisserait des colonnes ajoutées sous l'ancienne version (« duplicate column » ensuite)
+    onUpgrade: (m, from, to) => transaction(() async {
       if (from < 2) {
         await m.createTable(offline);
         await m.createTable(pendingScrobbles);
@@ -203,10 +205,11 @@ class LibraryDb extends _$LibraryDb {
         await m.createTable(playlistItems);
         await m.createTable(keptPlaylists);
         await m.createTable(keepOrigins);
-        // les copies gardées par l'utilisateur avant la v4 : gardées pour elles-mêmes
+        // les copies gardées par l'utilisateur avant la v4 : raison inconnue (un album ou le
+        // morceau), qui n'empêche pas de retirer l'album (KeepOrigin.legacy)
         await customStatement(
-          "INSERT OR IGNORE INTO keep_origins (track_path, origin) "
-          "SELECT track_path, 'song' FROM offline WHERE reason = 'user'",
+          'INSERT OR IGNORE INTO keep_origins (track_path, origin) '
+          "SELECT track_path, 'legacy' FROM offline WHERE reason = 'user'",
         );
         await m.addColumn(playCounts, playCounts.imported);
         // la sync du plan 1 écrivait les écoutes du serveur dans `count` (raisePlayCounts)
@@ -229,7 +232,7 @@ class LibraryDb extends _$LibraryDb {
         });
         await _relinkAlbums({for (final r in rows) albumNameKey(r.album)});
       }
-    },
+    }),
   );
 
   /// Met en file les morceaux [trackPaths] ; ne rétrograde jamais `user` en `top100`.
@@ -372,6 +375,24 @@ class LibraryDb extends _$LibraryDb {
     variables: [Variable(trackPath)],
     updates: {offline},
   );
+
+  /// The queued row [from] is now [to]'s (a twin on an account that answers), in the same
+  /// place in the queue, with its reason. False if [from] is no longer queued or [to] has a row.
+  Future<bool> moveQueued(String from, String to) => transaction(() async {
+    final row = await offlineOf(from);
+    if (row == null || row.state != OfflineState.queued.name) return false;
+    if (await offlineOf(to) != null) return false;
+    await into(offline).insert(
+      OfflineCompanion.insert(
+        trackPath: to,
+        addedAt: row.addedAt,
+        reason: row.reason,
+        state: OfflineState.queued.name,
+      ),
+    );
+    await (delete(offline)..where((o) => o.trackPath.equals(from))).go();
+    return true;
+  });
 
   Future<void> removeOffline(List<String> trackPaths) => transaction(() async {
     for (var i = 0; i < trackPaths.length; i += 500) {
@@ -767,8 +788,11 @@ class LibraryDb extends _$LibraryDb {
   ];
 
   /// Retire les lignes [trackPaths] (seulement celles de [reason] si donné), en une
-  /// transaction, et rend `chemin du morceau -> fichier` de celles retirées.
-  Future<Map<String, String?>> takeOffline(
+  /// transaction, et rend `chemin du morceau -> (fichier, alike)` de celles retirées :
+  /// [alike] = les fichiers que d'autres lignes nomment encore et qui ne diffèrent du sien
+  /// que par la casse (tous alphabets) ; deux lignes peuvent nommer un même fichier (une
+  /// copie effacée à la main libère son nom), c'est à l'appelant de voir sur le disque.
+  Future<Map<String, ({String? rel, List<String> alike})>> takeOffline(
     List<String> trackPaths, {
     OfflineReason? reason,
   }) => transaction(() async {
@@ -781,19 +805,24 @@ class LibraryDb extends _$LibraryDb {
       taken[p] = row.filePath;
     }
     await removeOffline(taken.keys.toList());
-    // a file another row still names is not given back to delete (two rows can name one
-    // file: a copy deleted by hand frees its name for the next download)
-    for (final e in taken.entries.toList()) {
-      final rel = e.value;
-      if (rel == null) continue;
-      final shared = await customSelect(
-        'SELECT 1 FROM offline WHERE lower(file_path) = lower(?) LIMIT 1',
-        variables: [Variable.withString(rel)],
-        readsFrom: {offline},
-      ).get();
-      if (shared.isNotEmpty) taken[e.key] = null;
+    final byName = <String, List<String>>{};
+    if (taken.values.any((rel) => rel != null)) {
+      // en Dart : le lower() de SQLite ne connaît que l'ASCII (« Été » ≠ « été »)
+      for (final r in await (select(
+        offline,
+      )..where((o) => o.filePath.isNotNull())).get()) {
+        (byName[r.filePath!.toLowerCase()] ??= []).add(r.filePath!);
+      }
     }
-    return taken;
+    return {
+      for (final e in taken.entries)
+        e.key: (
+          rel: e.value,
+          alike: e.value == null
+              ? const <String>[]
+              : byName[e.value!.toLowerCase()] ?? const <String>[],
+        ),
+    };
   });
 
   /// Le Top 100 ne garde plus [trackPaths] tout seul (l'utilisateur les a retirés).
@@ -1497,6 +1526,10 @@ class LibraryDb extends _$LibraryDb {
     }
   }
 
+  /// [origin] keeps nothing any more (a kept playlist dropped).
+  Future<void> dropOrigin(String origin) =>
+      (delete(keepOrigins)..where((o) => o.origin.equals(origin))).go();
+
   /// Every reason to keep [paths] goes (the user removed them one by one).
   Future<void> clearOrigins(List<String> paths) async {
     for (var i = 0; i < paths.length; i += 500) {
@@ -1570,7 +1603,8 @@ class LibraryDb extends _$LibraryDb {
     return out;
   }
 
-  /// The playlists of a removed account go with it (a kept `.m3u8` stays on the phone).
+  /// The playlists of a removed account go with it; the `.m3u8` of a kept one is then
+  /// deleted by `PlaylistFiles` and its songs stay kept for themselves (rules Q10, Q15).
   Future<void> deleteAccountPlaylists(String accountId) async {
     await (delete(
       playlistItems,

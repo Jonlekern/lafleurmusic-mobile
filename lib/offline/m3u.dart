@@ -89,6 +89,8 @@ class PlaylistFiles {
       if (!await db.anyKept(paths)) {
         await _delete(root, k.fileName);
         await db.dropKeptPlaylist(k.accountId, k.playlistId);
+        // plus gardée : sa raison ne retient plus rien (un album retiré plus tard)
+        await db.dropOrigin(KeepOrigin.playlist(k.accountId, k.playlistId));
         continue;
       }
       final copies = await db.doneCopies(paths);

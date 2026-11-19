@@ -107,6 +107,8 @@ Future<LafleurApp> buildLafleurApp({
     device: device,
     settings: () async => settings,
     mayAutoDownload: () => home.atHome,
+    // un compte qui ne répond pas : ses morceaux viennent d'un jumeau qui répond
+    reachable: (id) => accountService.stateOf(id) != AccountState.absent,
   );
   downloader.followPlaylists(); // synchro, compte retiré : les .m3u8 suivent
   unawaited(downloader.resumeAtLaunch());
@@ -130,11 +132,17 @@ Future<LafleurApp> buildLafleurApp({
     topKeeper.refreshQuietly();
   });
   // un serveur revient : la file reprend (copies demandées par l'utilisateur)
+  // …ou un compte vient d'être vu injoignable : ses morceaux en file passent à un jumeau
   var wasOnline = accountService.anyConnected;
+  var wasAbsent = accountService.absentIds;
   accountService.addListener(() {
     final online = accountService.anyConnected;
-    if (online && !wasOnline) downloader.start();
+    final absent = accountService.absentIds;
+    if (online && (!wasOnline || !wasAbsent.containsAll(absent))) {
+      downloader.start();
+    }
     wasOnline = online;
+    wasAbsent = absent;
   });
   // fichiers posés à la main dans le dossier : relus au lancement, au retour au premier plan
   // et quand le dossier change (déplacement ou nouveau choix : refreshRoot prévient)

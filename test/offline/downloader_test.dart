@@ -36,6 +36,19 @@ class _Source implements MusicSource {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
+/// The source of account [accountId], on its own host.
+class _AccSource extends _Source {
+  _AccSource(this.accountId);
+  @override
+  final String accountId;
+  @override
+  Uri downloadUri(String id) =>
+      Uri.parse('https://$accountId.srv/rest/download?id=$id&t=SECRET');
+  @override
+  Uri streamUri(String id) =>
+      Uri.parse('https://$accountId.srv/rest/stream?id=$id&t=SECRET');
+}
+
 class _Device implements Device {
   _Device(this.root);
   Directory root;
@@ -316,23 +329,56 @@ void main() {
     );
   });
 
+  /// Two rows whose files differ only by case: one file where names ignore case
+  /// (iOS, Android shared storage, macOS), two files where they don't (Linux, app storage).
+  /// [b] is written last, so on a folder that ignores case both names hold B's bytes.
+  Future<(File, File)> caseTwins(String a, String b) async {
+    await add(_t('1'));
+    await add(_t('1', acc: 'B'));
+    final fa = File('${root.path}/$a')
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([1, 2, 3, 4]);
+    final fb = File('${root.path}/$b')
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([5, 6, 7, 8]);
+    await db.queueOffline(['subsonic://acc/1'], OfflineReason.top100);
+    await db.markOfflineDone('subsonic://acc/1', a, 4);
+    await db.queueOffline(['subsonic://B/1'], OfflineReason.user);
+    await db.markOfflineDone('subsonic://B/1', b, 4);
+    return (fa, fb);
+  }
+
+  bool sameFile(File a, File b) =>
+      a.existsSync() &&
+      b.existsSync() &&
+      FileSystemEntity.identicalSync(a.path, b.path);
+
   test('two rows naming one file (a copy deleted by hand, its name reused): '
       'forgetting one keeps the file the other uses', () async {
     final d = make();
-    await add(_t('1'));
-    await add(_t('1', acc: 'B'));
-    final f = File('${root.path}/Art/Alb/01 Song 1.mp3')
-      ..createSync(recursive: true)
-      ..writeAsBytesSync([1, 2, 3, 4]);
-    await db.queueOffline(['subsonic://acc/1'], OfflineReason.top100);
-    await db.markOfflineDone('subsonic://acc/1', 'Art/Alb/01 Song 1.mp3', 4);
-    await db.queueOffline(['subsonic://B/1'], OfflineReason.user);
-    await db.markOfflineDone('subsonic://B/1', 'art/alb/01 song 1.mp3', 4);
+    final (fa, fb) = await caseTwins(
+      'Art/Alb/01 Song 1.mp3',
+      'art/alb/01 song 1.mp3',
+    );
+    final one = sameFile(fa, fb);
     await d.forget(['subsonic://acc/1'], only: OfflineReason.top100);
     expect(await db.offlineOf('subsonic://acc/1'), isNull);
-    expect(f.existsSync(), isTrue, reason: 'B still plays it');
+    expect(fb.existsSync(), isTrue, reason: 'B still plays it');
+    // names that keep their case: acc's own file was another file, and it went
+    expect(fa.existsSync(), one);
     await d.forget(['subsonic://B/1']);
-    expect(f.existsSync(), isFalse);
+    expect(fb.existsSync(), isFalse);
+    expect(fa.existsSync(), isFalse);
+  });
+
+  test('the same file under names differing by an accented capital: the other '
+      'row keeps it', () async {
+    final d = make();
+    final (fa, fb) = await caseTwins('Été/Alb/01.mp3', 'été/Alb/01.mp3');
+    final one = sameFile(fa, fb);
+    await d.forget(['subsonic://acc/1'], only: OfflineReason.top100);
+    expect(fb.existsSync(), isTrue, reason: 'B still plays it');
+    expect(fa.existsSync(), one);
   });
 
   test(
@@ -1865,6 +1911,129 @@ void main() {
     });
   });
 
+  group('one account out of reach (LAN address away from home)', () {
+    var down = {'acc'};
+
+    /// The same album on acc (first in the accounts screen) and on B; acc's server
+    /// does not answer (a network error, the account marked unreachable).
+    Downloader twins() {
+      handler = (r) async {
+        if (r.url.host == 'acc.srv') throw const SocketException('no route');
+        return _ok([1, 2, 3, 4]);
+      };
+      return Downloader(
+        db: db,
+        resolver: MediaResolver((id) async => _AccSource(id)),
+        device: device,
+        settings: () async => settings,
+        client: () => _Client((r) {
+          seen.add(r);
+          return handler(r);
+        }),
+        tags: io,
+        reader: reader,
+        reachable: (id) => !down.contains(id),
+      );
+    }
+
+    setUp(() async {
+      down = {'acc'};
+      for (final (i, id) in ['acc', 'B'].indexed) {
+        await db
+            .into(db.accountRows)
+            .insert(
+              AccountRowsCompanion.insert(
+                id: id,
+                type: 'subsonic',
+                name: id,
+                base: 'https://music.example.com',
+                user: 'u',
+                position: i,
+              ),
+            );
+      }
+      for (var i = 1; i <= 2; i++) {
+        await add(_t('$i', no: i));
+        await add(_t('$i', acc: 'B', no: i));
+      }
+    });
+
+    test(
+      'keeping the album takes each song from the account that answers',
+      () async {
+        final d = twins();
+        final r = await d.keep([
+          _t('1'),
+          _t('2', no: 2),
+        ], origin: KeepOrigin.albumOf);
+        expect(r.ok, isTrue);
+        await d.whenIdle();
+        expect((await db.offlineOf('subsonic://B/1'))?.state, 'done');
+        expect((await db.offlineOf('subsonic://B/2'))?.state, 'done');
+        expect(await db.offlineOf('subsonic://acc/1'), isNull);
+        expect(seen.where((r) => r.url.host == 'acc.srv'), isEmpty);
+        // the album removal still finds them through the twins
+        expect(
+          await d.toForgetFrom(KeepOrigin.albumOf(_t('1')), [
+            'subsonic://acc/1',
+            'subsonic://acc/2',
+          ]),
+          ['subsonic://acc/1', 'subsonic://acc/2'],
+        );
+      },
+    );
+
+    test('songs queued on it (kept at home) move to a twin; a song with no '
+        'twin waits, and the other songs still download', () async {
+      await add(_t('3', no: 3)); // only on acc
+      await add(_t('9', acc: 'B', no: 9, album: 'Other'));
+      await db.queueOffline([
+        'subsonic://acc/3',
+        'subsonic://acc/1',
+        'subsonic://acc/2',
+        'subsonic://B/9',
+      ], OfflineReason.user);
+      final d = twins();
+      d.start();
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://B/1'))?.state, 'done');
+      expect((await db.offlineOf('subsonic://B/2'))?.state, 'done');
+      expect((await db.offlineOf('subsonic://B/9'))?.state, 'done');
+      expect(await db.offlineOf('subsonic://acc/1'), isNull);
+      final waiting = (await db.offlineOf('subsonic://acc/3'))!;
+      expect((waiting.state, waiting.failures), ('queued', 0));
+    });
+
+    test('a network error on an account not yet marked down still stops the '
+        'queue (the phone itself is offline)', () async {
+      down = {};
+      await db.queueOffline([
+        'subsonic://acc/1',
+        'subsonic://B/2',
+      ], OfflineReason.user);
+      final d = twins();
+      d.start();
+      await d.whenIdle();
+      expect((await db.offlineOf('subsonic://B/2'))?.state, 'queued');
+    });
+
+    test(
+      'a copy that failed on one account is tried again from a twin',
+      () async {
+        down = {};
+        await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+        for (var i = 0; i < 3; i++) {
+          await db.markOfflineFailed('subsonic://acc/1');
+        }
+        final d = twins();
+        await d.keep([_t('1')], origin: KeepOrigin.songOf);
+        await d.whenIdle();
+        expect(await db.offlineOf('subsonic://acc/1'), isNull);
+        expect((await db.offlineOf('subsonic://B/1'))?.state, 'done');
+      },
+    );
+  });
+
   group('keep origins (Q13)', () {
     final albumOrigin = KeepOrigin.albumOf(_t('1'));
     const albumPaths = [
@@ -1962,6 +2131,23 @@ void main() {
         );
       },
     );
+
+    test('a kept playlist with no copy left is dropped with its reasons: they '
+        'no longer hold its songs when their album is removed', () async {
+      final d = await both();
+      // its songs' rows went away (gone from the server meanwhile, for one)
+      await db.removeOffline([
+        'subsonic://acc/2',
+        'subsonic://acc/3',
+        'subsonic://acc/4',
+      ]);
+      await d.playlistFiles.refresh();
+      expect(await db.keptPlaylistRows(), isEmpty);
+      expect(await db.originsOf('subsonic://acc/2'), {albumOrigin});
+      await d.keep([_t('2', no: 2)], origin: KeepOrigin.albumOf);
+      await d.whenIdle();
+      expect(await d.toForgetFrom(albumOrigin, albumPaths), albumPaths);
+    });
 
     test('a Top 100 copy has no reason: an album removal takes it', () async {
       await add(_t('1'));

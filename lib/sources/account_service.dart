@@ -331,6 +331,12 @@ class AccountService extends ChangeNotifier {
   /// At least one server answered the last test.
   bool get anyConnected => _results.values.any((r) => r == TestResult.ok);
 
+  /// The accounts whose last test failed ([AccountState.absent] when not busy).
+  Set<String> get absentIds => {
+    for (final e in _results.entries)
+      if (e.value != TestResult.ok) e.key,
+  };
+
   /// A sync is running for at least one account.
   bool get syncing => _syncing.isNotEmpty;
 

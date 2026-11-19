@@ -84,6 +84,7 @@ class Downloader extends ChangeNotifier {
     TagFileIO? tags,
     TagReader? reader,
     this.mayAutoDownload,
+    this.reachable,
   }) : _client = client ?? newServerClient,
        _tags = tags ?? TagLibIO(),
        _reader = reader ?? TagLibReader();
@@ -95,6 +96,9 @@ class Downloader extends ChangeNotifier {
   final http.Client Function() _client;
   final TagFileIO _tags;
   final TagReader _reader;
+
+  /// Le compte [id] répond-il (pas marqué injoignable) ? Null : tous.
+  final bool Function(String id)? reachable;
 
   /// Les copies `top100` ne partent que si ceci répond vrai (à la maison) ; les `user` toujours.
   /// Quand ça redevient vrai, l'appelant refait [start].
@@ -262,15 +266,23 @@ class Downloader extends ChangeNotifier {
       final row = own == null || own.state == OfflineState.failed.name
           ? await db.twinOffline(t.path) ?? own
           : own;
-      final path = row?.trackPath ?? t.path;
-      // its own failed row gives way to the twin's copy (no retry of a second copy)
-      if (own != null && path != t.path) dropOwn.add(t.path);
-      if (row?.state == OfflineState.done.name) {
-        done.add(path);
+      if (row?.state == OfflineState.done.name ||
+          row?.state == OfflineState.queued.name) {
+        final path = row!.trackPath;
+        // its own failed row gives way to the twin's copy (no retry of a second copy)
+        if (own != null && path != t.path) dropOwn.add(t.path);
+        if (row.state == OfflineState.done.name) {
+          done.add(path);
+        } else {
+          toQueue.add(path);
+        }
         continue;
       }
-      toQueue.add(path);
-      if (row?.state != OfflineState.queued.name) fresh.add(t);
+      // aucune copie, ou seulement une en échec : un jumeau dont le compte répond
+      final from = await _sourceFor(t, ownFailed: own != null);
+      if (own != null && from.path != t.path) dropOwn.add(t.path);
+      toQueue.add(from.path);
+      fresh.add(from);
     }
     // une copie déjà faite par le Top 100 devient celle de l'utilisateur : plus jamais retirée toute seule
     await db.queueOffline(done, reason);
@@ -320,6 +332,23 @@ class Downloader extends ChangeNotifier {
     return KeepResult.queued(fresh.length, need);
   }
 
+  bool _answers(String path) {
+    final acc = parseRemoteKey(path)?.$1;
+    return acc == null || (reachable?.call(acc) ?? true);
+  }
+
+  /// D'où copier [t] : lui, sinon un jumeau (le même morceau sur un autre compte, dans
+  /// l'ordre de l'écran des comptes) si son compte à lui ne répond pas ; après un échec
+  /// sur [t] ([ownFailed]), un jumeau d'abord. Aucun ne répond : [t].
+  Future<Track> _sourceFor(Track t, {bool ownFailed = false}) async {
+    final others = [
+      for (final w in await db.twinsOf(t.path))
+        if (w.path != t.path && parseRemoteKey(w.path) != null) w,
+    ];
+    final order = ownFailed ? [...others, t] : [t, ...others];
+    return order.firstWhere((w) => _answers(w.path), orElse: () => t);
+  }
+
   /// « Garder » une playlist du serveur : ses morceaux (chacun une fois, les absents de son
   /// compte laissés de côté), puis son `.m3u8` sous `Playlists/`, écrit au fil des copies.
   Future<KeepResult> keepPlaylist(String accountId, String playlistId) async {
@@ -340,11 +369,14 @@ class Downloader extends ChangeNotifier {
   }
 
   /// Ce que retirer [origin] de [paths] efface vraiment : ceux qui n'ont, jumeaux compris,
-  /// aucune autre raison d'être gardés (règle Q13). Une copie du Top 100 n'en a aucune.
+  /// aucune autre raison d'être gardés (règle Q13). Une copie du Top 100 n'en a aucune ;
+  /// celle d'avant la v4 ([KeepOrigin.legacy]) ne compte pas comme une autre raison.
   Future<List<String>> toForgetFrom(String origin, List<String> paths) async {
     final out = <String>[];
     for (final path in {...paths}) {
-      if ((await db.originsOf(path)).any((o) => o != origin)) continue;
+      final others = (await db.originsOf(path))
+          .where((o) => o != origin && o != KeepOrigin.legacy);
+      if (others.isNotEmpty) continue;
       out.add(path);
     }
     return out;
@@ -482,6 +514,14 @@ class Downloader extends ChangeNotifier {
     final skip =
         <String>{}; // comptes dont le serveur a refusé un morceau ce tour
     try {
+      // les comptes qui ne répondent pas (adresse de la maison, dehors) : leurs morceaux en
+      // file passent d'abord à un jumeau qui répond
+      if (reachable != null) {
+        for (final row in await db.offlineRows()) {
+          if (row.state != OfflineState.queued.name) continue;
+          if (!_answers(row.trackPath)) await _moveToTwin(row);
+        }
+      }
       while (!_paused && !_moving) {
         final row = await db.nextQueued(
           top100: mayAutoDownload?.call() ?? true,
@@ -493,6 +533,8 @@ class Downloader extends ChangeNotifier {
           await db.removeOffline([row.trackPath]);
           continue;
         }
+        // son compte ne répond pas (adresse de la maison, dehors) : un jumeau prend sa place
+        if (!_answers(row.trackPath) && await _moveToTwin(row)) continue;
         // dossier choisi injoignable : jamais de copie dans le dossier par défaut, rien de compté
         if (!await device.rootReachable()) {
           _lastError = 'folder unavailable';
@@ -527,6 +569,16 @@ class Downloader extends ChangeNotifier {
     }
   }
 
+  /// La ligne en file [row] passe à un jumeau dont le compte répond et qui n'a pas de copie.
+  Future<bool> _moveToTwin(OfflineRow row) async {
+    for (final w in await db.twinsOf(row.trackPath)) {
+      if (w.path == row.trackPath || parseRemoteKey(w.path) == null) continue;
+      if (!_answers(w.path) || await db.offlineOf(w.path) != null) continue;
+      return db.moveQueued(row.trackPath, w.path);
+    }
+    return false;
+  }
+
   /// [_Next.stop] si la boucle doit s'arrêter (réseau coupé, disque : rien n'est compté,
   /// le prochain start() reprend). Un refus du serveur pour ce morceau compte un échec et
   /// passe au suivant ; un autre souci propre au morceau l'envoie derrière, sans compter,
@@ -552,7 +604,13 @@ class Downloader extends ChangeNotifier {
         await db.sendOfflineToBack(row.trackPath);
         return _Next.go;
       }
-      if (_stopsAll(e)) return _Next.stop;
+      if (_stopsAll(e)) {
+        // le réseau d'un compte déjà vu injoignable : lui seul attend, les autres continuent
+        if (e is! FileSystemException && !_answers(row.trackPath)) {
+          return _Next.skipAccount;
+        }
+        return _Next.stop;
+      }
       await db.sendOfflineToBack(row.trackPath);
       return _Next.skipAccount;
     } finally {
@@ -841,7 +899,6 @@ class Downloader extends ChangeNotifier {
     if (byUser) await db.clearOrigins(remote);
     // les lignes d'abord : la boucle ne reprend pas un morceau qu'on oublie
     final taken = await db.takeOffline(remote, reason: only);
-    final rels = [for (final rel in taken.values) ?rel];
     final a = _active;
     if (a != null && taken.containsKey(a.path)) {
       a.cancel();
@@ -851,15 +908,38 @@ class Downloader extends ChangeNotifier {
     // désignent peut-être d'autres fichiers. Les lignes sont retirées, aucun fichier effacé.
     if (!await device.rootReachable()) return;
     final root = await device.musicRoot();
-    for (final rel in rels) {
+    for (final (:rel, :alike) in taken.values) {
+      if (rel == null) continue;
       final file = _inside(root, rel);
       if (file == null) continue; // hors de la racine : on n'y touche pas
+      // le fichier qu'une autre ligne joue encore reste
+      if (_usedByAnother(root, file, alike)) continue;
       await _drop(File(partialPath(file.path)));
       await _drop(File(legacyPartialPath(file.path)));
       await _drop(file);
       await _announce(file.path); // Android : la médiathèque l'oublie
       _pruneEmpty(root, file.parent);
     }
+  }
+
+  /// [file] est-il celui d'une des lignes restantes ([alike] : leurs noms, à la casse près) ?
+  /// Un dossier qui ignore la casse (iOS, stockage partagé d'Android) n'a qu'un fichier pour
+  /// « Art/x » et « art/x » ; un dossier qui la respecte (Linux, stockage de l'appli) en a
+  /// deux. Le disque tranche ; dans le doute (une copie mise de côté par iCloud), il reste.
+  bool _usedByAnother(Directory root, File file, List<String> alike) {
+    for (final rel in alike) {
+      final other = _inside(root, rel);
+      if (other == null) continue;
+      if (p.equals(other.path, file.path)) return true;
+      if (!fileOrPlaceholderExists(other.path)) continue; // un autre nom, sans fichier
+      if (!file.existsSync() || !other.existsSync()) return true;
+      try {
+        if (FileSystemEntity.identicalSync(file.path, other.path)) return true;
+      } on FileSystemException {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _announce(String path) async {

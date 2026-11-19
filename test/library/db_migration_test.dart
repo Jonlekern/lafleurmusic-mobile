@@ -1,8 +1,14 @@
+import 'dart:io';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/merge.dart';
 import 'package:lafleurmusic/library/models.dart';
+import 'package:lafleurmusic/offline/device.dart';
+import 'package:lafleurmusic/offline/downloader.dart';
+import 'package:lafleurmusic/player/media_resolver.dart';
+import 'package:lafleurmusic/settings.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 // Schéma v1 de la 0.1.0 (commit ae39106), table par table.
@@ -206,8 +212,109 @@ void main() {
     );
     expect((await db.pending('acc')).single.remoteId, '1');
     expect(await db.autoKeepBlocked(), {'subsonic://acc/2'});
-    // a user copy from 0.2.0 is kept for itself (Q13)
-    expect(await db.originsOf('subsonic://acc/1'), {'song'});
+    // a user copy from 0.2.0: its reason is unknown (an album or the song itself)
+    expect(await db.originsOf('subsonic://acc/1'), {KeepOrigin.legacy});
     await _expectV4(db);
   });
+
+  test('a 0.2.0 album kept whole can be removed by album after the upgrade, '
+      'unless the song was kept for itself since', () async {
+    final raw = sqlite3.openInMemory();
+    for (final sql in [..._v1, ..._v2, ..._v3]) {
+      raw.execute(sql);
+    }
+    raw.execute(
+      "INSERT INTO accounts VALUES ('acc', 'subsonic', 'Home', 'http://h', 'u', 0)",
+    );
+    for (final id in ['1', '2', '3']) {
+      raw.execute(
+        "INSERT INTO tracks (path, account_id, remote_id, album_artist, title, artist, album, album_key, track_no, duration_ms, has_cover, size, search_key) "
+        "VALUES ('subsonic://acc/$id', 'acc', '$id', 'Art', 't$id', 'Art', 'Alb', 'alb', $id, 1000, 1, 4, 'k')",
+      );
+      raw.execute(
+        "INSERT INTO offline VALUES ('subsonic://acc/$id', 'Art/Alb/0$id.mp3', 4, $id, 'user', 'done', 0)",
+      );
+    }
+    raw.execute('PRAGMA user_version = 3');
+    final tmp = Directory.systemTemp.createTempSync('mig');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    for (final id in ['1', '2', '3']) {
+      File('${tmp.path}/Art/Alb/0$id.mp3')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([1, 2, 3, 4]);
+    }
+
+    final db = LibraryDb(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final d = Downloader(
+      db: db,
+      resolver: MediaResolver((_) async => throw StateError('no network')),
+      device: _Device(tmp),
+      settings: () async => AppSettings(),
+    );
+    final t1 = (await db.trackByPath('subsonic://acc/1'))!;
+    final album = KeepOrigin.albumOf(t1);
+    const paths = ['subsonic://acc/1', 'subsonic://acc/2', 'subsonic://acc/3'];
+    // the user kept song 3 for itself after the upgrade: it stays
+    await db.addOrigins({'subsonic://acc/3': KeepOrigin.song});
+    expect(await d.toForgetFrom(album, paths), [
+      'subsonic://acc/1',
+      'subsonic://acc/2',
+    ]);
+    await d.forgetFrom(album, paths);
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    expect(await db.offlineOf('subsonic://acc/2'), isNull);
+    expect(File('${tmp.path}/Art/Alb/01.mp3').existsSync(), isFalse);
+    expect((await db.offlineOf('subsonic://acc/3'))!.state, 'done');
+    expect(File('${tmp.path}/Art/Alb/03.mp3').existsSync(), isTrue);
+  });
+
+  test('a migration cut in the middle leaves the database as it was: the '
+      'next launch upgrades it', () async {
+    final raw = sqlite3.openInMemory();
+    for (final sql in [..._v1, ..._v2, ..._v3]) {
+      raw.execute(sql);
+    }
+    raw.execute(
+      "INSERT INTO tracks (path, title, artist, album, album_key, duration_ms, has_cover, size, search_key) "
+      "VALUES ('/m/1.flac', 'Local', 'a', 'Café', 'cafe', 1000, 0, 5, 'k')",
+    );
+    raw.execute("INSERT INTO play_counts VALUES ('/m/1.flac', 2, 50)");
+    raw.execute(
+      "INSERT INTO offline VALUES ('subsonic://acc/1', 'A/a.mp3', 5, 1, 'user', 'done', 0)",
+    );
+    // the app is killed after the first columns are added
+    raw.execute(
+      'CREATE TRIGGER cut BEFORE UPDATE ON play_counts '
+      "BEGIN SELECT RAISE(ABORT, 'killed'); END",
+    );
+    raw.execute('PRAGMA user_version = 3');
+
+    final first = LibraryDb(
+      NativeDatabase.opened(raw, closeUnderlyingOnClose: false),
+    );
+    await expectLater(first.select(first.tracks).get(), throwsA(anything));
+    await first.close();
+    raw.execute('DROP TRIGGER cut');
+
+    final db = LibraryDb(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final plays = (await db.select(db.playCounts).get()).single;
+    expect((plays.imported, plays.count, plays.lastPlayed), (2, 0, 50));
+    expect(await db.originsOf('subsonic://acc/1'), {KeepOrigin.legacy});
+    await _expectV4(db);
+  });
+}
+
+class _Device implements Device {
+  _Device(this.root);
+  final Directory root;
+  @override
+  Future<Directory> musicRoot() async => root;
+  @override
+  Future<bool> rootReachable() async => true;
+  @override
+  Future<void> announce(String path) async {}
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
