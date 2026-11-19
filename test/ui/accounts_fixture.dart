@@ -135,6 +135,7 @@ Future<AccountsFixture> pumpAccounts(
     accounts,
     db: db,
     resolver: resolver,
+    wait: (_) => Completer<void>().future, // the 30 s follow-up sync never fires here
     draftSource: (d, password) {
       f.drafts.add((d, password));
       return ProbeSource('draft', f.draftResult);

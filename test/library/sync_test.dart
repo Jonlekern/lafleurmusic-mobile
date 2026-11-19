@@ -41,6 +41,16 @@ class FakeSource implements MusicSource {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
+class _AlwaysFailing extends FakeSource {
+  _AlwaysFailing(FakeSource o, this.onAsk) : super(o.accountId, o.library);
+  final void Function() onAsk;
+  @override
+  Future<List<SourceSong>> albumSongs(String albumId) async {
+    onAsk();
+    throw const SocketException('down');
+  }
+}
+
 SourceAlbum alb(int n) =>
     SourceAlbum(id: 'al$n', name: 'Album $n', artist: 'Art', songCount: 1);
 SourceSong song(String id, {String title = 'T', int playCount = 0}) =>
@@ -211,6 +221,31 @@ void main() {
     expect((r.complete, r.removed, r.updated), (false, 0, 1));
     expect(await count('acc1'), 10);
     expect((await db.trackByPath('subsonic://acc1/a0'))!.title, 'New');
+  });
+
+  test('a failing album is skipped: the others are stored, nothing deleted', () async {
+    final lib = {
+      for (var i = 0; i < 5; i++) alb(i): [song('a$i'), song('b$i')],
+    };
+    final src = FakeSource('acc1', lib, failSongsOf: 'al2');
+    final r = await LibrarySync(db).run(src);
+    expect((r.complete, r.added, r.removed), (false, 8, 0));
+    expect(await count('acc1'), 8);
+    expect(await db.trackByPath('subsonic://acc1/a2'), isNull);
+    expect((await db.trackByPath('subsonic://acc1/a4')), isNotNull);
+    // the album reads next time: complete, all there
+    final r2 = await LibrarySync(db).run(FakeSource('acc1', lib));
+    expect((r2.complete, r2.added), (true, 2));
+    expect(await count('acc1'), 10);
+  });
+
+  test('a server failing on every album stops after a few', () async {
+    final lib = {for (var i = 0; i < 30; i++) alb(i): [song('a$i')]};
+    var asked = 0;
+    final failing = _AlwaysFailing(FakeSource('acc1', lib), () => asked++);
+    final r = await LibrarySync(db).run(failing);
+    expect(r.complete, false);
+    expect(asked, LibrarySync.maxFailuresInARow);
   });
 
   test('an empty answer never wipes an account that has tracks', () async {

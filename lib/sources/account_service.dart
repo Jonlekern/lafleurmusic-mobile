@@ -96,7 +96,9 @@ class AccountService extends ChangeNotifier {
     Future<SyncResult> Function(MusicSource source)? sync,
     this.forgetCovers,
     this.device,
-  }) : _db = db,
+    Future<void> Function(Duration)? wait,
+  }) : _wait = wait, // ignore: prefer_initializing_formals
+       _db = db,
        _sourceOf = sourceOf ?? resolver?.source ?? accounts.source,
        _sync =
            sync ??
@@ -106,6 +108,30 @@ class AccountService extends ChangeNotifier {
            ).run;
 
   final LibraryDb _db;
+
+  /// Pause between the quick syncs after a save (a fake clock in tests).
+  final Future<void> Function(Duration)? _wait;
+  final _timers = <Timer>{};
+
+  Future<void> _pause(Duration d) {
+    final w = _wait;
+    if (w != null) return w(d);
+    final c = Completer<void>();
+    late final Timer t;
+    t = Timer(d, () {
+      _timers.remove(t);
+      c.complete();
+    });
+    _timers.add(t);
+    return c.future;
+  }
+
+  /// Gap between the syncs that follow a save.
+  static const followUpDelay = Duration(seconds: 30);
+
+  /// Syncs started by one save, the first included: the 2nd always runs, the 3rd only if
+  /// the 2nd wasn't complete.
+  static const quickSyncs = 3;
 
   /// The phone: where the kept copies live. Without it, finished copies are left alone
   /// when a track leaves the server or an account is removed.
@@ -142,6 +168,10 @@ class AccountService extends ChangeNotifier {
   // bumped on every edit or removal: an older test or sync must not record its result
   final _gen = <String, int>{};
   final _removed = <String>{};
+  // newest save per account: an older chain of follow-up syncs stops when it sees another
+  final _chain = <String, int>{};
+  // did the last finished sync of the account store everything?
+  final _lastComplete = <String, bool>{};
   final _cancel = <String, _CancelFlag>{};
 
   int _genOf(String id) => _gen[id] ?? 0;
@@ -267,6 +297,9 @@ class AccountService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    for (final t in _timers) {
+      t.cancel();
+    }
     _keptSub?.cancel();
     _twinsSub?.cancel();
     super.dispose();
@@ -364,8 +397,29 @@ class AccountService extends ChangeNotifier {
       _results.remove(a.id);
       notifyListeners();
     }
-    unawaited(sync(a.id, fresh: true));
+    unawaited(_syncAfterSave(a.id));
     return a;
+  }
+
+  /// Now, 30 s later, and once more 30 s after that while the last one wasn't complete
+  /// (the server or the phone's network may not be ready right after the form: iOS asks
+  /// for the local network on the first request). One at a time per account.
+  Future<void> _syncAfterSave(String id) async {
+    final mine = _chain[id] = (_chain[id] ?? 0) + 1;
+    bool stale() => _disposed || _removed.contains(id) || _chain[id] != mine;
+    try {
+      for (var n = 1; n <= quickSyncs; n++) {
+        if (n == 3 && _lastComplete[id] == true) return;
+        if (n > 1) {
+          await _pause(followUpDelay);
+          if (stale()) return;
+        }
+        await sync(id, fresh: true);
+        if (stale()) return;
+      }
+    } on Object {
+      // a sync never throws; a failed wait just ends the chain
+    }
   }
 
   /// Removes the account and its tracks from this phone (nothing on the server).
@@ -374,6 +428,7 @@ class AccountService extends ChangeNotifier {
     _removed.add(id);
     _bump(id);
     _rerun.remove(id);
+    _chain[id] = (_chain[id] ?? 0) + 1; // no follow-up sync after the removal
     _cancel[id]?.cancelled = true;
     final running = _syncing[id];
     if (running != null) await running.catchError((Object _) {});
@@ -483,8 +538,10 @@ class AccountService extends ChangeNotifier {
       final s = _CancellableSource(await _sourceOf(id), flag);
       final done = await _sync(s);
       if (flag.cancelled) return;
+      _lastComplete[id] = done.complete;
       r = done.complete ? TestResult.ok : await _timed(s);
     } catch (_) {
+      _lastComplete[id] = false;
       r = TestResult.unreachable;
     }
     _record(id, gen, r);

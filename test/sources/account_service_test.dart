@@ -167,6 +167,143 @@ void main() {
       expect(await accounts.watch().first, isEmpty);
     });
 
+    group('after a save', () {
+      late List<Completer<void>> waits;
+      late List<Duration> asked;
+      Future<void> fakeWait(Duration d) {
+        asked.add(d);
+        final c = Completer<void>();
+        waits.add(c);
+        return c.future;
+      }
+
+      setUp(() {
+        waits = [];
+        asked = [];
+      });
+      const draft = AccountDraft(address: 'h:1', user: 'u', password: 'pw');
+
+      Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 20));
+
+      test('syncs now and again after 30 s; a complete second one ends it', () async {
+        final src = _CountingSource('x');
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (_) async => src,
+          wait: fakeWait,
+        );
+        final acc = await service.save(draft);
+        await settle();
+        expect(src.runs, 1);
+        expect(asked, [AccountService.followUpDelay]);
+        waits[0].complete();
+        await settle();
+        expect(src.runs, 2);
+        await settle();
+        expect(waits.length, 1); // complete: no third
+        expect(acc.id, isNotEmpty);
+      });
+
+      test('an incomplete 2nd sync gets a 3rd, never a 4th', () async {
+        final src = _CountingSource('x', failAlbums: true);
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (_) async => src,
+          wait: fakeWait,
+        );
+        await service.save(draft);
+        await settle();
+        waits[0].complete();
+        await settle();
+        expect(waits.length, 2);
+        waits[1].complete();
+        await settle();
+        expect(src.runs, 3);
+        await settle();
+        expect(waits.length, 2);
+      });
+
+      test('the 2nd sync runs even after a complete first; the 3rd is skipped when the 2nd is complete', () async {
+        final src = _CountingSource('x', failAlbums: true);
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (_) async => src,
+          wait: fakeWait,
+        );
+        await service.save(draft);
+        await settle();
+        src.failAlbums = false;
+        waits[0].complete();
+        await settle();
+        expect(src.runs, 2);
+        expect(waits.length, 1);
+      });
+
+      test('never two syncs at once: requests while one runs queue exactly one rerun', () async {
+        final src = _CountingSource('x', gated: true);
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (_) async => src,
+          wait: fakeWait,
+        );
+        await service.save(draft, editing: a);
+        await settle();
+        final r1 = service.sync(a.id, fresh: true);
+        final r2 = service.sync(a.id, fresh: true);
+        final r3 = service.sync(a.id, fresh: true);
+        await settle();
+        expect(src.active, 1);
+        src.gate.complete();
+        await Future.wait([r1, r2, r3]);
+        expect(src.maxActive, 1);
+        // save's own sync + one rerun for the three requests
+        expect(src.runs, 2);
+      });
+
+      test('an edit does the same, and a newer save stops the older chain', () async {
+        final src = _CountingSource('x');
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (_) async => src,
+          wait: fakeWait,
+        );
+        await service.save(draft, editing: a);
+        await settle();
+        expect(src.runs, 1);
+        await service.save(draft, editing: a);
+        await settle();
+        expect(src.runs, 2);
+        expect(waits.length, 2);
+        waits[0].complete(); // the older chain: stopped
+        await settle();
+        expect(src.runs, 2);
+        waits[1].complete();
+        await settle();
+        expect(src.runs, 3);
+      });
+
+      test('removing the account ends the chain', () async {
+        final src = _CountingSource('x');
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (_) async => src,
+          wait: fakeWait,
+        );
+        await service.save(draft, editing: a);
+        await settle();
+        await service.remove(a.id);
+        waits[0].complete();
+        await settle();
+        expect(src.runs, 1);
+      });
+    });
+
     test('remove forgets the account\'s cached covers', () async {
       final forgotten = <String>[];
       final service = AccountService(
@@ -617,6 +754,53 @@ void main() {
 }
 
 /// Source whose album songs wait for [release] from album 2 on; [reached] waits for album n to be asked.
+/// Counts the sync runs (one `albums()` call each) and how many overlap.
+class _CountingSource implements MusicSource {
+  _CountingSource(this.accountId, {this.failAlbums = false, this.gated = false});
+  @override
+  final String accountId;
+  bool failAlbums;
+  final bool gated;
+  final gate = Completer<void>();
+  int runs = 0, active = 0, maxActive = 0;
+
+  @override
+  Future<TestResult> test() async => TestResult.ok;
+
+  @override
+  Stream<List<SourceAlbum>> albums({int pageSize = 500}) async* {
+    runs++;
+    active++;
+    if (active > maxActive) maxActive = active;
+    try {
+      if (gated && runs == 1) await gate.future;
+      yield [
+        for (var i = 1; i <= 2; i++)
+          SourceAlbum(id: 'al$i', name: 'A$i', artist: 'A'),
+      ];
+    } finally {
+      active--;
+    }
+  }
+
+  @override
+  Future<List<SourceSong>> albumSongs(String albumId) async {
+    if (failAlbums && albumId == 'al1') throw const SocketException('cut');
+    return [
+      SourceSong(
+        id: 's$albumId',
+        title: 'T',
+        artist: 'A',
+        album: albumId,
+        albumArtist: 'A',
+      ),
+    ];
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
 class GatedSource implements MusicSource {
   GatedSource(
     this.accountId, {

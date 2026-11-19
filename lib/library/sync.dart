@@ -23,16 +23,30 @@ class LibrarySync {
   final LibraryDb _db;
   final Future<CopyRoot?> Function()? copyRoot;
 
+  /// This many albums failing one after the other: the server is gone, stop the run.
+  static const maxFailuresInARow = 5;
+
   Future<SyncResult> run(MusicSource s) async {
     var added = 0, updated = 0, removed = 0;
     var complete = true;
     final seen = <String>{};
-    var albumCount = 0;
+    var albumCount = 0, failedInARow = 0;
     try {
+      albums:
       await for (final page in s.albums()) {
         for (final album in page) {
           albumCount++;
-          final songs = await s.albumSongs(album.id);
+          final List<SourceSong> songs;
+          try {
+            songs = await s.albumSongs(album.id);
+          } on Object {
+            // one album that won't read is skipped; the run is incomplete (nothing is
+            // deleted) and tried again later. A server that fails every time stops it.
+            complete = false;
+            if (++failedInARow >= maxFailuresInARow) break albums;
+            continue;
+          }
+          failedInARow = 0;
           final r = await _store(s.accountId, album, songs, seen);
           added += r.$1;
           updated += r.$2;
