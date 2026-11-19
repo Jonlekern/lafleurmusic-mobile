@@ -190,6 +190,17 @@ class JellyfinSource
     if (s != null) {
       await s.write(tokenKey(accountId), token);
       await s.write(userIdKey(accountId), id);
+      // closed meanwhile (the account removed and its secrets erased): no orphan token
+      if (_closed) {
+        for (final k in [tokenKey(accountId), userIdKey(accountId)]) {
+          try {
+            await s.delete(k);
+          } catch (_) {}
+        }
+        _token = null;
+        _userId = null;
+        throw JellyfinException('source closed');
+      }
     }
     return token;
   }

@@ -259,6 +259,18 @@ void main() {
   });
 
   group('token and secrets', () {
+    test('closed while its sign-in stores the token (account removed): no token is left', () async {
+      final store = _GatedWrites();
+      final s = source(server(), secrets: store);
+      final signIn = s.prepare();
+      await store.firstWrite.future; // the token is being written
+      s.close(); // the account is removed meanwhile (its secrets erased)
+      store.gate.complete();
+      await expectLater(signIn, throwsA(isA<JellyfinException>()));
+      expect(store.data[JellyfinSource.tokenKey('acc1')], isNull);
+      expect(store.data[JellyfinSource.userIdKey('acc1')], isNull);
+    });
+
     test('token and password never reach an exception or its text', () async {
       final c = MockClient(
         (r) async => throw http.ClientException('boom', r.url),
@@ -1289,4 +1301,16 @@ void playbackTests() {
       expect('$e', isNot(contains('tok-secret-1')));
     });
   });
+}
+
+/// A store whose writes wait for [gate]: the sign-in is caught while it stores its token.
+class _GatedWrites extends FakeSecretStore {
+  final gate = Completer<void>();
+  final firstWrite = Completer<void>();
+  @override
+  Future<void> write(String key, String value) async {
+    if (!firstWrite.isCompleted) firstWrite.complete();
+    await gate.future;
+    await super.write(key, value);
+  }
 }
