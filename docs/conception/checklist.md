@@ -7,8 +7,8 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Écrans : reprendre ceux du Mac, empilés
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
-- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes » et 4 « Jellyfin » écrits et codés ; plans 5 à 7 ensuite
-- ⬜ Code (plans 1, 2, 3 et 4 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
+- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes » et 4 « Jellyfin » écrits et codés ; plan 8 « file et bibliothèque » codé ; plans 5 à 7 et 9 ensuite
+- ⬜ Code (plans 1, 2, 3, 4 et 8 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 
@@ -62,6 +62,9 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ En plus : section « Playlists du serveur » sous les albums (lecture seule, gardables) ; garder une playlist écrit un fichier `.m3u8` dans `Playlists/` (l'appli n'efface que ses propres fichiers)
 - ✅ Plan 3 fait : Cover Flow en couché (comptes et playlists compris), tablette = colonnes côte à côte
 - ✅ Plan 3 : visuels de la tablette, texte « Ouvrir l'album » du Cover Flow et texte « Morceau absent » validés par Johnny (19.11.2026)
+- ✅ Plan 8 fait : glisser vers la droite = Ajouter à la file (bulle « Ajouté à la file » avec Annuler et Voir la file) ; « Vider » ne retire que tes ajouts, après confirmation, la suite de l'album reste
+- ✅ Plan 8 fait : écran Albums (touche le titre ALBUMS de l'Accueil) avec « Écoutés récemment » et le tri Nom, Artiste, Ajout récent, Plus écouté, gardé dans les réglages ; « Aller à l'album » et « Aller à l'artiste » dans le menu ⋯ de En cours
+- ✅ Plan 8 essayé de bout en bout dans le simulateur, avec des fichiers posés à la main (le premier compte demandé vient d'un faux serveur) : glisser, bulle, Annuler, Vider, Aller à l'album, tri gardé
 
 ## Mode clair
 - ✅ L'affichage actuel = mode sombre

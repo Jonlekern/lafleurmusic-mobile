@@ -4,7 +4,7 @@ An iPod-style music player for Android and iPhone, in the LAFLEURSTUDIO style.
 It plays the music from your own server and keeps a copy of your favourites on the phone.
 The phone sibling of [LAFLEURMUSIC for desktop](https://github.com/Jonlekern/lafleurmusic-desktop).
 
-**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets) and plan 4 (Jellyfin) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
+**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin) and plan 8 (queue and library) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
 
 What works now:
 
@@ -24,6 +24,12 @@ What works now:
   `.m3u8` file under `Playlists/` in the LAFLEURMUSIC folder; the app only ever removes the files it wrote.
 - **Cover Flow** when the phone is turned sideways, and **tablets** (iPad, Android) get the columns of the
   desktop app side by side (both done).
+- **Queue:** swipe a song to the right to add it to the queue (a bubble offers Undo and View queue); to the
+  left to play it next. "Clear" in Up Next removes only what you added, after asking; the rest of the album
+  stays. Files placed by hand work the same way.
+- **Albums:** tap the ALBUMS title on Home for the Albums screen: the last albums you played, and a sort
+  by name, artist, recently added or most played, which the app remembers. "Go to album" and "Go to artist"
+  are at the top of the Now Playing ⋯ menu.
 - **Offline:** keep songs or albums on the phone ("Keep on my iPhone / phone") as real
   files, filed as Artist/Album with tags and cover. They play from the copy when the server is out of
   reach; what isn't on the phone is greyed out. A download queue resumes after an interruption and
@@ -53,6 +59,7 @@ flutter pub get
 flutter test                                                   # goldens: --tags golden, on macOS
 flutter test integration_test/offline_test.dart -d <phone>     # end to end against a fake server
 flutter test integration_test/accounts_test.dart -d <phone>    # fake Navidrome and Jellyfin, merged library
+flutter test integration_test/queue_library_test.dart -d <phone>  # queue, Clear, Albums sort, no account
 flutter build apk --debug                                      # Android
 flutter build ios --simulator --debug --no-codesign            # iOS simulator
 ```
