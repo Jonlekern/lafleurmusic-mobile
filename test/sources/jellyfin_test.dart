@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lafleurmusic/app_version.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/models.dart' show unknownAlbumName;
 import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/player/media_resolver.dart' show remoteCover;
 import 'package:lafleurmusic/sources/accounts.dart';
@@ -589,6 +590,15 @@ MockClient library({
   if (p == '/Users/user-1/Views') {
     return json(views ? fx('views.json') : '{"Items":[]}');
   }
+  if (p == '/Users/user-1/Items' && q['Ids'] != null) {
+    final ids = q['Ids']!.split(',');
+    final d = jsonDecode(fx('audio_all.json')) as Map;
+    final items = [
+      for (final i in d['Items'] as List)
+        if (ids.contains((i as Map)['Id'])) i,
+    ];
+    return json(jsonEncode({'Items': items, 'TotalRecordCount': items.length}));
+  }
   if (p == '/Users/user-1/Items') {
     switch ((q['IncludeItemTypes'], q['ParentId'])) {
       case ('MusicAlbum', 'v-music1'):
@@ -600,7 +610,18 @@ MockClient library({
           albums ? page('albums_v2.json') : '{"Items":[],"TotalRecordCount":0}',
         );
       case ('Audio', 'v-music1'):
-        return json(page('audio_all.json'));
+        // a lean scan: the server only sends the heavy fields when asked
+        final d = jsonDecode(page('audio_all.json')) as Map;
+        if (!(q['Fields'] ?? '').contains('MediaSources')) {
+          for (final i in d['Items'] as List) {
+            (i as Map)
+              ..remove('MediaSources')
+              ..remove('RunTimeTicks')
+              ..remove('ImageTags')
+              ..remove('Genres');
+          }
+        }
+        return json(jsonEncode(d));
       case ('Audio', 'v-music2'):
         return json('{"Items":[],"TotalRecordCount":0}');
       case ('Audio', 'al1'):
@@ -760,13 +781,13 @@ void libraryTests() {
         final solo = albums.firstWhere((a) => a.id == 'loose:Solo');
         expect(
           (solo.name, solo.artist, solo.songCount),
-          ('Album inconnu', 'Solo', 2),
+          (unknownAlbumName, 'Solo', 2),
         );
         final songs = await s.albumSongs('loose:Solo');
         expect(songs.map((e) => e.id), ['s9', 's10']);
         expect(
           songs.every(
-            (e) => e.album == 'Album inconnu' && e.albumArtist == 'Solo',
+            (e) => e.album == unknownAlbumName && e.albumArtist == 'Solo',
           ),
           isTrue,
         );
@@ -861,6 +882,117 @@ void libraryTests() {
       expect(calls, 2);
     });
 
+    test(
+      'the loose-song scan is lean; the loose ones are then fetched by Ids',
+      () async {
+        final log = <http.Request>[];
+        final s = source(library(log: log));
+        await s.albums().toList();
+        final scan = log.where(
+          (r) =>
+              r.url.queryParameters['IncludeItemTypes'] == 'Audio' &&
+              r.url.queryParameters['ParentId'] != null,
+        );
+        expect(scan, isNotEmpty);
+        for (final r in scan) {
+          expect(
+            r.url.queryParameters['Fields'] ?? '',
+            isNot(contains('MediaSources')),
+          );
+          expect(
+            r.url.queryParameters['Fields'] ?? '',
+            isNot(contains('Genres')),
+          );
+        }
+        final byIds = log
+            .where((r) => r.url.queryParameters['Ids'] != null)
+            .toList();
+        expect(byIds, hasLength(1));
+        expect(byIds.single.url.queryParameters['Ids']!.split(','), [
+          's9',
+          's10',
+          's11',
+        ]);
+        expect(
+          byIds.single.url.queryParameters['Fields'],
+          contains('MediaSources'),
+        );
+        final songs = await s.albumSongs('loose:Solo');
+        expect(
+          (songs[0].size, songs[0].suffix, songs[0].durationMs),
+          (123, 'mp3', 60000),
+        );
+      },
+    );
+
+    test('many loose songs are fetched by Ids in batches', () async {
+      final log = <http.Request>[];
+      final c = MockClient((r) async {
+        log.add(r);
+        final q = r.url.queryParameters;
+        if (r.url.path == '/Users/AuthenticateByName') return json(_auth);
+        if (r.url.path.endsWith('/Views')) return json(fx('views.json'));
+        if (q['Ids'] != null) {
+          return json(
+            jsonEncode({
+              'Items': [
+                for (final id in q['Ids']!.split(',')) {'Id': id, 'Name': id},
+              ],
+              'TotalRecordCount': q['Ids']!.split(',').length,
+            }),
+          );
+        }
+        if (q['IncludeItemTypes'] == 'Audio' && q['ParentId'] == 'v-music1') {
+          final start = int.parse(q['StartIndex']!);
+          final n = (250 - start).clamp(0, int.parse(q['Limit']!));
+          return json(
+            jsonEncode({
+              'Items': [
+                for (var i = start; i < start + n; i++)
+                  {'Id': 'x$i', 'Name': 'n$i'},
+              ],
+              'TotalRecordCount': 250,
+            }),
+          );
+        }
+        return json('{"Items":[],"TotalRecordCount":0}');
+      });
+      final albums = (await source(
+        c,
+      ).albums().toList()).expand((p) => p).toList();
+      expect(albums.single.songCount, 250);
+      final batches = log
+          .where((r) => r.url.queryParameters['Ids'] != null)
+          .toList();
+      expect(batches.length, greaterThan(1));
+      expect(
+        batches.every(
+          (r) => r.url.queryParameters['Ids']!.split(',').length <= 100,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a cover answered 401 signs in again once and succeeds; a second 401 gives up', () async {
+      var signIns = 0, gets = 0;
+      final c = MockClient((r) async {
+        if (r.url.path == '/Users/AuthenticateByName') {
+          signIns++;
+          return json(_auth);
+        }
+        gets++;
+        return http.Response('', 401);
+      });
+      final secrets = FakeSecretStore()
+        ..data[JellyfinSource.tokenKey('acc1')] = 'old'
+        ..data[JellyfinSource.userIdKey('acc1')] = 'user-1';
+      await expectLater(
+        remoteCover(source(c, secrets: secrets), 'x', 64),
+        throwsA(isA<SourceNetworkException>()),
+      );
+      expect((signIns, gets), (1, 2)); // one re-sign-in, no loop
+    });
+
     test('a missing cover is null', () async {
       final c = MockClient(
         (r) async => r.url.path == '/Users/AuthenticateByName'
@@ -878,7 +1010,7 @@ void libraryTests() {
       expect(r.complete, isTrue);
       expect(r.added, 5); // s1 s2 (al1) + s9 s10 + s11 (loose)
       final t = await db.trackByPath('jellyfin://acc1/s9');
-      expect(t!.album, 'Album inconnu');
+      expect(t!.album, unknownAlbumName);
       expect(t.artist, 'Solo');
       expect((await db.trackByPath('jellyfin://acc1/s1'))!.replayGain, -7.25);
       final r2 = await LibrarySync(db)

@@ -195,15 +195,17 @@ Future<Uint8List?> remoteCover(
   http.Client? client,
   Duration timeout = requestTimeout,
 }) async {
-  final c = client ?? (s is HttpSource ? (s as HttpSource).httpClient : null);
-  final own = c == null;
-  final cl = c ?? newServerClient();
+  final HttpSource? hs = s is HttpSource ? s as HttpSource : null;
+  final c = client ?? hs?.httpClient;
+  // Jellyfin goes through its own authenticated GET: no client to create
+  final own = c == null && s is! JellyfinSource;
+  final cl = c ?? (own ? newServerClient() : null);
   try {
     final url = s.coverUri(coverId, size);
     // Jellyfin: the token may not be loaded yet, and a revoked one is renewed
     final res = s is JellyfinSource
         ? await s.authedGetUri(url).timeout(timeout)
-        : await cl.get(url, headers: s.headers).timeout(timeout);
+        : await cl!.get(url, headers: s.headers).timeout(timeout);
     final type = (res.headers['content-type'] ?? '').toLowerCase();
     // Subsonic answers "not found" with a 200 and a JSON/XML error (an SVG cover is image/svg+xml: kept)
     if (res.statusCode != 200 ||
@@ -217,7 +219,7 @@ Future<Uint8List?> remoteCover(
   } on Exception catch (e) {
     throw SourceNetworkException(e); // without the URL
   } finally {
-    if (own) cl.close();
+    if (own) cl!.close();
   }
 }
 

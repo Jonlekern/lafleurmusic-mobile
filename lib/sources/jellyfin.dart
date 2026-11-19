@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
 import '../app_version.dart';
+import '../library/models.dart' show unknownAlbumName;
 import 'accounts.dart';
 import 'remote_key.dart';
 import 'secret_store.dart';
@@ -321,8 +323,6 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
 
   // ---- library ---------------------------------------------------------------------------
 
-  /// Name given to songs the server holds outside any album (kept under their artist).
-  static const unknownAlbum = 'Album inconnu';
   static const _loosePrefix = 'loose:';
 
   /// Songs outside any album, by `loose:<artist>`; filled when [albums] reaches its end.
@@ -445,7 +445,7 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
         for (final e in loose.entries)
           SourceAlbum(
             id: e.key,
-            name: unknownAlbum,
+            name: unknownAlbumName,
             artist: e.value.first.albumArtist,
             coverId: e.value
                 .map((s) => s.coverId)
@@ -456,12 +456,14 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
     }
   }
 
+  /// Songs outside any album. The scan over every song is lean (no media sources, genres or
+  /// pictures: just what tells a loose song); only the loose ones are then fetched in full.
   Future<Map<String, List<SourceSong>>> _looseSongs(
     String uid,
     List<String> views,
     int pageSize,
   ) async {
-    final out = <String, List<SourceSong>>{};
+    final loose = <String>[];
     final seen = <String>{};
     for (final view in views) {
       await for (final items in _pages('Users/$uid/Items', {
@@ -469,21 +471,41 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
         'IncludeItemTypes': 'Audio',
         'Recursive': 'true',
         'SortBy': 'SortName',
-        'Fields': _songFields,
+        'EnableUserData': 'false',
+        'EnableImages': 'false',
       }, pageSize: pageSize)) {
         for (final m in items) {
           final album = m['AlbumId'];
           if (album != null && '$album'.isNotEmpty) continue;
-          if (m['Id'] == null || !seen.add('${m['Id']}')) continue;
-          final artist = _albumArtist(m, fallbackToArtists: true);
-          out
-              .putIfAbsent('$_loosePrefix$artist', () => [])
-              .add(_song(m, unknownAlbum, artist));
+          if (m['Id'] != null && seen.add('${m['Id']}')) {
+            loose.add('${m['Id']}');
+          }
         }
+      }
+    }
+    final out = <String, List<SourceSong>>{};
+    for (var i = 0; i < loose.length; i += _idsBatch) {
+      final batch = loose.sublist(i, min(i + _idsBatch, loose.length));
+      final d = _decode(
+        await authedGet('Users/$uid/Items', {
+          'Ids': batch.join(','),
+          'Fields': _songFields,
+        }),
+      );
+      final items = d['Items'];
+      for (final m in (items is List ? items : const []).whereType<Map>()) {
+        if (m['Id'] == null) continue;
+        final artist = _albumArtist(m, fallbackToArtists: true);
+        out
+            .putIfAbsent('$_loosePrefix$artist', () => [])
+            .add(_song(m, unknownAlbumName, artist));
       }
     }
     return out;
   }
+
+  /// Ids per request (they travel in the URL).
+  static const _idsBatch = 100;
 
   @override
   Future<List<SourceSong>> albumSongs(String albumId) async {

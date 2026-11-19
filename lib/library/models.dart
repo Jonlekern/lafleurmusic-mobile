@@ -1,3 +1,6 @@
+/// Album name stored at sync time for songs a Jellyfin server holds outside any album.
+const unknownAlbumName = 'Album inconnu';
+
 /// Un morceau de la bibliothèque (une ligne de la base, reflet des tags du fichier).
 class Track {
   const Track({
