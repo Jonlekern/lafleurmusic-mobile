@@ -19,6 +19,37 @@ void main() {
     expect(back.equalizer.enabled, true);
     expect(back.equalizer.preset, 'bass');
   });
+  test('accounts display: defaults to all, saved and read back', () async {
+    final f = File('${dir.path}/settings.json');
+    final d = AppSettings();
+    expect(d.displayMode, DisplayMode.all);
+    expect(d.oneAccount, isNull);
+    expect(d.customAccounts, isEmpty);
+    await (AppSettings()
+          ..displayMode = DisplayMode.custom
+          ..oneAccount = 'a1'
+          ..customAccounts = ['a1', 'a2'])
+        .save(f);
+    final back = await AppSettings.load(f);
+    expect(back.displayMode, DisplayMode.custom);
+    expect(back.oneAccount, 'a1');
+    expect(back.customAccounts, ['a1', 'a2']);
+  });
+
+  test(
+    'accounts display: unreadable values fall back to the defaults',
+    () async {
+      final f = File('${dir.path}/bad.json')
+        ..writeAsStringSync(
+          '{"displayMode":"nope","oneAccount":3,"customAccounts":["a",1,"b"]}',
+        );
+      final s = await AppSettings.load(f);
+      expect(s.displayMode, DisplayMode.all);
+      expect(s.oneAccount, isNull);
+      expect(s.customAccounts, ['a', 'b']);
+    },
+  );
+
   test('fichier absent ou cassé : réglages par défaut', () async {
     expect(
       (await AppSettings.load(File('${dir.path}/rien.json'))).equalizer.enabled,

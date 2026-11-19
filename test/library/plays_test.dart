@@ -87,6 +87,15 @@ void main() {
     expect(await db.loudnessOf('/b', 1), isNull);
   });
 
+  test('movePlays carries the imported plays too', () async {
+    await db.upsertTracks([t('/a'), t('/b')]);
+    await db.raisePlayCounts({'/a': 10, '/b': 4});
+    await db.addPlay('/a', DateTime(2026, 1, 1));
+    await db.movePlays('/a', '/b');
+    final r = (await db.select(db.playCounts).get()).single;
+    expect((r.path, r.imported, r.count), ('/b', 14, 1));
+  });
+
   test('movePlays additionne avec les écoutes déjà là et garde la plus récente', () async {
     await db.upsertTracks([t('/a'), t('/b')]);
     await db.addPlay('/a', DateTime(2026, 1, 1));

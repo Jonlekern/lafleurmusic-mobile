@@ -4,11 +4,13 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
 import '../offline/paths.dart';
+import 'merge.dart';
 import 'models.dart';
 
 part 'db.g.dart';
 
 @DataClassName('TrackRow')
+@TableIndex(name: 'tracks_merge_key', columns: {#mergeKey})
 class Tracks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get path => text().unique()();
@@ -33,12 +35,16 @@ class Tracks extends Table {
   BoolColumn get missing => boolean().withDefault(const Constant(false))();
   BoolColumn get toRepair => boolean().withDefault(const Constant(false))();
   TextColumn get searchKey => text()();
+  // même morceau sur plusieurs comptes = même clé (voir merge.dart)
+  TextColumn get mergeKey => text().withDefault(const Constant(''))();
 }
 
 /// Écoutes (Top 100) : une ligne par fichier écouté.
 class PlayCounts extends Table {
   TextColumn get path => text()();
-  IntColumn get count => integer()();
+  IntColumn get count => integer()(); // écoutes faites dans l'appli
+  IntColumn get imported =>
+      integer().withDefault(const Constant(0))(); // écoutes lues sur le serveur
   IntColumn get lastPlayed => integer()(); // millisecondes depuis 1970
   @override
   Set<Column> get primaryKey => {path};
@@ -102,6 +108,38 @@ class PendingScrobbles extends Table {
   IntColumn get at => integer()(); // ms
 }
 
+/// Playlists des serveurs (une par compte et par identifiant distant).
+@DataClassName('PlaylistRow')
+class Playlists extends Table {
+  TextColumn get accountId => text()();
+  TextColumn get remoteId => text()();
+  TextColumn get name => text()();
+  IntColumn get position => integer()();
+  @override
+  Set<Column> get primaryKey => {accountId, remoteId};
+}
+
+/// Les morceaux d'une playlist, dans l'ordre (`index`).
+@DataClassName('PlaylistItemRow')
+class PlaylistItems extends Table {
+  TextColumn get accountId => text()();
+  TextColumn get playlistId => text()();
+  IntColumn get index => integer()();
+  TextColumn get trackPath => text()();
+  @override
+  Set<Column> get primaryKey => {accountId, playlistId, index};
+}
+
+/// Les `.m3u8` écrits par l'appli sous `<racine>/Playlists/` : seuls fichiers qu'elle supprime.
+@DataClassName('KeptPlaylistRow')
+class KeptPlaylists extends Table {
+  TextColumn get accountId => text()();
+  TextColumn get playlistId => text()();
+  TextColumn get fileName => text()();
+  @override
+  Set<Column> get primaryKey => {accountId, playlistId};
+}
+
 /// Where the kept copies live (a reachable folder) and how a copy found there is named
 /// once it is a local track ([keyFor]: absolute path → library path; null = the path itself).
 class CopyRoot {
@@ -119,14 +157,18 @@ class CopyRoot {
     Offline,
     PendingScrobbles,
     AutoKeepBlocks,
+    Playlists,
+    PlaylistItems,
+    KeptPlaylists,
   ],
 )
 class LibraryDb extends _$LibraryDb {
   LibraryDb(super.e);
 
   // v2 : copies hors ligne et écoutes en attente. v3 : morceaux retirés du Top 100 par l'utilisateur.
+  // v4 : clé de fusion, écoutes importées, playlists des serveurs.
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -137,6 +179,28 @@ class LibraryDb extends _$LibraryDb {
         await m.createTable(pendingScrobbles);
       }
       if (from < 3) await m.createTable(autoKeepBlocks);
+      if (from < 4) {
+        await m.addColumn(tracks, tracks.mergeKey);
+        await m.createIndex(tracksMergeKey);
+        await m.createTable(playlists);
+        await m.createTable(playlistItems);
+        await m.createTable(keptPlaylists);
+        await m.addColumn(playCounts, playCounts.imported);
+        // la sync du plan 1 écrivait les écoutes du serveur dans `count` (raisePlayCounts)
+        await customStatement(
+          'UPDATE play_counts SET imported = count, count = 0',
+        );
+        final rows = await select(tracks).get();
+        await batch((b) {
+          for (final r in rows) {
+            b.update(
+              tracks,
+              TracksCompanion(mergeKey: Value(mergeKey(_fromRow(r)))),
+              where: (t) => t.id.equals(r.id),
+            );
+          }
+        });
+      }
     },
   );
 
@@ -381,6 +445,7 @@ class LibraryDb extends _$LibraryDb {
         artist: t.artist,
         album: t.album,
         albumKey: sortKey(t.album),
+        mergeKey: Value(mergeKey(t)),
         genre: Value(t.genre),
         trackNo: Value(t.trackNo),
         durationMs: t.durationMs,
@@ -506,14 +571,22 @@ class LibraryDb extends _$LibraryDb {
     }
   });
 
-  /// Raises counts to [counts] (path -> count) where higher; never lowers one.
+  /// Raises the server's counts [counts] (path -> count, kept in `imported`) where higher;
+  /// never lowers one and never touches the plays made in the app (`count`).
   Future<void> raisePlayCounts(Map<String, int> counts) async {
     for (final e in counts.entries) {
       await into(playCounts).insert(
-        PlayCountsCompanion.insert(path: e.key, count: e.value, lastPlayed: 0),
+        PlayCountsCompanion.insert(
+          path: e.key,
+          count: 0,
+          imported: Value(e.value),
+          lastPlayed: 0,
+        ),
         onConflict: DoUpdate(
           (_) => PlayCountsCompanion.custom(
-            count: const CustomExpression('max(count, excluded.count)'),
+            imported: const CustomExpression(
+              'max(imported, excluded.imported)',
+            ),
           ),
           target: [playCounts.path],
         ),
@@ -548,14 +621,17 @@ class LibraryDb extends _$LibraryDb {
           .join([innerJoin(playCounts, playCounts.path.equalsExp(tracks.path))])
         ..where(tracks.missing.equals(false))
         ..orderBy([
-          OrderingTerm.desc(playCounts.count),
+          OrderingTerm.desc(playCounts.count + playCounts.imported),
           OrderingTerm.desc(playCounts.lastPlayed),
         ])
         ..limit(limit);
 
   List<(Track, int)> _topRows(List<TypedResult> rows) => [
     for (final r in rows)
-      (_fromRow(r.readTable(tracks)), r.readTable(playCounts).count),
+      (
+        _fromRow(r.readTable(tracks)),
+        r.readTable(playCounts).count + r.readTable(playCounts).imported,
+      ),
   ];
 
   /// Retire les lignes [trackPaths] (seulement celles de [reason] si donné), en une
@@ -597,7 +673,7 @@ class LibraryDb extends _$LibraryDb {
     final rows = await top100Offline();
     final plays = {
       for (final c in await select(playCounts).get())
-        c.path: (c.count, c.lastPlayed),
+        c.path: (c.count + c.imported, c.lastPlayed),
     };
     rows.sort((a, b) {
       final x = plays[a.trackPath], y = plays[b.trackPath];
@@ -632,10 +708,16 @@ class LibraryDb extends _$LibraryDb {
     await (delete(playCounts)..where((p) => p.path.equals(from))).go();
     // la destination a déjà des écoutes : on additionne, la dernière écoute est la plus récente
     await customUpdate(
-      'INSERT INTO play_counts (path, count, last_played) VALUES (?, ?, ?) '
+      'INSERT INTO play_counts (path, count, imported, last_played) VALUES (?, ?, ?, ?) '
       'ON CONFLICT(path) DO UPDATE SET count = count + excluded.count, '
+      'imported = imported + excluded.imported, '
       'last_played = max(last_played, excluded.last_played)',
-      variables: [Variable(to), Variable(old.count), Variable(old.lastPlayed)],
+      variables: [
+        Variable(to),
+        Variable(old.count),
+        Variable(old.imported),
+        Variable(old.lastPlayed),
+      ],
       updates: {playCounts},
     );
   });

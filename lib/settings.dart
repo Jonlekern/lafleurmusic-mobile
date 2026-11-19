@@ -6,6 +6,9 @@ import 'package:flutter/painting.dart' show Size;
 
 import 'player/equalizer.dart';
 
+/// Quels comptes la bibliothèque montre : un seul, tous (fusionnés), ou un choix.
+enum DisplayMode { one, all, custom }
+
 /// Réglages de l'appli (dossier de support / settings.json).
 class AppSettings {
   AppSettings({
@@ -23,7 +26,11 @@ class AppSettings {
     this.crossfadeSeconds = 5,
     this.storageLimitBytes = defaultStorageLimitBytes,
     this.musicFolder,
-  }) : equalizer = equalizer ?? Equalizer.named('flat');
+    this.displayMode = DisplayMode.all,
+    this.oneAccount,
+    List<String>? customAccounts,
+  }) : customAccounts = customAccounts ?? [],
+       equalizer = equalizer ?? Equalizer.named('flat');
   Equalizer equalizer;
   bool artistGrid; // vue Artistes : grille de photos (sinon liste)
   // mini lecteur Winamp
@@ -43,6 +50,10 @@ class AppSettings {
   storageLimitBytes; // place maximale des copies hors ligne (bornes : l'écran)
 
   String? musicFolder; // dossier choisi pour les copies (iOS : signet en base64) ; null = dossier par défaut
+
+  DisplayMode displayMode; // plusieurs comptes : un, tous ou un choix
+  String? oneAccount; // le compte montré quand displayMode = one
+  List<String> customAccounts; // les comptes montrés quand displayMode = custom
 
   static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
 
@@ -86,6 +97,19 @@ class AppSettings {
                   (j['musicFolder']! as String).isNotEmpty
               ? j['musicFolder']! as String
               : null,
+          displayMode: DisplayMode.values.firstWhere(
+            (m) => m.name == j['displayMode'],
+            orElse: () => DisplayMode.all,
+          ),
+          oneAccount: j['oneAccount'] is String
+              ? j['oneAccount']! as String
+              : null,
+          customAccounts: j['customAccounts'] is List
+              ? [
+                  for (final a in j['customAccounts']! as List)
+                    if (a is String) a,
+                ]
+              : null,
         );
       }
     } on Object {
@@ -120,6 +144,9 @@ class AppSettings {
         'crossfadeSeconds': crossfadeSeconds,
         'storageLimitBytes': storageLimitBytes,
         'musicFolder': musicFolder,
+        'displayMode': displayMode.name,
+        'oneAccount': oneAccount,
+        'customAccounts': customAccounts,
       }),
     );
     await tmp.rename(f.path);

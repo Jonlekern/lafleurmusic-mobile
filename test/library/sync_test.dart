@@ -159,23 +159,28 @@ void main() {
     expect(await count('local'), 1);
   });
 
-  test('play counts: max of local and server, never decreasing', () async {
+  test('play counts: server count raised in imported, app plays kept apart', () async {
     final k = trackKey('acc1', 's0');
     for (var i = 0; i < 3; i++) {
       await db.addPlay(k, DateTime(2026));
     }
-    Future<int?> cnt() async => (await (db.select(
-      db.playCounts,
-    )..where((p) => p.path.equals(k))).getSingleOrNull())?.count;
+    Future<(int, int)?> cnt() async {
+      final r = await (db.select(
+        db.playCounts,
+      )..where((p) => p.path.equals(k))).getSingleOrNull();
+      return r == null ? null : (r.imported, r.count);
+    }
+
     Map<SourceAlbum, List<SourceSong>> one(int pc) => {
       alb(0): [song('s0', playCount: pc)],
     };
     await LibrarySync(db).run(FakeSource('acc1', one(12)));
-    expect(await cnt(), 12);
+    expect(await cnt(), (12, 3));
     await LibrarySync(db).run(FakeSource('acc1', one(5)));
-    expect(await cnt(), 12);
+    expect(await cnt(), (12, 3)); // never lowered
     await LibrarySync(db).run(FakeSource('acc1', one(20)));
-    expect(await cnt(), 20);
+    expect(await cnt(), (20, 3));
+    expect((await db.top(10)).single.$2, 23); // the Top 100 counts both
   });
 
   test('albumSongs failing on the 3rd album: nothing deleted', () async {
