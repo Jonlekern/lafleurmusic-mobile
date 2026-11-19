@@ -59,7 +59,7 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Playlists = albums, comme sur le Mac et la console
 - ✅ En plus : section « Playlists du serveur » sous les albums (lecture seule, gardables) ; garder une playlist écrit un fichier `.m3u8` dans `Playlists/` (l'appli n'efface que ses propres fichiers)
 - ✅ Plan 3 fait : Cover Flow en couché (comptes et playlists compris), tablette = colonnes côte à côte
-- ⬜ Plan 3 : les visuels de la tablette et le texte « Ouvrir l'album » du Cover Flow attendent le oui de Johnny
+- ✅ Plan 3 : visuels de la tablette, texte « Ouvrir l'album » du Cover Flow et texte « Morceau absent » validés par Johnny (19.11.2026)
 
 ## Mode clair
 - ✅ L'affichage actuel = mode sombre

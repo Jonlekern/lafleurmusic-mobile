@@ -4,7 +4,7 @@ An iPod-style music player for Android and iPhone, in the LAFLEURSTUDIO style.
 It plays the music from your own server and keeps a copy of your favourites on the phone.
 The phone sibling of [LAFLEURMUSIC for desktop](https://github.com/Jonlekern/lafleurmusic-desktop).
 
-**Status:** early work in progress. Plan 1 (listen to your server) and plan 3 (several accounts merged, server playlists, Cover Flow, tablets) are done, the Cover Flow and tablet visuals awaiting final approval. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
+**Status:** early work in progress. Plan 1 (listen to your server) and plan 3 (several accounts merged, server playlists, Cover Flow, tablets) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
 
 What works now:
 
@@ -20,7 +20,7 @@ What works now:
 - **Server playlists:** shown under the albums, read-only. Keeping one keeps its songs and writes an
   `.m3u8` file under `Playlists/` in the LAFLEURMUSIC folder; the app only ever removes the files it wrote.
 - **Cover Flow** when the phone is turned sideways, and **tablets** (iPad, Android) get the columns of the
-  desktop app side by side (both done, visuals awaiting final approval).
+  desktop app side by side (both done).
 - **Offline:** keep songs or albums on the phone ("Keep on my iPhone / phone") as real
   files, filed as Artist/Album with tags and cover. They play from the copy when the server is out of
   reach; what isn't on the phone is greyed out. A download queue resumes after an interruption and
