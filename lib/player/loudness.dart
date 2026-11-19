@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import '../library/db.dart';
 import '../library/models.dart';
+import '../sources/remote_key.dart';
 import 'loudness_probe.dart';
 import 'player.dart';
 
@@ -13,7 +14,7 @@ double gainFor(double? lufs) =>
 /// Morceau du serveur : pas de mesure (il faudrait tout télécharger), le ReplayGain du serveur
 /// sert de gain (même cible, −18 LUFS), borné à ±12 dB ; sans ReplayGain, pas de correction.
 /// Sa copie gardée, elle, est un fichier : mesurée comme un fichier local (clé = chemin du fichier).
-bool _remote(Track t) => t.path.startsWith('subsonic://');
+bool _remote(Track t) => isRemotePath(t.path);
 double _serverGain(Track t) =>
     (t.replayGain ?? 0).clamp(-12.0, 12.0).toDouble();
 

@@ -175,11 +175,11 @@ void main() {
     expect(seen.first.url.host, 'music.example.com');
   });
 
-  test('source() for jellyfin/plex is unsupported for now', () async {
+  test('source() for plex is unsupported for now', () async {
     final a = await accounts.add(
-      type: AccountType.jellyfin,
-      name: 'J',
-      base: Uri.parse('https://j.example.com'),
+      type: AccountType.plex,
+      name: 'P',
+      base: Uri.parse('https://p.example.com'),
       user: 'u',
       password: 'p',
     );

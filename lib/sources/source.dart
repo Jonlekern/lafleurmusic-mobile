@@ -15,7 +15,19 @@ const requestTimeout = Duration(seconds: 15);
 http.Client newServerClient() =>
     IOClient(HttpClient()..connectionTimeout = connectTimeout);
 
-/// A music source (Subsonic today) as seen by sync and playback.
+int _portOf(Uri u) => u.hasPort ? u.port : (u.scheme == 'https' ? 443 : 80);
+
+/// A redirect hop we accept: same host, http or https, never https -> http, and the
+/// port unchanged (or the default https port when upgrading).
+bool sameHostHop(Uri from, Uri to) {
+  if (to.scheme != 'http' && to.scheme != 'https') return false;
+  if (to.host.toLowerCase() != from.host.toLowerCase()) return false;
+  if (from.scheme == 'https' && to.scheme == 'http') return false;
+  final upgrade = from.scheme == 'http' && to.scheme == 'https';
+  return _portOf(to) == _portOf(from) || (upgrade && _portOf(to) == 443);
+}
+
+/// A music source (Subsonic, Jellyfin) as seen by sync and playback.
 class SourceAlbum {
   const SourceAlbum({
     required this.id,
@@ -107,6 +119,9 @@ enum TestResult {
   wrongPassword,
   headerRefused,
   notSubsonic,
+
+  /// The address answers but is not a Jellyfin server.
+  notJellyfin,
 
   /// https: the server's certificate was refused (self-signed, expired, wrong name).
   certificateRejected,

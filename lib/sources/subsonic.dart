@@ -129,19 +129,6 @@ class SubsonicSource implements MusicSource, HttpSource {
   Uri? get redirectedBase => _redirectedBase;
   Uri? _redirectedBase;
 
-  static int _portOf(Uri u) =>
-      u.hasPort ? u.port : (u.scheme == 'https' ? 443 : 80);
-
-  /// A hop we accept: same host, http or https, never https -> http, and the
-  /// port unchanged (or the default https port when upgrading).
-  static bool _sameHostHop(Uri from, Uri to) {
-    if (to.scheme != 'http' && to.scheme != 'https') return false;
-    if (to.host.toLowerCase() != from.host.toLowerCase()) return false;
-    if (from.scheme == 'https' && to.scheme == 'http') return false;
-    final upgrade = from.scheme == 'http' && to.scheme == 'https';
-    return _portOf(to) == _portOf(from) || (upgrade && _portOf(to) == 443);
-  }
-
   @override
   Future<TestResult> test() async {
     _redirectedBase = null;
@@ -172,7 +159,7 @@ class SubsonicSource implements MusicSource, HttpSource {
         if (r.statusCode < 300 || r.statusCode >= 400) break;
         final loc = r.headers['location'];
         final next = loc == null ? null : url.resolve(loc);
-        if (next == null || hops >= _maxRedirects || !_sameHostHop(url, next)) {
+        if (next == null || hops >= _maxRedirects || !sameHostHop(url, next)) {
           return TestResult.headerRefused;
         }
         hops++;

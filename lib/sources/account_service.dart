@@ -12,6 +12,8 @@ import '../library/sync.dart';
 import '../player/media_resolver.dart';
 import 'accounts.dart';
 import 'source.dart';
+import 'jellyfin.dart';
+import 'remote_key.dart';
 import 'subsonic.dart';
 
 /// What the account form holds, before it is saved. Never logged.
@@ -355,17 +357,34 @@ class AccountService extends ChangeNotifier {
     if (custom != null) return _timed(custom(d, password));
     final client = newServerClient();
     try {
-      final source = SubsonicSource(
-        accountId: id ?? 'draft',
-        base: d.base!,
-        user: d.user.trim(),
-        password: password,
-        headers: d.headers,
-        client: client,
-      );
-      final r = await _timed(source);
-      draftRedirect = source.redirectedBase;
-      return r;
+      switch (d.type) {
+        case AccountType.jellyfin:
+          // nothing stored: a test is not a sign-in the account keeps
+          final source = JellyfinSource(
+            accountId: id ?? 'draft',
+            base: d.base!,
+            user: d.user.trim(),
+            password: password,
+            headers: d.headers,
+            client: client,
+          );
+          final r = await _timed(source);
+          draftRedirect = source.redirectedBase;
+          return r;
+        case AccountType.subsonic:
+        case AccountType.plex:
+          final source = SubsonicSource(
+            accountId: id ?? 'draft',
+            base: d.base!,
+            user: d.user.trim(),
+            password: password,
+            headers: d.headers,
+            client: client,
+          );
+          final r = await _timed(source);
+          draftRedirect = source.redirectedBase;
+          return r;
+      }
     } finally {
       client.close();
     }
@@ -623,7 +642,7 @@ class _CancelFlag {
 }
 
 /// Stops a sync between albums once its account is removed: songs answered after that are dropped.
-class _CancellableSource implements MusicSource {
+class _CancellableSource implements MusicSource, TypedSource {
   _CancellableSource(this._inner, this._flag);
   final MusicSource _inner;
   final _CancelFlag _flag;
@@ -634,6 +653,14 @@ class _CancellableSource implements MusicSource {
 
   @override
   String get accountId => _inner.accountId;
+
+  @override
+  AccountType get accountType {
+    final i = _inner;
+    return i is TypedSource
+        ? (i as TypedSource).accountType
+        : AccountType.subsonic;
+  }
 
   @override
   Future<TestResult> test() => _inner.test();

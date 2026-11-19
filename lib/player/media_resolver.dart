@@ -9,18 +9,11 @@ import 'package:path/path.dart' as p;
 import '../library/db.dart';
 import '../library/models.dart';
 import '../offline/paths.dart' show fileOrPlaceholderExists;
+import '../sources/remote_key.dart';
 import '../sources/source.dart';
 
-const _scheme = 'subsonic://';
-
-/// `subsonic://acc/song` → (acc, song) ; null for a local file.
-(String, String)? parseRemoteKey(String path) {
-  if (!path.startsWith(_scheme)) return null;
-  final rest = path.substring(_scheme.length);
-  final slash = rest.indexOf('/');
-  if (slash <= 0 || slash == rest.length - 1) return null;
-  return (rest.substring(0, slash), rest.substring(slash + 1));
-}
+// the key format lives with the schemes; callers keep importing it from here
+export '../sources/remote_key.dart' show parseRemoteKey;
 
 /// Absolute path of the finished copy of server track [trackPath], if its file is still there
 /// (deleted by hand: null, the stream is used).

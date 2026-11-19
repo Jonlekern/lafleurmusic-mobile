@@ -46,7 +46,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final app = AppScope.of(context);
     _skipped ??= app.player.skipped.listen((path) {
       if (!mounted) return;
-      // morceau du serveur : son titre (le chemin n'est qu'une clé subsonic://)
+      // morceau du serveur : son titre (le chemin n'est qu'une clé subsonic:// ou jellyfin://)
       final title =
           app.player.queue?.order
               .where((t) => t.path == path)

@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
 import '../offline/paths.dart';
+import '../sources/remote_key.dart';
 import 'merge.dart';
 import 'models.dart';
 
@@ -288,10 +289,12 @@ class LibraryDb extends _$LibraryDb {
                       ? const Constant(true)
                       : o.reason.equals(OfflineReason.top100.name).not());
               for (final acc in skipAccounts) {
-                final prefix = 'subsonic://$acc/';
-                w =
-                    w &
-                    o.trackPath.substr(1, prefix.length).equals(prefix).not();
+                for (final scheme in remoteSchemes) {
+                  final prefix = '$scheme$acc/';
+                  w =
+                      w &
+                      o.trackPath.substr(1, prefix.length).equals(prefix).not();
+                }
               }
               return w;
             })
@@ -1044,7 +1047,7 @@ class LibraryDb extends _$LibraryDb {
   Stream<Set<String>> watchKeptAlbums({Set<String>? accounts}) {
     final (sql, v) = _reps(accounts);
     return customSelect(
-      "${sql}SELECT r.album_merge_key AS k FROM reps r WHERE r.path LIKE 'subsonic://%' "
+      "${sql}SELECT r.album_merge_key AS k FROM reps r WHERE ${sqlIsRemote('r.path')} "
       'GROUP BY r.album_merge_key HAVING COUNT(*) = SUM(CASE WHEN EXISTS ('
       'SELECT 1 FROM tracks t2 JOIN offline o ON o.track_path = t2.path '
       'WHERE o.state = ? AND (t2.path = r.path OR (r.merge_key <> \'\' '

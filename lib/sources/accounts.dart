@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../library/db.dart';
 import 'secret_store.dart';
 import 'source.dart';
+import 'jellyfin.dart';
 import 'subsonic.dart';
 
 enum AccountType { subsonic, jellyfin, plex }
@@ -36,6 +37,11 @@ class Accounts {
 
   static String _pwKey(String id) => 'account.$id.password';
   static String _hdrKey(String id) => 'account.$id.headers';
+  // Jellyfin's token and user id: gone with the account, and when a sign-in detail changes
+  static List<String> _tokenKeys(String id) => [
+    JellyfinSource.tokenKey(id),
+    JellyfinSource.userIdKey(id),
+  ];
 
   static Account _from(AccountRow r) => Account(
     id: r.id,
@@ -107,7 +113,7 @@ class Accounts {
 
   Future<void> _deleteSecrets(String id) async {
     // each delete is tried even if the other fails; errors are swallowed on cleanup
-    for (final k in [_pwKey(id), _hdrKey(id)]) {
+    for (final k in [_pwKey(id), _hdrKey(id), ..._tokenKeys(id)]) {
       try {
         await _secrets.delete(k);
       } catch (_) {}
@@ -124,6 +130,14 @@ class Accounts {
       _db.accountRows,
     )..where((t) => t.id.equals(a.id))).getSingleOrNull();
     if (exists == null) throw StateError('Unknown account ${a.id}');
+    // new address, name or password: the old token proves nothing, sign in again
+    if (password != null ||
+        a.base.toString() != exists.base ||
+        a.user != exists.user) {
+      for (final k in _tokenKeys(a.id)) {
+        await _secrets.delete(k);
+      }
+    }
     if (password != null) await _secrets.write(_pwKey(a.id), password);
     if (headers != null) {
       await _secrets.write(_hdrKey(a.id), jsonEncode(headers));
@@ -152,6 +166,9 @@ class Accounts {
     });
     await _secrets.delete(_pwKey(id));
     await _secrets.delete(_hdrKey(id));
+    for (final k in _tokenKeys(id)) {
+      await _secrets.delete(k);
+    }
   }
 
   /// Listed accounts first (unknown and duplicate ids ignored), the others after, in their old order.
@@ -203,6 +220,18 @@ class Accounts {
           client: client,
         );
       case AccountType.jellyfin:
+        // the account's own password entry: signing in again after a revoked token needs it
+        final pw = await _secrets.read(_pwKey(id));
+        if (pw == null) throw StateError('Missing password for account $id');
+        return JellyfinSource(
+          accountId: id,
+          base: a.base,
+          user: a.user,
+          password: pw,
+          headers: await headers(id),
+          client: client,
+          secrets: _secrets,
+        );
       case AccountType.plex:
         throw UnsupportedError('${a.type.name} is not supported yet');
     }

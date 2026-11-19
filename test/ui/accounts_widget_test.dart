@@ -215,7 +215,7 @@ void main() {
       expect(find.textContaining('Il manque'), findsOneWidget);
     });
 
-    testWidgets('Jellyfin et Plex visibles mais grisés « bientôt »', (
+    testWidgets('Jellyfin choisissable, Plex grisé « bientôt »', (
       tester,
     ) async {
       await pumpAccounts(
@@ -228,12 +228,12 @@ void main() {
       expect(find.text('Plex'), findsOneWidget);
       expect(find.textContaining('bientôt'), findsWidgets);
       await tapAndSettle(tester, find.text('Plex'));
-      expect(
-        tester
-            .widget<AccountTypeSegment>(find.byType(AccountTypeSegment))
-            .value,
-        AccountType.subsonic,
-      );
+      AccountType shown() => tester
+          .widget<AccountTypeSegment>(find.byType(AccountTypeSegment))
+          .value;
+      expect(shown(), AccountType.subsonic);
+      await tapAndSettle(tester, find.text('Jellyfin'));
+      expect(shown(), AccountType.jellyfin);
     });
   });
 

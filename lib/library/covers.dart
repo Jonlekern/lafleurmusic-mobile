@@ -9,9 +9,11 @@ import 'package:flutter_taglib/flutter_taglib.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
+import '../sources/remote_key.dart';
+
 typedef EmbeddedCover = Future<Uint8List?> Function(String trackPath);
 
-/// Cover of a server track (`subsonic://…`), fetched with the account headers.
+/// Cover of a server track (`subsonic://…`, `jellyfin://…`), fetched with the account headers.
 typedef RemoteCover = Future<Uint8List?> Function(String trackPath, int size);
 
 /// Pochette intégrée lue avec TagLib (dans un isolate).
@@ -75,9 +77,10 @@ class Covers {
   /// Compte retiré : ses pochettes quittent le disque et la mémoire.
   Future<void> forgetAccount(String accountId) async {
     if (accountId.isEmpty || accountId.contains(RegExp(r'[/\\.]'))) return;
-    final prefix = '|subsonic://$accountId/';
-    _memo.removeWhere((k, _) => k.contains(prefix));
-    _failedAt.removeWhere((k, _) => k.contains(prefix));
+    bool mine(String k) =>
+        remoteSchemes.any((s) => k.contains('|$s$accountId/'));
+    _memo.removeWhere((k, _) => mine(k));
+    _failedAt.removeWhere((k, _) => mine(k));
     final d = _accountDir(accountId);
     if (await d.exists()) await d.delete(recursive: true);
   }
@@ -117,7 +120,7 @@ class Covers {
   final _downloads = <String, Future<File?>>{};
 
   Future<File?> _load(String trackPath, int size) async {
-    if (!trackPath.startsWith('subsonic://')) {
+    if (!isRemotePath(trackPath)) {
       return _make(_cacheFile(trackPath, size), size, () async {
         final file = await absolute?.call(trackPath) ?? trackPath;
         Uint8List? bytes = await embedded(file);
@@ -138,7 +141,7 @@ class Covers {
     final keyOf = remoteKey;
     final cover = keyOf == null ? trackPath : await keyOf(trackPath);
     if (cover == null) return null; // pas de pochette sur le serveur
-    final rest = trackPath.substring('subsonic://'.length);
+    final rest = trackPath.substring(remoteSchemeOf(trackPath)!.length);
     final account = rest.contains('/')
         ? rest.substring(0, rest.indexOf('/'))
         : rest;

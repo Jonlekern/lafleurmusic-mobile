@@ -274,7 +274,12 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
             onChanged: (t) => setState(() => _type = t),
           ),
           const SizedBox(height: 6),
-          Text(s.subsonicServers, style: phoneHint),
+          Text(
+            _type == AccountType.jellyfin
+                ? s.jellyfinServers
+                : s.subsonicServers,
+            style: phoneHint,
+          ),
           FieldLabel(s.fieldName),
           _Input(key: const ValueKey('account-name'), controller: _name),
           FieldLabel(s.fieldAddress),
@@ -567,7 +572,7 @@ class PhoneSegment<T> extends StatelessWidget {
   }
 }
 
-/// Subsonic seul pour l'instant ; Jellyfin et Plex grisés (plus tard).
+/// Subsonic et Jellyfin ; Plex grisé (plus tard).
 class AccountTypeSegment extends StatelessWidget {
   const AccountTypeSegment({
     super.key,
@@ -585,7 +590,7 @@ class AccountTypeSegment extends StatelessWidget {
       onChanged: onChanged,
       options: [
         for (final t in AccountType.values)
-          SegmentOption(t, s.typeName(t), enabled: t == AccountType.subsonic),
+          SegmentOption(t, s.typeName(t), enabled: t != AccountType.plex),
       ],
     );
   }

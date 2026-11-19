@@ -1,9 +1,14 @@
+import '../sources/accounts.dart';
+import '../sources/remote_key.dart';
 import '../sources/source.dart';
 import 'db.dart';
 import 'models.dart';
 
-String trackKey(String accountId, String songId) =>
-    'subsonic://$accountId/$songId';
+String trackKey(
+  String accountId,
+  String songId, [
+  AccountType type = AccountType.subsonic,
+]) => remoteKey(type, accountId, songId);
 
 class SyncResult {
   const SyncResult({
@@ -62,7 +67,7 @@ class LibrarySync {
             continue;
           }
           failedInARow = 0;
-          final r = await _store(s.accountId, album, songs, seen);
+          final r = await _store(s.accountId, _typeOf(s), album, songs, seen);
           added += r.$1;
           updated += r.$2;
         }
@@ -102,13 +107,20 @@ class LibrarySync {
           name: l.name,
           paths: l.songIds == null
               ? null // unread: its old songs stay
-              : [for (final id in l.songIds!) trackKey(s.accountId, id)],
+              : [
+                  for (final id in l.songIds!)
+                    trackKey(s.accountId, id, _typeOf(s)),
+                ],
         ),
     ]);
   }
 
+  static AccountType _typeOf(MusicSource s) =>
+      s is TypedSource ? (s as TypedSource).accountType : AccountType.subsonic;
+
   Future<(int, int)> _store(
     String acc,
+    AccountType type,
     SourceAlbum album,
     List<SourceSong> songs,
     Set<String> seen,
@@ -120,7 +132,7 @@ class LibrarySync {
     final tracks = [
       for (final s in songs)
         Track(
-          path: trackKey(acc, s.id),
+          path: trackKey(acc, s.id, type),
           accountId: acc,
           remoteId: s.id,
           title: s.title,
