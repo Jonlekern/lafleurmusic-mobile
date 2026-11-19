@@ -12,6 +12,7 @@ import '../offline/paths.dart';
 import '../player/media_resolver.dart';
 import 'accounts.dart';
 import 'jellyfin.dart';
+import 'plex.dart';
 import 'plex_link.dart';
 import 'remote_key.dart';
 import 'source.dart';
@@ -579,8 +580,11 @@ class AccountService extends ChangeNotifier {
   }
 
   /// [checkAll] on every account (the network changed: who answers from here?).
-  Future<void> checkAccounts() async =>
-      checkAll([for (final a in await accounts.watch().first) a.id]);
+  Future<void> checkAccounts() async {
+    // home / away: Plex may read its server addresses from plex.tv again at once
+    PlexSource.resetRefreshCooldowns();
+    return checkAll([for (final a in await accounts.watch().first) a.id]);
+  }
 
   Future<void> _check(String id) async {
     notifyListeners();

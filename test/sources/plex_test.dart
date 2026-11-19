@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/native.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/sync.dart';
@@ -24,6 +25,7 @@ PlexSource plexSource(
   Map<String, String> headers = const {},
   PlexServer? server,
   FakePlexTv? tv,
+  DateTime Function()? now,
 }) {
   final s = secrets ?? FakeSecretStore();
   if (token != null) s.data[PlexSource.tokenKey('acc1')] = token;
@@ -36,6 +38,7 @@ PlexSource plexSource(
     secrets: s,
     deviceName: 'iPhone',
     platform: 'iOS',
+    now: now,
   );
 }
 
@@ -102,6 +105,11 @@ void main() {
       ),
     )!;
 
+    setUp(PlexSource.resetRefreshCooldowns);
+
+    int resourceReads(FakePlexTv tv) =>
+        tv.log.where((r) => r.url.path == '/api/v2/resources').length;
+
     FakeSecretStore withAccountToken() =>
         FakeSecretStore()
           ..data[PlexSource.accountTokenKey('acc1')] = 'user-token-1';
@@ -113,6 +121,10 @@ void main() {
         tv.pms.down = {homeLocal};
         final secrets = withAccountToken();
         final s = plexSource(tv.pms, secrets: secrets, server: stale, tv: tv);
+        // this check stays short: the refresh runs in the background
+        expect(await s.test(), TestResult.unreachable);
+        await s.refreshing;
+        expect(s.base?.host, homeRemote);
         expect(await s.test(), TestResult.ok);
         expect(s.base?.host, homeRemote);
         final saved = PlexServer.fromJson(
@@ -148,8 +160,10 @@ void main() {
         final secrets = withAccountToken();
         final s = plexSource(tv.pms, secrets: secrets, server: stale, tv: tv);
         expect(await s.test(), TestResult.unreachable);
+        await s.refreshing;
         expect(secrets.data.containsKey(PlexSource.serverKey('acc1')), isFalse);
         await expectLater(s.prepare(), throwsA(isA<PlexException>()));
+        await s.refreshing;
       },
     );
 
@@ -171,8 +185,82 @@ void main() {
       final secrets = withAccountToken();
       final s = plexSource(tv.pms, secrets: secrets, tv: tv);
       expect(await s.test(), TestResult.unreachable);
+      await s.refreshing;
+      expect(resourceReads(tv), 1);
       expect(secrets.data.containsKey(PlexSource.serverKey('acc1')), isFalse);
     });
+
+    test(
+      'cooldown: five prepare() with the server down → one plex.tv read',
+      () async {
+        final tv = FakePlexTv();
+        tv.pms.down = {homeLocal, homeRemote, homeRelay};
+        final secrets = withAccountToken();
+        var clock = DateTime.utc(2026, 11, 19, 10);
+        PlexSource build() =>
+            plexSource(tv.pms, secrets: secrets, tv: tv, now: () => clock);
+        final s = build();
+        for (var i = 0; i < 5; i++) {
+          await expectLater(s.prepare(), throwsA(isA<PlexException>()));
+          await s.refreshing;
+        }
+        expect(resourceReads(tv), 1);
+        // the source is rebuilt (resolver, sync): still cooling down
+        final again = build();
+        expect(await again.test(), TestResult.unreachable);
+        await again.refreshing;
+        expect(resourceReads(tv), 1);
+        // 10 minutes later: plex.tv is asked again
+        clock = clock.add(const Duration(minutes: 10, seconds: 1));
+        expect(await again.test(), TestResult.unreachable);
+        await again.refreshing;
+        expect(resourceReads(tv), 2);
+        // the network changed (home/away): asked again at once
+        PlexSource.resetRefreshCooldowns();
+        expect(await again.test(), TestResult.unreachable);
+        await again.refreshing;
+        expect(resourceReads(tv), 3);
+      },
+    );
+
+    test('the cooldown is per account', () async {
+      final tv = FakePlexTv();
+      tv.pms.down = {homeLocal, homeRemote, homeRelay};
+      final s = plexSource(tv.pms, secrets: withAccountToken(), tv: tv);
+      await s.test();
+      await s.refreshing;
+      final other = PlexSource(
+        accountId: 'acc2',
+        server: home,
+        clientId: 'client-abc',
+        client: tv.client(),
+        secrets: FakeSecretStore()
+          ..data[PlexSource.tokenKey('acc2')] = 't'
+          ..data[PlexSource.accountTokenKey('acc2')] = 'user-token-1',
+      );
+      await other.test();
+      await other.refreshing;
+      expect(resourceReads(tv), 2);
+    });
+
+    test(
+      'worst case: every address and plex.tv hang, test() ends within 10 s',
+      () {
+        fakeAsync((fa) {
+          final tv = FakePlexTv()..hang = true;
+          tv.pms.hang = {homeLocal, homeRemote, homeRelay};
+          final s = plexSource(tv.pms, secrets: withAccountToken(), tv: tv);
+          TestResult? r;
+          s.test().then((v) => r = v);
+          fa.elapse(const Duration(seconds: 8, milliseconds: 100));
+          expect(r, TestResult.unreachable);
+          expect(resourceReads(tv), 1); // the refresh went on in the background
+          // the background refresh ends too (its own time limits), nothing left behind
+          fa.elapse(const Duration(minutes: 1));
+          expect(fa.pendingTimers, isEmpty);
+        });
+      },
+    );
 
     test('no plex.tv token kept: no refresh, unreachable', () async {
       final tv = FakePlexTv();

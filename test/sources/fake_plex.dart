@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -46,6 +47,9 @@ class FakePms {
   /// Hosts that never answer (a SocketException).
   Set<String> down = {};
 
+  /// Hosts that never answer at all (the request hangs).
+  Set<String> hang = {};
+
   /// Hosts answered by some other server (another machineIdentifier).
   Set<String> otherMachine = {};
 
@@ -66,6 +70,7 @@ class FakePms {
     final host = r.url.host;
     final d = delay[host];
     if (d != null) await Future<void>.delayed(d);
+    if (hang.contains(host)) await Completer<void>().future;
     if (down.contains(host)) throw const SocketException('no route to host');
     final machine = otherMachine.contains(host)
         ? 'someone-else'
@@ -119,6 +124,9 @@ class FakePlexTv {
 
   /// plex.tv does not answer at all.
   bool down = false;
+
+  /// plex.tv never answers (the request hangs).
+  bool hang = false;
   List<String> resources = [homeResource, officeResource, playerResource];
   int _polls = 0;
   int pinsMade = 0;
@@ -130,6 +138,7 @@ class FakePlexTv {
     if (r.url.host != 'plex.tv') return pms.handle(r);
     log.add(r);
     if (down) throw const SocketException('plex.tv down');
+    if (hang) await Completer<void>().future;
     final path = r.url.path;
     if (r.method == 'POST' && path == '/api/v2/pins') {
       if (pinStatus >= 300) return http.Response('', pinStatus);

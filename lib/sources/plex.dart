@@ -27,7 +27,9 @@ class PlexSource
     String? platform,
     this.timeout = requestTimeout,
     this.probeTimeout = plexProbeTimeout,
-  }) : _custom = Map.unmodifiable(headers),
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       _custom = Map.unmodifiable(headers),
        _client = client ?? newServerClient(),
        _deviceName = deviceName ?? defaultPlexDeviceName,
        _platform = platform ?? defaultPlexPlatform;
@@ -44,6 +46,20 @@ class PlexSource
 
   /// Who the account is on plex.tv (`uuid`): a new code must come from the same one.
   static String userKey(String id) => 'account.$id.plex.user';
+
+  /// After a read of the addresses from plex.tv that found none answering, plex.tv is not
+  /// asked again for this long (per account: sources are rebuilt often).
+  static const refreshCooldown = Duration(minutes: 10);
+  static final _cooldownUntil = <String, DateTime>{};
+  static final _refreshingNow = <String, Future<void>>{};
+
+  /// The network changed (home / away): plex.tv may be asked again at once.
+  static void resetRefreshCooldowns() => _cooldownUntil.clear();
+
+  /// The background read of the addresses from plex.tv running for this account, if any.
+  Future<void>? get refreshing => _refreshingNow[accountId];
+
+  final DateTime Function() _now;
 
   @override
   final String accountId;
@@ -90,23 +106,55 @@ class PlexSource
   }
 
   /// Tries every address again, best first; keeps the one that answers (or none).
+  /// One round of probes (all addresses at once, [probeTimeout] at most). None answers:
+  /// the addresses may be stale (a new public IP), so plex.tv is asked for the new ones in
+  /// the background; this call doesn't wait for it (a check must stay short), the next one
+  /// uses what it found.
   Future<Uri?> _pick() async {
-    var c = await bestConnection(
+    final c = await bestConnection(
       _client,
       _server,
       headers: _headersWith(null),
       timeout: probeTimeout,
     );
-    // none answers: the addresses may be stale (a new public IP); plex.tv knows the new ones
-    if (c == null && await _refreshConnections()) {
-      c = await bestConnection(
-        _client,
-        _server,
-        headers: _headersWith(null),
-        timeout: probeTimeout,
-      );
-    }
+    if (c == null) _startRefresh();
     return _base = c?.uri;
+  }
+
+  void _startRefresh() {
+    if (_refreshingNow.containsKey(accountId)) return;
+    final until = _cooldownUntil[accountId];
+    if (until != null && _now().isBefore(until)) return;
+    late final Future<void> f;
+    f = _refresh().whenComplete(() {
+      if (identical(_refreshingNow[accountId], f)) {
+        _refreshingNow.remove(accountId);
+      }
+    });
+    _refreshingNow[accountId] = f;
+  }
+
+  Future<void> _refresh() async {
+    var answers = false;
+    try {
+      if (await _refreshConnections()) {
+        final c = await bestConnection(
+          _client,
+          _server,
+          headers: _headersWith(null),
+          timeout: probeTimeout,
+        );
+        if (c != null) _base = c.uri;
+        answers = c != null;
+      }
+    } on Object {
+      answers = false;
+    }
+    if (answers) {
+      _cooldownUntil.remove(accountId);
+    } else {
+      _cooldownUntil[accountId] = _now().add(refreshCooldown);
+    }
   }
 
   static bool _sameConnections(List<PlexConnection> a, List<PlexConnection> b) {
