@@ -5,7 +5,6 @@ import '../library/models.dart';
 import '../settings.dart';
 import '../theme/colors.dart';
 import 'cover_image.dart';
-import 'cover_mosaic.dart';
 import 'keep_actions.dart' show onIphone;
 import 'phone/accounts_screen.dart';
 import 'phone/on_device_screen.dart';
@@ -246,7 +245,13 @@ class _ServerPlaylists extends StatelessWidget {
             for (final p in lists)
               _Item(
                 key: ValueKey('playlist-${p.accountId}-${p.id}'),
-                leading: CoverMosaic(tracks: p.covers, size: 26, radius: 4),
+                leading: PlaylistCover(
+                  ref: p.ref,
+                  tracks: p.covers,
+                  size: 26,
+                  radius: 4,
+                  stamp: p,
+                ),
                 label: p.name,
                 tag: tagged ? playlistPlace(app.strings, p) : null,
                 onTap: () => openPlaylist(context, p),

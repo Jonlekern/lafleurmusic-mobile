@@ -21,7 +21,8 @@ class SubsonicException implements Exception {
   String toString() => 'SubsonicException(${code ?? '-'}): $message';
 }
 
-class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
+class SubsonicSource
+    implements MusicSource, HttpSource, PlaylistWriter, PlaylistOrderWriter {
   SubsonicSource({
     required this.accountId,
     required this._base,
@@ -497,6 +498,33 @@ class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
       ids,
       split: false,
     );
+  }
+
+  /// The whole list written again in its new order (`createPlaylist?playlistId=…`), in one
+  /// request (or one form POST), never in parts.
+  @override
+  Future<void> setOrder(
+    String id,
+    List<String> songIds, {
+    List<String>? expected,
+  }) async {
+    final now = (await readPlaylist(id)).songIds!;
+    if (expected != null && !_sameList(now, expected)) throw PlaylistChanged();
+    await _writeList(
+      'createPlaylist',
+      {'playlistId': id},
+      'songId',
+      songIds,
+      split: false,
+    );
+  }
+
+  static bool _sameList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   @override

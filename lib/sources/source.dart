@@ -228,6 +228,19 @@ abstract interface class PlaylistWriter {
   Future<SourcePlaylist> readPlaylist(String id);
 }
 
+/// A [PlaylistWriter] that can write a playlist's whole order at once (« Trier »), instead of
+/// one move per row.
+abstract interface class PlaylistOrderWriter {
+  /// Writes playlist [id] as [songIds], in that order (the same songs, reordered).
+  /// [expected]: the songs the caller sees now, in order; another list on the server is a
+  /// [PlaylistChanged] and nothing sent. Too long to send: [PlaylistTooLong], nothing sent.
+  Future<void> setOrder(
+    String id,
+    List<String> songIds, {
+    List<String>? expected,
+  });
+}
+
 /// The server refused to change its playlists for this account (no rights, a server too
 /// old). Nothing was changed. Never carries a token or an address.
 class PlaylistWriteRefused implements Exception {

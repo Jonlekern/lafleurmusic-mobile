@@ -113,8 +113,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     final p = widget.playlist;
     var ok = false;
     try {
-      ok =
-          await store.canWrite(p.accountId) && await store.checkEditable(p.ref);
+      ok = await store.writes(p.accountId) && await store.checkEditable(p.ref);
     } on Object {
       ok = false;
     }
@@ -397,11 +396,13 @@ class PlaylistCover extends StatefulWidget {
     required this.ref,
     required this.tracks,
     required this.size,
+    this.radius = 6,
     this.stamp,
   });
   final PlaylistRef ref;
   final List<Track> tracks;
   final double size;
+  final double radius;
   final Object? stamp;
 
   @override
@@ -427,8 +428,9 @@ class _PlaylistCoverState extends State<PlaylistCover> {
 
   Future<File?> _load() async {
     if (widget.ref is! PhonePlaylistRef) return null;
+    final store = AppScope.of(context).playlistStore;
     try {
-      final f = await AppScope.of(context).playlistStore.coverOf(widget.ref);
+      final f = await store.coverOf(widget.ref);
       return f != null && await f.exists() ? f : null;
     } on Object {
       return null;
@@ -441,11 +443,15 @@ class _PlaylistCoverState extends State<PlaylistCover> {
     builder: (context, snap) {
       final f = snap.data;
       if (f == null) {
-        return CoverMosaic(tracks: widget.tracks, size: widget.size);
+        return CoverMosaic(
+          tracks: widget.tracks,
+          size: widget.size,
+          radius: widget.radius,
+        );
       }
       return ClipRRect(
         key: const Key('chosenCover'),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(widget.radius),
         child: Image.file(
           f,
           width: widget.size,
@@ -457,7 +463,7 @@ class _PlaylistCoverState extends State<PlaylistCover> {
   );
 }
 
-/// « Trier » : par titre, artiste, album, ou l'ordre d'ajout inverse ; le nouvel ordre est
+/// « Trier » : par titre, artiste, album, ou l'ordre inversé ; le nouvel ordre est
 /// écrit dans la playlist (sur son serveur, après une question). Les morceaux absents vont
 /// à la fin, dans leur ordre.
 Future<void> sortPlaylist(
@@ -509,7 +515,7 @@ Future<void> sortPlaylist(
               (PlaylistSort.title, s.sortTitle),
               (PlaylistSort.artist, s.sortArtist),
               (PlaylistSort.album, s.sortAlbum),
-              (PlaylistSort.reverse, s.sortReverseAdded),
+              (PlaylistSort.reverse, s.sortReverse),
             ])
               InkWell(
                 key: Key('sort-${by.name}'),

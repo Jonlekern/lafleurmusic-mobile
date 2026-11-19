@@ -80,6 +80,7 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
   ];
   File? _cover; // chosen, copied at OK
   var _busy = false;
+  var _noName = false; // OK with an empty name: said under the field
 
   @override
   void dispose() {
@@ -103,9 +104,13 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
     final store = app.playlistStore;
     final ref = widget.playlist.ref;
     final name = _name.text.trim();
+    if (name.isEmpty) {
+      setState(() => _noName = true);
+      return;
+    }
     setState(() => _busy = true);
     try {
-      if (name.isNotEmpty && name != widget.playlist.name) {
+      if (name != widget.playlist.name) {
         await store.rename(ref, name);
       }
       final kept = {for (final r in _rows) r.at};
@@ -257,6 +262,9 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                       child: TextField(
                         key: const Key('editName'),
                         controller: _name,
+                        onChanged: (_) {
+                          if (_noName) setState(() => _noName = false);
+                        },
                         textAlign: TextAlign.center,
                         cursorColor: LafleurColors.pink,
                         style: const TextStyle(
@@ -276,6 +284,18 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                         ),
                       ),
                     ),
+                    if (_noName)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          s.nameNeeded,
+                          style: const TextStyle(
+                            color: Color(0xFFFF6B6B),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 12),
                   ],
                 ),

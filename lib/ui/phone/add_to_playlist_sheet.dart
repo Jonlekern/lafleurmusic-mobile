@@ -5,11 +5,11 @@ import '../../app_scope.dart';
 import '../../library/models.dart';
 import '../../library/playlist_store.dart';
 import '../../theme/colors.dart';
-import '../cover_mosaic.dart';
 import '../keep_actions.dart' show onIphone;
 import '../queue_toast.dart' show showPlaylistToast;
 import '../tablet.dart' show onTablet;
 import 'new_playlist_screen.dart';
+import 'playlist_screen.dart' show PlaylistCover;
 
 /// « Ajouter à une playlist » (maquette 15, écran B) pour [tracks] : on coche une ou plusieurs
 /// playlists (ou on en crée une), puis OK. Une bulle dit « Ajouté à N playlists ».
@@ -371,10 +371,12 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
                                   for (final p in shown)
                                     _Row(
                                       key: Key('pl-${p.accountId}/${p.id}'),
-                                      cover: CoverMosaic(
+                                      cover: PlaylistCover(
+                                        ref: p.ref,
                                         tracks: p.covers,
                                         size: 44,
                                         radius: 4,
+                                        stamp: p,
                                       ),
                                       name: p.name,
                                       sub:

@@ -749,8 +749,9 @@ class Strings {
   String get sortTitle => _t('Titre', 'Title');
   String get sortArtist => _t('Artiste', 'Artist');
   String get sortAlbum => _t('Album', 'Album');
-  String get sortReverseAdded =>
-      _t("Ordre d'ajout inverse", 'Reverse order added');
+  String get sortReverse => _t("Inverser l'ordre", 'Reverse the order');
+  String get nameNeeded =>
+      _t('Donne un nom à ta playlist.', 'Give your playlist a name.');
   String sortServerQuestion(String name) =>
       _t('Trier « $name » ?', 'Sort “$name”?');
   String sortServerExplain(String account) => _t(

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drift/drift.dart' show TableUpdateQuery;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
@@ -414,6 +415,86 @@ void main() {
       await srv.reorder(ref, [3, 1, 0, 2]);
       expect(nav.lists['pl1']!.songs, ['s4', 's2', 's1', 's3']);
       expect(await stored('pl1'), [k('s4'), k('s2'), k('s1'), k('s3')]);
+    });
+
+    test('Subsonic: a sort of 20 songs is one write (the whole order), then '
+        'read back', () async {
+      final ids = [for (var i = 1; i <= 20; i++) 'z$i'];
+      await db.upsertTracks([
+        for (final id in ids) _t(k(id), title: id, account: acc),
+      ]);
+      nav.lists['pl1'] = (name: 'Road', songs: [...ids]);
+      expect(await srv.checkEditable(ref), isTrue);
+      nav.log.clear();
+      final order = [for (var i = 19; i >= 0; i--) i];
+      await srv.reorder(ref, order);
+      final writes = [
+        for (final r in nav.log)
+          if (r.url.path.contains('createPlaylist') ||
+              r.url.path.contains('updatePlaylist'))
+            r,
+      ];
+      expect(writes, hasLength(1));
+      expect(nav.lists['pl1']!.songs, ids.reversed.toList());
+      expect(await stored('pl1'), [for (final id in ids.reversed) k(id)]);
+    });
+
+    test('Subsonic: a sort too long for the address (no form POST): '
+        '« tooLong », nothing changed', () async {
+      nav.maxUrl = 100000;
+      final ids = [for (var i = 1; i <= 700; i++) 'song-number-$i'];
+      await db.upsertTracks([
+        for (final id in ids) _t(k(id), title: id, account: acc),
+      ]);
+      nav.lists['pl1'] = (name: 'Road', songs: [...ids]);
+      expect(await srv.checkEditable(ref), isTrue);
+      await expectLater(
+        srv.reorder(ref, [for (var i = 699; i >= 0; i--) i]),
+        throwsA(
+          isA<PlaylistWriteException>().having(
+            (e) => e.problem,
+            'problem',
+            PlaylistProblem.tooLong,
+          ),
+        ),
+      );
+      expect(nav.lists['pl1']!.songs, ids);
+    });
+
+    test('an account whose server refused a creation still edits its own '
+        'playlists (writes: true)', () async {
+      nav.readOnly = true;
+      await expectLater(
+        srv.create('New', accountId: acc),
+        throwsA(isA<PlaylistWriteException>()),
+      );
+      nav.readOnly = false;
+      expect(await srv.canWrite(acc), isFalse); // not offered to create
+      expect(await srv.writes(acc), isTrue);
+      expect(await srv.checkEditable(ref), isTrue);
+    });
+
+    test('checkEditable writes nothing when the server has the same '
+        'playlist', () async {
+      expect(await srv.checkEditable(ref), isTrue); // stores the read
+      var writes = 0;
+      final sub = db
+          .tableUpdates(
+            TableUpdateQuery.allOf([
+              TableUpdateQuery.onTable(db.playlists),
+              TableUpdateQuery.onTable(db.playlistItems),
+            ]),
+          )
+          .listen((_) => writes++);
+      addTearDown(sub.cancel);
+      expect(await srv.checkEditable(ref), isTrue);
+      await pumpEventQueue();
+      expect(writes, 0);
+      nav.lists['pl1'] = (name: 'Road', songs: ['s1']);
+      expect(await srv.checkEditable(ref), isTrue);
+      await pumpEventQueue();
+      expect(writes, greaterThan(0));
+      expect(await stored('pl1'), [k('s1')]);
     });
 
     test('review focus 4: quick reorders go one at a time; the final order '

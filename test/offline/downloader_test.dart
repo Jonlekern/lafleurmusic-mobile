@@ -2349,6 +2349,61 @@ void main() {
       ]);
     });
 
+    test('renamed to the name of a file of the user\'s: theirs untouched, '
+        'ours « Trip (2).m3u8 » (a phone playlist)', () async {
+      for (var i = 1; i <= 2; i++) {
+        await add(_t('$i', no: i));
+      }
+      final store = PlaylistStore(db);
+      final ref = await store.create(
+        'Road',
+        songs: ['subsonic://acc/1'],
+      ) as PhonePlaylistRef;
+      final d = make()..followPlaylists();
+      await d.keepPlaylist(phonePlaylistAccount, '${ref.id}');
+      await d.whenIdle();
+      final theirs = m3u(root, 'Trip.m3u8')
+        ..writeAsStringSync('#EXTM3U\nmine\n');
+      await store.rename(ref, 'Trip');
+      await settled(d);
+      expect(theirs.readAsStringSync(), '#EXTM3U\nmine\n');
+      expect(m3u(root, 'Road.m3u8').existsSync(), isFalse);
+      expect(songs(m3u(root, 'Trip (2).m3u8')), ['../Art/Alb/01 Song 1.mp3']);
+      expect(
+        [for (final k in await db.keptPlaylistRows()) k.fileName],
+        ['Trip (2).m3u8'],
+      );
+      // a later change keeps our name
+      await store.add(ref, ['subsonic://acc/2']);
+      await settled(d);
+      expect(songs(m3u(root, 'Trip (2).m3u8')), hasLength(2));
+      expect(theirs.readAsStringSync(), '#EXTM3U\nmine\n');
+    });
+
+    test('a server playlist renamed on its server to the name of a file of '
+        'the user\'s: theirs untouched, ours « Trip (2).m3u8 »', () async {
+      await seedLists();
+      final d = make()..followPlaylists();
+      await d.keepPlaylist('acc', 'q');
+      await d.whenIdle();
+      final theirs = m3u(root, 'Trip.m3u8')
+        ..writeAsStringSync('#EXTM3U\nmine\n');
+      await db.replacePlaylists('acc', [
+        (
+          id: 'q',
+          name: 'Trip',
+          paths: ['subsonic://acc/2', 'subsonic://acc/3'],
+        ),
+      ]);
+      await settled(d);
+      expect(theirs.readAsStringSync(), '#EXTM3U\nmine\n');
+      expect(m3u(root, 'Running.m3u8').existsSync(), isFalse);
+      expect(songs(m3u(root, 'Trip (2).m3u8')), [
+        '../Art/Alb/02 Song 2.mp3',
+        '../Art/Alb/03 Song 3.mp3',
+      ]);
+    });
+
     test('a kept phone playlist: edited, its .m3u8 follows (a new song kept); '
         'deleted, its .m3u8 goes and its songs stay kept for themselves '
         '(Q6)', () async {

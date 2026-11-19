@@ -166,6 +166,36 @@ void main() {
     expect(find.text('Road Trip'), findsNothing);
   });
 
+  testWidgets('an empty name at OK: « Donne un nom à ta playlist. », '
+      'nothing written, the screen stays', (tester) async {
+    final s = await _pump(tester);
+    final ref = await _road(s);
+    await s.open(ref);
+    await s.tap(const Key('plEdit'));
+    await tester.enterText(find.byKey(const Key('editName')), '   ');
+    await tester.tap(find.byKey(const Key('editRemove-0')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('editOk')));
+    await settle(tester);
+    await tester.pump();
+    expect(find.text('Donne un nom à ta playlist.'), findsOneWidget);
+    expect(find.byKey(const Key('editOk')), findsOneWidget);
+    expect(await s.keys(ref), [_ocean.path, _surf.path, _golden.path]);
+  });
+
+  testWidgets('a chosen cover shows on the playlist screen', (tester) async {
+    final support = Directory.systemTemp.createTempSync('covers');
+    addTearDown(() => support.deleteSync(recursive: true));
+    final s = await _pump(
+      tester,
+      make: (db) => PlaylistStore(db, supportDir: () async => support),
+    );
+    final ref = await _road(s);
+    await s.run(() => s.store.setCover(ref, s.f.covers.values.first));
+    await s.open(ref);
+    expect(find.byKey(const Key('chosenCover')), findsOneWidget);
+  });
+
   testWidgets('« Annuler » changes nothing', (tester) async {
     final s = await _pump(tester);
     final ref = await _road(s);
@@ -247,6 +277,7 @@ void main() {
     // Divers, Johnny, LAFLEURSTUDIO
     expect(await s.keys(ref), [_golden.path, _ocean.path, _surf.path]);
     await s.tap(const Key('plSort'));
+    expect(find.text("Inverser l'ordre"), findsOneWidget);
     await s.tap(const Key('sort-reverse'));
     expect(await s.keys(ref), [_surf.path, _ocean.path, _golden.path]);
   });
@@ -340,6 +371,40 @@ void main() {
       await s.tap(const Key('plEdit'));
       expect(find.text('Changer la pochette'), findsNothing);
       expect(find.text('Supprimer la playlist'), findsOneWidget);
+    });
+
+    testWidgets('an account whose server refused a new playlist still edits '
+        'its own playlists', (tester) async {
+      final s = await pumpServer(tester);
+      nav.readOnly = true;
+      await s.run(() async {
+        try {
+          await s.store.create('New', accountId: acc);
+        } on PlaylistWriteException {
+          // refused: the account is no longer offered to create
+        }
+      });
+      nav.readOnly = false;
+      expect(await s.run(() => s.store.canWrite(acc)), isFalse);
+      await s.open(PlaylistRef.server(acc, 'pl1'));
+      expect(find.text('Modifier'), findsOneWidget);
+      expect(find.text('Trier'), findsOneWidget);
+    });
+
+    testWidgets('« Trier » on Subsonic: the whole order in one write', (
+      tester,
+    ) async {
+      final s = await pumpServer(tester);
+      await s.open(PlaylistRef.server(acc, 'pl1'));
+      nav.log.clear();
+      await s.tap(const Key('plSort'));
+      await s.tap(const Key('sort-title'));
+      await s.tap(const Key('questionYes'));
+      expect(nav.lists['pl1']!.songs, ['s2', 's3', 's1']);
+      expect(
+        nav.log.where((r) => r.url.path.contains('createPlaylist')),
+        hasLength(1),
+      );
     });
 
     testWidgets('another user\'s playlist (read-only): no Ajouter, Modifier, '

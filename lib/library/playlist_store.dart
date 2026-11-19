@@ -133,6 +133,19 @@ class PlaylistStore {
     }
   }
 
+  /// Whether [accountId]'s source writes playlists at all (its server may still refuse one
+  /// playlist: [canEdit]). Unlike [canWrite], a refused creation does not count: an account
+  /// that may not create playlists may still change its own. Asks nothing of the server.
+  Future<bool> writes(String accountId) async {
+    final of = _sourceOf;
+    if (of == null) return false;
+    try {
+      return await of(accountId) is PlaylistWriter;
+    } on Object {
+      return false;
+    }
+  }
+
   static const coverFolder = 'playlist_covers';
 
   /// A new playlist named [name] (spaces around it dropped; empty: refused) holding
@@ -289,8 +302,25 @@ class PlaylistStore {
   /// gets it as moves, one at a time ([move]); the first failure stops the rest.
   Future<void> reorder(PlaylistRef ref, List<int> order) async {
     if (ref is ServerPlaylistRef) {
-      final count = (await _serverPaths(ref)).length;
+      final rows = await _serverPaths(ref);
+      final count = rows.length;
       _checkOrder(order, count);
+      if (_isIdentity(order)) return;
+      final (_, w) = await _writer(ref.accountId);
+      if (w is PlaylistOrderWriter) {
+        // the whole order in one write (Subsonic: one rewrite instead of one per move)
+        return _serial(ref, () async {
+          final now = await _serverPaths(ref);
+          final ids = [for (final p in now) _songIdOf(p)];
+          if (now.length != count) throw RangeError.value(count, 'order');
+          await _onServer(
+            ref,
+            (w) => (w as PlaylistOrderWriter).setOrder(ref.remoteId, [
+              for (final i in order) ids[i],
+            ], expected: ids),
+          );
+        });
+      }
       // where each original row is now: moving one shifts the others
       final now = [for (var i = 0; i < count; i++) i];
       for (var to = 0; to < order.length; to++) {
@@ -307,6 +337,13 @@ class PlaylistStore {
       _checkOrder(order, rows.length);
       await _rewrite(id, [for (final i in order) rows[i]]);
     });
+  }
+
+  static bool _isIdentity(List<int> order) {
+    for (var i = 0; i < order.length; i++) {
+      if (order[i] != i) return false;
+    }
+    return true;
   }
 
   static void _checkOrder(List<int> order, int count) {
@@ -683,6 +720,17 @@ class PlaylistStore {
       db.playlists,
     )..where((l) => l.accountId.equals(accountId))).get();
     final old = mine.where((l) => l.remoteId == p.id).firstOrNull;
+    final songs = p.songIds;
+    final keys = songs == null
+        ? null
+        : [for (final id in songs) trackKey(accountId, id, type)];
+    // the same as stored: nothing written (no table update, nothing followed redone)
+    if (old != null &&
+        old.name == p.name &&
+        (keys == null ||
+            _same(await db.playlistPaths(accountId, p.id), keys))) {
+      return;
+    }
     final position =
         old?.position ??
         mine.fold<int>(-1, (m, l) => l.position > m ? l.position : m) + 1;
@@ -696,26 +744,33 @@ class PlaylistStore {
             position: position,
           ),
         );
-    final songs = p.songIds;
-    if (songs == null) return; // unread: its old songs stay
+    if (keys == null) return; // unread: its old songs stay
     await (db.delete(db.playlistItems)..where(
           (i) => i.accountId.equals(accountId) & i.playlistId.equals(p.id),
         ))
         .go();
     await db.batch((b) {
-      for (final (i, id) in songs.indexed) {
+      for (final (i, key) in keys.indexed) {
         b.insert(
           db.playlistItems,
           PlaylistItemsCompanion.insert(
             accountId: accountId,
             playlistId: p.id,
             index: i,
-            trackPath: trackKey(accountId, id, type),
+            trackPath: key,
           ),
         );
       }
     });
   });
+
+  static bool _same(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 
   static String _name(String name) {
     final n = name.trim();
