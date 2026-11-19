@@ -23,6 +23,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:lafleurmusic/library/db.dart' show TrackRow;
 import 'package:lafleurmusic/main.dart';
+import 'package:lafleurmusic/offline/paths.dart' show isPartialName;
 import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/sources/accounts.dart' show AccountType;
 import 'package:lafleurmusic/sources/secret_store.dart';
@@ -196,20 +197,22 @@ void main() {
               .where((f) => f.path.endsWith('.m3u8'))
               .toList()
         : const [];
+    // the app writes `<name>.lafleur-part.m3u8` then renames it: wait for the final name, with
+    // nothing half-written left (the partial already holds the whole text before the rename)
+    final want = File(p.join(dir.path, 'Road Trip e2e.m3u8'));
     await waitFor(
       tester,
-      () async {
-        final f = files();
-        return f.isNotEmpty &&
-            f.first.readAsStringSync().contains('Night Drive');
-      },
+      () async =>
+          want.existsSync() &&
+          want.readAsStringSync().contains('Night Drive') &&
+          files().every((f) => !isPartialName(f.path)),
       '.m3u8 written',
       timeout: const Duration(seconds: 60),
       why: () async =>
           'files: ${files()}, kept: ${(await app.db.keptPlaylistRows()).length}',
     );
-    final text = files().single.readAsStringSync();
-    expect(p.basename(files().single.path), 'Road Trip e2e.m3u8');
+    expect(files().map((f) => p.basename(f.path)), ['Road Trip e2e.m3u8']);
+    final text = want.readAsStringSync();
     expect(text.startsWith('#EXTM3U'), isTrue);
     expect(text.indexOf('Surf Break'), lessThan(text.indexOf('Night Drive')));
     expect(
