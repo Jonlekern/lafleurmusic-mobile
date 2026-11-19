@@ -239,12 +239,14 @@ void main() {
   });
 
   test(
-    'Android, iOS : toujours le téléphone ; ordinateur : colonnes dès 900 px',
+    'Android, iOS : le téléphone, sauf tablette (plus petit côté ≥ 600) ; ordinateur : colonnes dès 900 px',
     () {
       for (final p in [TargetPlatform.android, TargetPlatform.iOS]) {
         expect(AdaptiveHome.isPhone(const Size(390, 844), p), isTrue);
-        expect(AdaptiveHome.isPhone(const Size(1440, 900), p), isTrue);
         expect(AdaptiveHome.isPhone(const Size(844, 390), p), isTrue);
+        expect(AdaptiveHome.isPhone(const Size(932, 430), p), isTrue);
+        expect(AdaptiveHome.isPhone(const Size(1440, 900), p), isFalse);
+        expect(AdaptiveHome.isPhone(const Size(768, 1024), p), isFalse);
       }
       for (final p in [
         TargetPlatform.macOS,
@@ -265,10 +267,13 @@ void main() {
     await settle(tester);
   }
 
-  testWidgets('iPhone à 1440 px : toujours le téléphone', (tester) async {
+  testWidgets('iPad à 1440 px : les colonnes (plan 3, tablettes)', (
+    tester,
+  ) async {
     await pumpWide(tester, TargetPlatform.iOS);
-    expect(find.byType(PhoneShell), findsOneWidget);
-    expect(find.byType(LibraryScreen), findsNothing);
+    expect(find.byType(LibraryScreen), findsOneWidget);
+    expect(find.byType(PhoneShell), findsNothing);
+    await tester.pumpWidget(const SizedBox());
     debugDefaultTargetPlatformOverride = null;
   });
 

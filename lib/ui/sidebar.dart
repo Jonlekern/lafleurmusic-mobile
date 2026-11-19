@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../library/models.dart';
+import '../settings.dart';
 import '../theme/colors.dart';
 import 'cover_image.dart';
+import 'cover_mosaic.dart';
+import 'keep_actions.dart' show onIphone;
+import 'phone/accounts_screen.dart';
+import 'phone/on_device_screen.dart';
+import 'phone/phone_shell.dart' show pushPhone;
+import 'phone/playlist_screen.dart';
 import 'track_menu.dart';
 import 'coverflow_screen.dart';
 
@@ -17,7 +24,9 @@ class Sidebar extends StatelessWidget {
     required this.album,
     required this.onAlbum,
     required this.onView,
+    this.tablet = false,
   });
+  final bool tablet; // tablette : Comptes, Sur mon iPad, playlists du serveur, appui long = Garder / Retirer
   final LibraryView view;
   final String? album; // [Album.key] de l'album choisi
   final void Function(Album album) onAlbum;
@@ -70,6 +79,21 @@ class Sidebar extends StatelessWidget {
                 selected: view == LibraryView.top,
                 onTap: () => onView(LibraryView.top),
               ),
+              if (tablet) ...[
+                // les copies gardées (sans téléchargeur : rien à montrer) et les comptes
+                _Item(
+                  icon: Icons.download_done_rounded,
+                  label: s.onDevice(onIphone, tablet: true),
+                  onTap: app.downloader == null
+                      ? null
+                      : () => pushPhone(context, const OnDeviceScreen()),
+                ),
+                _Item(
+                  icon: Icons.manage_accounts_rounded,
+                  label: s.accountsBack,
+                  onTap: () => pushPhone(context, const AccountsScreen()),
+                ),
+              ],
               _Head(s.playlists),
               for (final a in albums)
                 GestureDetector(
@@ -84,8 +108,18 @@ class Sidebar extends StatelessWidget {
                     label: a.name.isEmpty ? s.unknownArtist : a.name,
                     selected: view == LibraryView.album && a.key == album,
                     onTap: () => onAlbum(a),
+                    // tablette : appui long → Lire ensuite / Ajouter / Garder / Retirer
+                    onLongPress: tablet && app.downloader != null
+                        ? () => showTrackSheet(
+                            context,
+                            title: a.name,
+                            album: true,
+                            tracks: () => app.library.albumTracks(a.key).first,
+                          )
+                        : null,
                   ),
                 ),
+              if (tablet) const _ServerPlaylists(),
             ],
           );
         },
@@ -114,12 +148,17 @@ class _Head extends StatelessWidget {
 
 class _Item extends StatelessWidget {
   const _Item({
+    super.key,
     this.icon,
     this.leading,
     required this.label,
     this.selected = false,
     this.onTap,
+    this.onLongPress,
+    this.tag,
   });
+  final String? tag; // le compte, en petit
+  final VoidCallback? onLongPress;
   final IconData? icon;
   final Widget? leading;
   final String label;
@@ -133,6 +172,7 @@ class _Item extends StatelessWidget {
       type: MaterialType.transparency,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -158,10 +198,56 @@ class _Item extends StatelessWidget {
                   ),
                 ),
               ),
+              if (tag != null) ...[
+                const SizedBox(width: 6),
+                Text(
+                  tag!,
+                  style: TextStyle(
+                    color: selected ? LafleurColors.ink : LafleurColors.sub,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// « PLAYLISTS DU SERVEUR » sous les albums de la tablette (comme l'Accueil du téléphone) : mosaïque et
+/// nom, le compte en petit en mode Tout / Perso. Rien quand aucun compte n'en a.
+class _ServerPlaylists extends StatelessWidget {
+  const _ServerPlaylists();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    return StreamBuilder<List<ServerPlaylist>>(
+      stream: app.library.playlists(),
+      builder: (context, snap) {
+        final lists = snap.data ?? const <ServerPlaylist>[];
+        if (lists.isEmpty) return const SizedBox.shrink();
+        final tagged = app.settings?.displayMode != DisplayMode.one;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Head(app.strings.serverPlaylists),
+            for (final p in lists)
+              _Item(
+                key: ValueKey('playlist-${p.accountId}-${p.id}'),
+                leading: CoverMosaic(tracks: p.covers, size: 26, radius: 4),
+                label: p.name,
+                tag: tagged ? p.accountName : null,
+                onTap: () => openPlaylist(context, p),
+                onLongPress: app.downloader == null
+                    ? null
+                    : () => showPlaylistSheet(context, p),
+              ),
+          ],
+        );
+      },
     );
   }
 }

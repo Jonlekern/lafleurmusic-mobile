@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -7,6 +8,7 @@ import '../library/models.dart';
 import '../theme/colors.dart';
 import '../offline/downloader.dart' show KeepOrigin;
 import 'keep_actions.dart';
+import 'tablet.dart';
 import 'phone/keep_screen.dart';
 import 'phone/phone_shell.dart' show pushPhone;
 
@@ -82,6 +84,19 @@ class TrackMenuArea extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     behavior: HitTestBehavior.translucent,
     onSecondaryTapUp: (d) => showTrackMenu(context, d.globalPosition, track),
+    // tablette : appui long → Lire ensuite / Ajouter / Garder / Retirer, comme sur le téléphone
+    onLongPress:
+        isMobilePlatform(defaultTargetPlatform) &&
+            AppScope.of(context).downloader != null
+        ? () => showTrackSheet(
+            context,
+            title: track.title,
+            sub: track.artist.isEmpty
+                ? AppScope.of(context).strings.unknownArtist
+                : track.artist,
+            tracks: () async => [track],
+          )
+        : null,
     child: child,
   );
 }
@@ -200,8 +215,16 @@ Future<void> showTrackSheet(
                 endIndent: 4,
               ),
               allKept
-                  ? option(ctx, _Action.remove, s.removeFromDevice(onIphone))
-                  : option(ctx, _Action.keep, s.keepOnDevice(onIphone)),
+                  ? option(
+                      ctx,
+                      _Action.remove,
+                      s.removeFromDevice(onIphone, tablet: onTablet),
+                    )
+                  : option(
+                      ctx,
+                      _Action.keep,
+                      s.keepOnDevice(onIphone, tablet: onTablet),
+                    ),
               option(ctx, _Action.select, s.select),
             ],
           ],

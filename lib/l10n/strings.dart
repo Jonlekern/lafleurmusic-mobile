@@ -238,7 +238,12 @@ class Strings {
   String notOnAccount(String account) =>
       _t('absent de $account', 'not on $account');
   String get allAccounts => _t('Tout', 'All');
-  String onDevice(bool iphone) => iphone
+  // [tablet] : « iPad » sur iOS, « tablette » sur Android (plan 3, tablettes)
+  String onDevice(bool iphone, {bool tablet = false}) => tablet
+      ? (iphone
+            ? _t('Sur mon iPad', 'On my iPad')
+            : _t('Sur ma tablette', 'On my tablet'))
+      : iphone
       ? _t('Sur mon iPhone', 'On my iPhone')
       : _t('Sur mon téléphone', 'On my phone');
   String get upNextTab => _t('À suivre', 'Up next');
@@ -352,10 +357,18 @@ class Strings {
 
   // plan 2 : garder hors ligne (maquettes 1 et 2, écrans 2, 4 et 8)
   String get select => _t('Sélectionner…', 'Select…');
-  String keepOnDevice(bool iphone) => iphone
+  String keepOnDevice(bool iphone, {bool tablet = false}) => tablet
+      ? (iphone
+            ? _t('Garder sur mon iPad', 'Keep on my iPad')
+            : _t('Garder sur ma tablette', 'Keep on my tablet'))
+      : iphone
       ? _t('Garder sur mon iPhone', 'Keep on my iPhone')
       : _t('Garder sur mon téléphone', 'Keep on my phone');
-  String removeFromDevice(bool iphone) => iphone
+  String removeFromDevice(bool iphone, {bool tablet = false}) => tablet
+      ? (iphone
+            ? _t('Retirer de l’iPad', 'Remove from iPad')
+            : _t('Retirer de la tablette', 'Remove from tablet'))
+      : iphone
       ? _t('Retirer du téléphone', 'Remove from iPhone')
       : _t('Retirer du téléphone', 'Remove from phone');
   String albumsSelected(int n) => _t(
@@ -494,14 +507,34 @@ class Strings {
   );
 
   // confirmation avant « Retirer du téléphone » (maquette 10)
-  String removeConfirmTitle(bool iphone) => _t(
-    'Retirer du téléphone ?',
-    iphone ? 'Remove from the iPhone?' : 'Remove from the phone?',
-  );
-  String removeConfirmBody(String name, int n, String size, bool iphone) => _t(
-    '« $name » ($n ${n == 1 ? 'morceau' : 'morceaux'}, $size) sera effacé de ton ${iphone ? 'iPhone' : 'téléphone'}. Il reste sur ton serveur : tu pourras le garder à nouveau.',
-    '“$name” ($n ${n == 1 ? 'song' : 'songs'}, $size) will be erased from your ${iphone ? 'iPhone' : 'phone'}. It stays on your server: you can keep it again.',
-  );
+  String removeConfirmTitle(bool iphone, {bool tablet = false}) => tablet
+      ? _t(
+          iphone ? 'Retirer de l’iPad ?' : 'Retirer de la tablette ?',
+          iphone ? 'Remove from the iPad?' : 'Remove from the tablet?',
+        )
+      : _t(
+          'Retirer du téléphone ?',
+          iphone ? 'Remove from the iPhone?' : 'Remove from the phone?',
+        );
+  String removeConfirmBody(
+    String name,
+    int n,
+    String size,
+    bool iphone, {
+    bool tablet = false,
+  }) {
+    final frDevice = tablet
+        ? (iphone ? 'iPad' : 'tablette')
+        : (iphone ? 'iPhone' : 'téléphone');
+    final enDevice = tablet
+        ? (iphone ? 'iPad' : 'tablet')
+        : (iphone ? 'iPhone' : 'phone');
+    return _t(
+      '« $name » ($n ${n == 1 ? 'morceau' : 'morceaux'}, $size) sera effacé de ton $frDevice. Il reste sur ton serveur : tu pourras le garder à nouveau.',
+      '“$name” ($n ${n == 1 ? 'song' : 'songs'}, $size) will be erased from your $enDevice. It stays on your server: you can keep it again.',
+    );
+  }
+
   String get doNotAskAgain => _t('Ne plus me demander', "Don't ask me again");
   String get removeAction => _t('Retirer', 'Remove');
   String get confirmationsSection => _t('CONFIRMATIONS', 'CONFIRMATIONS');

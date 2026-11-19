@@ -32,12 +32,14 @@ import 'sources/secret_store.dart';
 import 'tags/tag_reader.dart';
 import 'theme/lafleur_theme.dart';
 import 'ui/phone/phone_shell.dart';
+import 'ui/tablet.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // téléphone : debout, ou couché des deux côtés (Cover Flow) ; En cours le remet debout le temps qu'on y est
+  // téléphone : debout, ou couché des deux côtés (Cover Flow) ; En cours le remet debout le temps qu'on y est.
+  // Tablette : les quatre orientations
   if (isMobilePlatform(defaultTargetPlatform)) {
-    await SystemChrome.setPreferredOrientations(mobileOrientations);
+    await SystemChrome.setPreferredOrientations(deviceOrientations);
   }
   // --dart-define=LAFLEUR_DEMO=true : bibliothèque inventée des maquettes, sans serveur ni son (debug seulement)
   if (kDebugMode && const bool.fromEnvironment('LAFLEUR_DEMO')) {
@@ -328,7 +330,7 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
       title: 'LAFLEURMUSIC',
       debugShowCheckedModeBanner: false,
       theme: lafleurTheme(),
-      home: const AdaptiveHome(), // Android, iOS : téléphone ; sinon les colonnes du Mac
+      home: const AdaptiveHome(), // téléphone : la vue téléphone ; tablette, ordinateur : les colonnes du Mac
     ),
   );
 }

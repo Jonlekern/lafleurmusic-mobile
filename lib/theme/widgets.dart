@@ -93,8 +93,13 @@ class LafleurChip extends StatelessWidget {
 
 /// Barre du haut : logo texte LAFLEURMUSIC centré, contenu optionnel à droite (recherche).
 class TitleBar extends StatelessWidget {
-  const TitleBar({super.key, this.trailing});
+  const TitleBar({
+    super.key,
+    this.trailing,
+    this.logoAlignment = Alignment.center,
+  });
   final Widget? trailing;
+  final Alignment logoAlignment; // à gauche quand la barre est trop étroite pour le logo au centre (iPad debout)
 
   @override
   Widget build(BuildContext context) => Container(
@@ -108,7 +113,10 @@ class TitleBar extends StatelessWidget {
     child: Stack(
       alignment: Alignment.center,
       children: [
-        Image.asset('assets/logo-texte-grand.png', height: 20),
+        Align(
+          alignment: logoAlignment,
+          child: Image.asset('assets/logo-texte-grand.png', height: 20),
+        ),
         if (trailing != null)
           Align(alignment: Alignment.centerRight, child: trailing),
       ],

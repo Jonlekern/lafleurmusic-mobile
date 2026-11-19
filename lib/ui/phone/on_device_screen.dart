@@ -18,6 +18,7 @@ import '../../settings.dart';
 import '../../theme/colors.dart';
 import '../cover_image.dart';
 import '../keep_actions.dart';
+import '../tablet.dart';
 import 'home_screen.dart' show PhoneSection;
 import 'phone_shell.dart';
 
@@ -484,7 +485,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Text(
-                      s.removeFromDevice(onIphone),
+                      s.removeFromDevice(onIphone, tablet: onTablet),
                       style: const TextStyle(fontSize: 16, color: _red),
                     ),
                   ),
@@ -754,7 +755,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
-          s.removeFromDevice(onIphone),
+          s.removeFromDevice(onIphone, tablet: onTablet),
           style: const TextStyle(
             color: LafleurColors.ink,
             fontSize: 13,

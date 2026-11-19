@@ -10,6 +10,7 @@ import '../library/models.dart';
 import '../offline/downloader.dart' show Downloader, KeepOrigin, KeepResult;
 import '../player/media_resolver.dart';
 import '../theme/colors.dart';
+import 'tablet.dart';
 
 /// « iPhone » sur iOS, « téléphone » ailleurs (pour les textes).
 bool get onIphone => defaultTargetPlatform == TargetPlatform.iOS;
@@ -175,8 +176,14 @@ Future<bool> confirmRemoval(
   final result = await showDialog<_RemoveAnswer>(
     context: context,
     builder: (ctx) => _RemoveDialog(
-      title: s.removeConfirmTitle(onIphone),
-      body: s.removeConfirmBody(name, songs.length, s.size(bytes), onIphone),
+      title: s.removeConfirmTitle(onIphone, tablet: onTablet),
+      body: s.removeConfirmBody(
+        name,
+        songs.length,
+        s.size(bytes),
+        onIphone,
+        tablet: onTablet,
+      ),
     ),
   );
   if (result == null) return false;

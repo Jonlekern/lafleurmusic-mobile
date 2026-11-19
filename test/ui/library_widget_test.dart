@@ -90,7 +90,10 @@ Future<(LibraryDb, FakePlayer)> pump(
       player: player,
       covers: covers,
       strings: Strings.of(const Locale('fr')),
-      child: MaterialApp(theme: lafleurTheme(), home: const LibraryScreen()),
+      child: MaterialApp(
+        theme: lafleurTheme(),
+        home: const LibraryScreen(tablet: false),
+      ),
     ),
   );
   for (var i = 0; i < 5; i++) {

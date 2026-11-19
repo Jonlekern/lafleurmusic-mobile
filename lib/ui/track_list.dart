@@ -110,7 +110,11 @@ class TrackList extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        Row(
+                        // (à la ligne si la liste est étroite : iPad)
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             PillButton(
                               label: s.play,
@@ -120,7 +124,6 @@ class TrackList extends StatelessWidget {
                                   ? null
                                   : () => app.player.playTracks(tracks, 0),
                             ),
-                            const SizedBox(width: 12),
                             PillButton(
                               label: s.shuffle,
                               icon: Icons.shuffle_rounded,
@@ -215,6 +218,25 @@ class _Row extends StatelessWidget {
     );
     Widget cell(String text, TextStyle style) =>
         Text(text, overflow: TextOverflow.ellipsis, style: style);
+    // liste étroite (iPad debout) : la colonne artiste rétrécit pour laisser sa place au titre
+    return LayoutBuilder(
+      builder: (context, box) => _line(
+        context,
+        fg,
+        st,
+        cell,
+        artistWidth: (box.maxWidth * 0.35).clamp(0.0, 260.0),
+      ),
+    );
+  }
+
+  Widget _line(
+    BuildContext context,
+    Color fg,
+    TextStyle Function(bool) st,
+    Widget Function(String, TextStyle) cell, {
+    required double artistWidth,
+  }) {
     return Opacity(
       opacity: missing ? 0.35 : 1,
       child: GestureDetector(
@@ -239,7 +261,7 @@ class _Row extends StatelessWidget {
               ),
               Expanded(child: cell(title, st(true))),
               const SizedBox(width: 12),
-              SizedBox(width: 260, child: cell(artist, st(false))),
+              SizedBox(width: artistWidth, child: cell(artist, st(false))),
               SizedBox(
                 width: 70,
                 child: Text(

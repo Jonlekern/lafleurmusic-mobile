@@ -13,30 +13,52 @@ import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
 import '../coverflow_screen.dart';
 import '../library_screen.dart';
+import '../tablet.dart';
 import 'account_form.dart';
 import 'album_screen.dart';
 import 'home_screen.dart';
 import 'mini_player.dart';
 import 'now_screen.dart';
 
-/// Android ou iOS.
-bool isMobilePlatform(TargetPlatform p) =>
-    p == TargetPlatform.android || p == TargetPlatform.iOS;
-
-/// Téléphone (Android, iOS) : toujours la vue téléphone ; sur ordinateur, la vue en colonnes du Mac.
-class AdaptiveHome extends StatelessWidget {
+/// Téléphone : la vue téléphone ; tablette (Android, iOS, plus petit côté ≥ 600 px) et ordinateur : les colonnes du Mac.
+class AdaptiveHome extends StatefulWidget {
   const AdaptiveHome({super.key, this.debugStart, this.debugScreens});
   final String? debugStart; // voir [PhoneShell.debugStart]
   final List<Widget> Function()? debugScreens; // voir [PhoneShell.debugScreens]
 
-  /// Android et iOS : toujours le téléphone (plan 1, téléphones seulement, quelle que soit la largeur).
-  /// Mac, Windows, Linux : les colonnes, sauf fenêtre étroite (< 900 px).
-  static bool isPhone(Size size, [TargetPlatform? platform]) =>
-      isMobilePlatform(platform ?? defaultTargetPlatform) || size.width < 900;
+  /// Android et iOS : le téléphone, sauf sur une tablette (plus petit côté ≥ 600 px : [isTablet], toutes
+  /// orientations, debout comme couchée). Mac, Windows, Linux : les colonnes, sauf fenêtre étroite (< 900 px).
+  static bool isPhone(Size size, [TargetPlatform? platform]) {
+    final p = platform ?? defaultTargetPlatform;
+    return isMobilePlatform(p) ? !isTablet(size, p) : size.width < 900;
+  }
 
   @override
-  Widget build(BuildContext context) => isPhone(MediaQuery.sizeOf(context))
-      ? PhoneShell(debugStart: debugStart, debugScreens: debugScreens)
+  State<AdaptiveHome> createState() => _AdaptiveHomeState();
+}
+
+class _AdaptiveHomeState extends State<AdaptiveHome> {
+  bool _free = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // tablette : les quatre orientations (main les demande déjà ; ici au cas où l'écran n'avait pas
+    // encore sa taille au lancement)
+    final tablet = isTablet(MediaQuery.sizeOf(context), defaultTargetPlatform);
+    if (tablet && !_free) {
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    }
+    _free = tablet;
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      AdaptiveHome.isPhone(MediaQuery.sizeOf(context))
+      ? PhoneShell(
+          debugStart: widget.debugStart,
+          debugScreens: widget.debugScreens,
+        )
       : const LibraryScreen();
 }
 
@@ -81,7 +103,7 @@ class _PhoneShellState extends State<PhoneShell> {
     if (_mobile && now != _lockedUpright) {
       _lockedUpright = now;
       SystemChrome.setPreferredOrientations(
-        now ? uprightOnly : mobileOrientations,
+        now ? uprightOnly : deviceOrientations,
       );
     }
     // (appelé pendant que le navigateur se construit : on redessine après)
@@ -148,7 +170,7 @@ class _PhoneShellState extends State<PhoneShell> {
     _skipped?.cancel();
     _albumsSub?.cancel();
     if (_mobile && _lockedUpright) {
-      SystemChrome.setPreferredOrientations(mobileOrientations);
+      SystemChrome.setPreferredOrientations(deviceOrientations);
     }
     super.dispose();
   }
@@ -215,14 +237,6 @@ class _PhoneShellState extends State<PhoneShell> {
     );
   }
 }
-
-/// Orientations du téléphone : debout et couché des deux côtés (le Cover Flow est l'écran couché).
-const mobileOrientations = [
-  DeviceOrientation.portraitUp,
-  DeviceOrientation.landscapeLeft,
-  DeviceOrientation.landscapeRight,
-];
-const uprightOnly = [DeviceOrientation.portraitUp];
 
 /// Suit les écrans empilés : leur nombre, et le premier écran nommé en partant du dessus (les feuilles et
 /// boîtes de dialogue n'ont pas de nom : En cours reste En cours dessous).

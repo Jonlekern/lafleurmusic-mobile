@@ -97,7 +97,10 @@ void main() {
         player: player,
         covers: ReadyCovers(files),
         strings: Strings.of(const Locale('fr')),
-        child: MaterialApp(theme: lafleurTheme(), home: const LibraryScreen()),
+        child: MaterialApp(
+          theme: lafleurTheme(),
+          home: const LibraryScreen(tablet: false),
+        ),
       ),
     );
     Future<void> settle() async {

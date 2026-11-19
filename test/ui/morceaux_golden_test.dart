@@ -98,7 +98,10 @@ void main() {
         player: FakePlayer(),
         covers: ReadyCovers(files),
         strings: Strings.of(const Locale('fr')),
-        child: MaterialApp(theme: lafleurTheme(), home: const LibraryScreen()),
+        child: MaterialApp(
+          theme: lafleurTheme(),
+          home: const LibraryScreen(tablet: false),
+        ),
       ),
     );
     for (var i = 0; i < 5; i++) {

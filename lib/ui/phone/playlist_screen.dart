@@ -8,6 +8,7 @@ import '../../theme/colors.dart';
 import '../../theme/widgets.dart';
 import '../cover_mosaic.dart';
 import '../keep_actions.dart';
+import '../tablet.dart';
 import '../track_menu.dart';
 import 'album_screen.dart';
 import 'phone_shell.dart';
@@ -216,7 +217,9 @@ class _KeepPlaylistPill extends StatelessWidget {
           return PillButton(
             icon: Icons.arrow_downward_rounded,
             iconColor: kept ? LafleurColors.pink : null,
-            tooltip: kept ? null : app.strings.keepOnDevice(onIphone),
+            tooltip: kept
+                ? null
+                : app.strings.keepOnDevice(onIphone, tablet: onTablet),
             onPressed: () => kept
                 ? say(
                     ScaffoldMessenger.of(context),

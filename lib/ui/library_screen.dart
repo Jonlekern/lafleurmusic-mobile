@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -15,12 +16,15 @@ import 'artist_avatar.dart';
 import 'artist_browser.dart';
 import 'name_list.dart';
 import 'sidebar.dart';
+import 'tablet.dart';
 import 'top_screen.dart';
 import 'track_list.dart';
 
 /// Vue en colonnes (maquette 2).
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({super.key});
+  /// [tablet] : les lignes de la tablette dans la barre de côté ; par défaut, selon l'appareil.
+  const LibraryScreen({super.key, this.tablet});
+  final bool? tablet;
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
@@ -164,152 +168,162 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final s = app.strings;
+    final size = MediaQuery.sizeOf(context);
+    final tablet = widget.tablet ?? isTablet(size, defaultTargetPlatform);
     return Focus(
       focusNode: _keys,
       autofocus: true,
       onKeyEvent: _onKey,
       child: Scaffold(
-        body: Column(
-          children: [
-            TitleBar(
-              trailing: SizedBox(
-                width: 260,
-                height: 30,
-                child: TextField(
-                  key: const Key('search'),
-                  controller: _search,
-                  focusNode: _searchFocus,
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (v) => setState(() => _query = v),
-                  onSubmitted: (_) => _keys.requestFocus(),
-                  decoration: InputDecoration(
-                    hintText: s.search,
-                    hintStyle: const TextStyle(
-                      color: LafleurColors.sub,
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      size: 16,
-                      color: LafleurColors.sub,
-                    ),
-                    isDense: true,
-                    filled: true,
-                    fillColor: const Color(0xFF0F0F0F),
-                    contentPadding: EdgeInsets.zero,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: LafleurColors.line),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: LafleurColors.line),
+        // barre d'état et barre d'accueil de l'iPad (rien sur un ordinateur)
+        body: SafeArea(
+          child: Column(
+            children: [
+              TitleBar(
+                logoAlignment: size.width < 900
+                    ? Alignment.centerLeft
+                    : Alignment.center,
+                trailing: SizedBox(
+                  width: 260,
+                  height: 30,
+                  child: TextField(
+                    key: const Key('search'),
+                    controller: _search,
+                    focusNode: _searchFocus,
+                    style: const TextStyle(fontSize: 13),
+                    onChanged: (v) => setState(() => _query = v),
+                    onSubmitted: (_) => _keys.requestFocus(),
+                    decoration: InputDecoration(
+                      hintText: s.search,
+                      hintStyle: const TextStyle(
+                        color: LafleurColors.sub,
+                        fontSize: 13,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        size: 16,
+                        color: LafleurColors.sub,
+                      ),
+                      isDense: true,
+                      filled: true,
+                      fillColor: const Color(0xFF0F0F0F),
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: LafleurColors.line),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: LafleurColors.line),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            StreamBuilder<bool>(
-              stream: app.db.watchAnyMissing(),
-              builder: (_, snap) => snap.data == true
-                  ? Container(
-                      width: double.infinity,
-                      color: const Color(0xFF2A1A2A),
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 18,
-                      ),
-                      child: Text(
-                        s.nasMissing,
-                        style: const TextStyle(
-                          color: LafleurColors.pink,
-                          fontSize: 13,
+              StreamBuilder<bool>(
+                stream: app.db.watchAnyMissing(),
+                builder: (_, snap) => snap.data == true
+                    ? Container(
+                        width: double.infinity,
+                        color: const Color(0xFF2A1A2A),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 18,
                         ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-            Expanded(
-              child: Row(
-                children: [
-                  StreamBuilder<List<Album>>(
-                    stream: app.library.albums(),
-                    builder: (_, snap) {
-                      final albums = snap.data ?? const <Album>[];
-                      if (_album == null && albums.isNotEmpty) {
-                        WidgetsBinding.instance.addPostFrameCallback(
-                          (_) => mounted
-                              ? setState(() {
-                                  _album = albums.first.key;
-                                  _albumName = albums.first.name;
-                                })
-                              : null,
-                        );
-                      }
-                      return Sidebar(
-                        view: _view,
-                        album: _album,
-                        onAlbum: (a) => setState(() {
-                          _name = null;
-                          _keys.requestFocus();
-                          _view = LibraryView.album;
-                          _album = a.key;
-                          _albumName = a.name;
-                          _shown = const [];
-                          _query = '';
-                          _search.clear();
-                        }),
-                        onView: (v) => setState(() {
-                          _name = null;
-                          _keys.requestFocus();
-                          _view = v;
-                          _query = '';
-                          _search.clear();
-                        }),
-                      );
-                    },
-                  ),
-                  Expanded(
-                    child: _view == LibraryView.top && _query.trim().isEmpty
-                        ? TopScreen(onPlay: _keys.requestFocus)
-                        : (_view == LibraryView.artists ||
-                                  _view == LibraryView.genres) &&
-                              _name == null &&
-                              _query.trim().isEmpty
-                        ? (_view == LibraryView.artists
-                              ? ArtistBrowser(
-                                  names: app.library.artists(),
-                                  onPick: (n) => setState(() => _name = n),
-                                )
-                              : NameList(
-                                  names: app.library.genres(),
-                                  title: s.genres,
-                                  onPick: (n) => setState(() => _name = n),
-                                ))
-                        : StreamBuilder<List<Track>>(
-                            key: ValueKey('$_view-$_album-$_name-$_query'),
-                            stream: _tracks(app),
-                            builder: (_, snap) => TrackList(
-                              title: _title(app),
-                              label: _label(app),
-                              headerImage: _artistPage
-                                  ? ArtistAvatar(name: _name!, size: 190)
-                                  : null,
-                              albumColumn: _artistPage,
-                              tracks: snap.data ?? const [],
-                              onPlay: _keys.requestFocus,
-                              isAlbum:
-                                  _view == LibraryView.album &&
-                                  _query.trim().isEmpty,
-                            ),
+                        child: Text(
+                          s.nasMissing,
+                          style: const TextStyle(
+                            color: LafleurColors.pink,
+                            fontSize: 13,
                           ),
-                  ),
-                  const NowPanel(),
-                ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
-            ),
-            const PlayerBar(),
-          ],
+              Expanded(
+                child: Row(
+                  children: [
+                    StreamBuilder<List<Album>>(
+                      stream: app.library.albums(),
+                      builder: (_, snap) {
+                        final albums = snap.data ?? const <Album>[];
+                        if (_album == null && albums.isNotEmpty) {
+                          WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => mounted
+                                ? setState(() {
+                                    _album = albums.first.key;
+                                    _albumName = albums.first.name;
+                                  })
+                                : null,
+                          );
+                        }
+                        return Sidebar(
+                          tablet: tablet,
+                          view: _view,
+                          album: _album,
+                          onAlbum: (a) => setState(() {
+                            _name = null;
+                            _keys.requestFocus();
+                            _view = LibraryView.album;
+                            _album = a.key;
+                            _albumName = a.name;
+                            _shown = const [];
+                            _query = '';
+                            _search.clear();
+                          }),
+                          onView: (v) => setState(() {
+                            _name = null;
+                            _keys.requestFocus();
+                            _view = v;
+                            _query = '';
+                            _search.clear();
+                          }),
+                        );
+                      },
+                    ),
+                    Expanded(
+                      child: _view == LibraryView.top && _query.trim().isEmpty
+                          ? TopScreen(onPlay: _keys.requestFocus)
+                          : (_view == LibraryView.artists ||
+                                    _view == LibraryView.genres) &&
+                                _name == null &&
+                                _query.trim().isEmpty
+                          ? (_view == LibraryView.artists
+                                ? ArtistBrowser(
+                                    names: app.library.artists(),
+                                    onPick: (n) => setState(() => _name = n),
+                                  )
+                                : NameList(
+                                    names: app.library.genres(),
+                                    title: s.genres,
+                                    onPick: (n) => setState(() => _name = n),
+                                  ))
+                          : StreamBuilder<List<Track>>(
+                              key: ValueKey('$_view-$_album-$_name-$_query'),
+                              stream: _tracks(app),
+                              builder: (_, snap) => TrackList(
+                                title: _title(app),
+                                label: _label(app),
+                                headerImage: _artistPage
+                                    ? ArtistAvatar(name: _name!, size: 190)
+                                    : null,
+                                albumColumn: _artistPage,
+                                tracks: snap.data ?? const [],
+                                onPlay: _keys.requestFocus,
+                                isAlbum:
+                                    _view == LibraryView.album &&
+                                    _query.trim().isEmpty,
+                              ),
+                            ),
+                    ),
+                    // iPad debout (< 900 px) : la liste garde la place, En cours s'ouvre depuis la barre du bas
+                    if (size.width >= 900) const NowPanel(),
+                  ],
+                ),
+              ),
+              const PlayerBar(),
+            ],
+          ),
         ),
       ),
     );

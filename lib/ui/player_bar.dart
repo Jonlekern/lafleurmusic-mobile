@@ -25,6 +25,8 @@ class _PlayerBarState extends State<PlayerBar> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final s = app.strings;
+    // iPad debout (< 900 px) : les côtés se resserrent, le Cover Flow reste dans la barre de côté
+    final narrow = MediaQuery.sizeOf(context).width < 900;
     return Container(
       height: 84,
       decoration: const BoxDecoration(
@@ -46,7 +48,7 @@ class _PlayerBarState extends State<PlayerBar> {
           return Row(
             children: [
               SizedBox(
-                width: 300,
+                width: narrow ? 200 : 300,
                 child: Row(
                   children: [
                     GestureDetector(
@@ -225,7 +227,7 @@ class _PlayerBarState extends State<PlayerBar> {
               ),
               // au moins 300 (comme la partie gauche)
               ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 300),
+                constraints: BoxConstraints(minWidth: narrow ? 0 : 300),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -241,18 +243,20 @@ class _PlayerBarState extends State<PlayerBar> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    LafleurChip(
-                      label: s.coverFlow,
-                      onPressed: () => openCoverflow(context),
-                    ),
-                    const SizedBox(width: 12),
+                    if (!narrow) ...[
+                      LafleurChip(
+                        label: s.coverFlow,
+                        onPressed: () => openCoverflow(context),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                     const Icon(
                       Icons.volume_up_rounded,
                       size: 18,
                       color: LafleurColors.sub,
                     ),
                     SizedBox(
-                      width: 90,
+                      width: narrow ? 70 : 90,
                       child: SliderTheme(
                         data: const SliderThemeData(
                           trackHeight: 3,
