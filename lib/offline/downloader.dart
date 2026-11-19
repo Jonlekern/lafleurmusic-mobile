@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 import '../library/db.dart';
-import '../library/merge.dart' show albumKeyOf;
 import '../library/models.dart';
 import '../player/media_resolver.dart';
 import '../settings.dart';
@@ -15,8 +14,11 @@ import '../sources/source.dart';
 import '../tags/tag_reader.dart';
 import '../tags/tag_writer.dart';
 import 'device.dart';
+import 'keep_origin.dart';
 import 'm3u.dart';
 import 'paths.dart';
+
+export 'keep_origin.dart';
 
 /// Place laissée libre sur le téléphone.
 const _freeMargin = 200 * 1024 * 1024;
@@ -56,19 +58,6 @@ class KeepResult {
 
   final bool ok, folderUnavailable;
   final int count, bytes, neededBytes;
-}
-
-/// Pourquoi l'utilisateur garde un morceau (table `KeepOrigins`, règle Q13).
-abstract final class KeepOrigin {
-  /// Gardé pour lui-même (feuille d'un morceau, liste Morceaux, artiste…).
-  static const song = 'song';
-  static String songOf(Track _) => song;
-
-  /// Gardé avec son album (⬇ de l'album, « Sélectionner », feuille d'un album).
-  static String albumOf(Track t) => 'album:${albumKeyOf(t)}';
-  static String album(String albumKey) => 'album:$albumKey';
-  static String playlist(String accountId, String playlistId) =>
-      'playlist:$accountId/$playlistId';
 }
 
 /// Le serveur refuse CE morceau (introuvable, vide, format inconnu) : seul cas compté
@@ -133,9 +122,14 @@ class Downloader extends ChangeNotifier {
   void followPlaylists() {
     _playlistsSub ??= db
         .tableUpdates(TableUpdateQuery.onTable(db.playlists))
-        .listen(
-          (_) => _playlistsJob = _playlistsJob.then((_) => syncPlaylists()),
-        );
+        .listen((_) => syncPlaylists());
+  }
+
+  /// Un travail sur les playlists gardées à la fois (rattrapage, « Retirer »).
+  Future<T> _playlistsSerial<T>(Future<T> Function() f) {
+    final run = _playlistsJob.then((_) => f());
+    _playlistsJob = run.then((_) {}, onError: (Object _) {});
+    return run;
   }
 
   /// Se termine quand les changements de playlists déjà vus sont traités.
@@ -144,35 +138,23 @@ class Downloader extends ChangeNotifier {
 
   /// Les playlists des serveurs ont changé (ou l'appli démarre) : chaque playlist encore
   /// gardée garde ses morceaux qui n'ont aucune copie, pas même en échec (ceux qu'elle a gagnés
-  /// sur le serveur, règle Q12), sauf ceux que l'utilisateur a retirés un par un (bloqués) ;
-  /// puis les .m3u8 suivent (une playlist que le serveur n'a plus, ou dont le compte est
-  /// retiré, perd son fichier : règle Q10).
-  Future<void> syncPlaylists() async {
+  /// sur le serveur, règle Q12), sauf ceux que l'utilisateur a retirés un par un (bloqués),
+  /// sans lever sa pause ; puis les .m3u8 suivent (une playlist que le serveur n'a plus, ou
+  /// dont le compte est retiré, perd son fichier : règle Q10).
+  Future<void> syncPlaylists() => _playlistsSerial(() async {
     try {
-      for (final k in await db.keptPlaylistRows()) {
-        final missing = <Track>[];
-        for (final path in {
-          ...await db.playlistPaths(k.accountId, k.playlistId),
-        }) {
-          if (await db.anyKept([path])) continue;
-          if (await db.autoKeepBlockedFor(path)) continue;
-          final t = await db.trackByPath(path);
-          if (t != null) missing.add(t);
-        }
-        if (missing.isEmpty) continue;
+      for (final e in (await db.keptPlaylistsMissing()).entries) {
+        final (acc, id) = e.key;
         // « Retirer » entre-temps : plus rien à garder pour elle
-        final still = (await db.keptPlaylistRows()).any(
-          (r) => r.accountId == k.accountId && r.playlistId == k.playlistId,
-        );
-        if (!still) continue;
-        final origin = KeepOrigin.playlist(k.accountId, k.playlistId);
-        await keep(missing, origin: (_) => origin);
+        if (!await db.isKeptPlaylist(acc, id)) continue;
+        final origin = KeepOrigin.playlist(acc, id);
+        await keep(e.value, origin: (_) => origin, unpause: false);
       }
     } catch (e) {
       _lastError = _describe(e);
     }
     await _refreshPlaylists();
-  }
+  });
 
   @override
   void dispose() {
@@ -236,13 +218,15 @@ class Downloader extends ChangeNotifier {
   /// dossier choisi ne répond plus. Un « Garder » de l'utilisateur lève sa pause.
   /// [origin] : pourquoi l'utilisateur garde chaque morceau ([KeepOrigin]) ; null : rien de
   /// noté (Top 100, « Réessayer » qui garde les raisons d'avant).
+  /// [unpause] faux : la pause de l'utilisateur reste (un rattrapage automatique).
   Future<KeepResult> keep(
     List<Track> tracks, {
     OfflineReason reason = OfflineReason.user,
     String Function(Track)? origin,
+    bool unpause = true,
   }) {
     // un à la fois : une garde automatique ne prend pas la place qu'un « Garder » vient de libérer
-    final run = _keepLock.then((_) => _keep(tracks, reason, origin));
+    final run = _keepLock.then((_) => _keep(tracks, reason, origin, unpause));
     _keepLock = run.then((_) {}, onError: (Object _) {});
     return run;
   }
@@ -253,6 +237,7 @@ class Downloader extends ChangeNotifier {
     List<Track> tracks,
     OfflineReason reason,
     String Function(Track)? origin,
+    bool unpause,
   ) async {
     if (!await device.rootReachable()) {
       return const KeepResult.folderUnavailable();
@@ -330,7 +315,7 @@ class Downloader extends ChangeNotifier {
       ]);
     }
     _accessDenied = false;
-    if (reason == OfflineReason.user) _userPaused = false;
+    if (reason == OfflineReason.user && unpause) _userPaused = false;
     start();
     return KeepResult.queued(fresh.length, need);
   }
@@ -390,14 +375,16 @@ class Downloader extends ChangeNotifier {
 
   /// « Retirer » une playlist : son `.m3u8` (le nôtre) part, puis ses morceaux qui n'ont plus
   /// d'autre raison ; sans les bloquer : le Top 100 peut les garder de nouveau (règle Q11).
-  Future<void> forgetPlaylist(String accountId, String playlistId) async {
-    await playlistFiles.remove(accountId, playlistId);
-    await forgetFrom(
-      KeepOrigin.playlist(accountId, playlistId),
-      await db.playlistPaths(accountId, playlistId),
-      block: false,
-    );
-  }
+  /// Jamais en même temps qu'un rattrapage ([syncPlaylists]).
+  Future<void> forgetPlaylist(String accountId, String playlistId) =>
+      _playlistsSerial(() async {
+        await playlistFiles.remove(accountId, playlistId);
+        await forgetFrom(
+          KeepOrigin.playlist(accountId, playlistId),
+          await db.playlistPaths(accountId, playlistId),
+          block: false,
+        );
+      });
 
   /// Fait de la place pour un « Garder » de l'utilisateur : efface des copies `top100`,
   /// les moins écoutées d'abord, juste ce qu'il faut pour couvrir [overLimit] (la limite)

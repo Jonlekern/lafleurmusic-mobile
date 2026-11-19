@@ -108,7 +108,7 @@ Future<void> forgetTracks(
 
 /// Retire un album ([tracks]) du téléphone : seuls partent ceux qui ne sont gardés pour aucune
 /// autre raison (une playlist, le morceau lui-même : règle Q13), après la question, qui ne
-/// compte qu'eux.
+/// compte qu'eux ; s'il n'y en a aucun, pas de question, un mot le dit.
 Future<void> forgetAlbum(
   BuildContext context,
   List<Track> tracks, {
@@ -124,7 +124,15 @@ Future<void> forgetAlbum(
     for (final e in byOrigin.entries) ...await d.toForgetFrom(e.key, e.value),
   ];
   if (!context.mounted) return;
-  if (!await confirmRemoval(context, name: name, paths: gone)) return;
+  if (gone.isEmpty) {
+    // tout est gardé autrement : seule la raison « album » part
+    say(
+      ScaffoldMessenger.of(context),
+      AppScope.of(context).strings.stillKeptElsewhere,
+    );
+  } else if (!await confirmRemoval(context, name: name, paths: gone)) {
+    return;
+  }
   for (final e in byOrigin.entries) {
     await d.forgetFrom(e.key, e.value);
   }

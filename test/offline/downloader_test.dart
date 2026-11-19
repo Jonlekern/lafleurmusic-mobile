@@ -162,6 +162,16 @@ class _Db extends LibraryDb {
     return super.markOfflineDone(trackPath, filePath, size);
   }
 
+  /// Runs once, right before the next [isKeptPlaylist] (a « Retirer » in between).
+  Future<void> Function()? beforeIsKept;
+  @override
+  Future<bool> isKeptPlaylist(String accountId, String playlistId) async {
+    final f = beforeIsKept;
+    beforeIsKept = null;
+    await f?.call();
+    return super.isKeptPlaylist(accountId, playlistId);
+  }
+
   @override
   Future<void> applyOfflineMove(Map<String, String> newRel, List<String> lost) {
     if (failMove) throw StateError('db closed');
@@ -1989,14 +1999,66 @@ void main() {
       });
     });
 
-    test('a playlist removed meanwhile keeps nothing more', () async {
+    /// Playlist r gains song 5 on the server (no follower: nothing kept yet).
+    Future<Downloader> gains() async {
+      final d = await both();
       await add(_t('5', no: 5, album: 'Other'));
       await db.replacePlaylists('acc', [
-        (id: 'r', name: 'Mix', paths: ['subsonic://acc/5']),
+        (
+          id: 'r',
+          name: 'Mix',
+          paths: [
+            'subsonic://acc/2',
+            'subsonic://acc/3',
+            'subsonic://acc/4',
+            'subsonic://acc/5',
+          ],
+        ),
       ]);
-      final d = make();
-      await d.syncPlaylists(); // not kept: nothing
+      return d;
+    }
+
+    test(
+      'a playlist removed between the listing and the keep keeps nothing',
+      () async {
+        final d = await gains();
+        db.beforeIsKept = () => db.dropKeptPlaylist('acc', 'r');
+        await d.syncPlaylists();
+        expect(await db.offlineOf('subsonic://acc/5'), isNull);
+      },
+    );
+
+    test('Retirer and the catch-up never interleave', () async {
+      final d = await gains();
+      await Future.wait([d.syncPlaylists(), d.forgetPlaylist('acc', 'r')]);
+      await d.whenIdle();
       expect(await db.offlineOf('subsonic://acc/5'), isNull);
+      expect(await db.offlineOf('subsonic://acc/4'), isNull);
+      expect(await db.keptPlaylistRows(), isEmpty);
+    });
+
+    test('the catch-up keeps the user\'s Pause', () async {
+      final d = await gains();
+      d.pause();
+      await d.syncPlaylists();
+      expect(d.userPaused, isTrue);
+      expect((await db.offlineOf('subsonic://acc/5'))!.state, 'queued');
+    });
+
+    test('Q15: a kept playlist gone from its server: its songs stay, kept for '
+        'themselves', () async {
+      final d = await both()
+        ..followPlaylists();
+      await db.replacePlaylists('acc', const []);
+      await pumpEventQueue();
+      await d.whenPlaylistsSettled();
+      expect(await db.keptPlaylistRows(), isEmpty);
+      expect(await db.originsOf('subsonic://acc/4'), {'song'});
+      expect(await db.originsOf('subsonic://acc/2'), {albumOrigin, 'song'});
+      // still removable one by one, and an album removal no longer takes 4
+      expect(await d.toForgetFrom(albumOrigin, albumPaths), [
+        'subsonic://acc/1',
+      ]);
     });
   });
 }

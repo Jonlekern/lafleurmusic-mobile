@@ -199,6 +199,63 @@ void main() {
       },
     );
 
+    phoneTest(
+      'Q14 : la ligne part telle quelle, même gardée comme morceaux ou par une '
+      'playlist (pas de retrait par raison)',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(
+          tester,
+          also: (db) async {
+            await db.addOrigins({
+              for (final p in pathsOf('Lafleur Surf')) p: 'playlist:demo/x',
+              pathsOf('Lafleur Surf').first: 'song',
+            });
+          },
+        );
+        await tester.drag(find.text('Lafleur Surf'), const Offset(-300, 0));
+        await done(tester);
+        expect(find.textContaining('(2 morceaux'), findsOneWidget);
+        await confirmRemoval(tester);
+        expect(r.f.downloader.forgotten, [pathsOf('Lafleur Surf')]);
+        expect(r.f.downloader.forgottenOrigins, isEmpty);
+      },
+    );
+
+    phoneTest(
+      'deux albums du même nom (artistes différents) : deux lignes',
+      TargetPlatform.iOS,
+      (tester) async {
+        Track twin(String artist) => Track(
+          path: 'subsonic://demo/Twin/$artist',
+          accountId: 'demo',
+          remoteId: 'Twin/$artist',
+          title: 'Song $artist',
+          artist: artist,
+          albumArtist: artist,
+          album: 'Twin',
+          trackNo: 1,
+          durationMs: 60000,
+          hasCover: false,
+          size: 1024,
+        );
+        await pumpOnDevice(
+          tester,
+          also: (db) async {
+            await db.upsertTracks([twin('Alpha'), twin('Beta')]);
+            await seedKept(db, [twin('Alpha').path], 1024);
+            await seedKept(db, [twin('Beta').path], 1024);
+          },
+        );
+        await tester.scrollUntilVisible(
+          find.text('Twin').last,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Twin'), findsNWidgets(2));
+      },
+    );
+
     phoneTest('appui long → « Retirer du téléphone »', TargetPlatform.iOS, (
       tester,
     ) async {

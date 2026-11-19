@@ -20,14 +20,20 @@ Future<void> openPlaylist(BuildContext context, ServerPlaylist p) =>
 Future<bool> keepPlaylist(BuildContext context, ServerPlaylist p) =>
     keepWith(context, (d) => d.keepPlaylist(p.accountId, p.id));
 
-/// « Retirer » la playlist du téléphone, après la question de l'écran 10 : son `.m3u8` et ses
-/// morceaux, sauf ceux d'une autre playlist gardée.
+/// « Retirer » la playlist du téléphone, après la question (maquette 10) : son `.m3u8` et ses
+/// morceaux qui ne sont gardés pour aucune autre raison (album, autre playlist, le morceau
+/// lui-même : règle Q13). Rien à effacer : pas de question, un mot le dit.
 Future<void> forgetPlaylist(BuildContext context, ServerPlaylist p) async {
-  final d = AppScope.of(context).downloader;
+  final app = AppScope.of(context);
+  final d = app.downloader;
   if (d == null) return;
   final paths = await d.playlistSongsToForget(p.accountId, p.id);
   if (!context.mounted) return;
-  if (!await confirmRemoval(context, name: p.name, paths: paths)) return;
+  if (paths.isEmpty) {
+    say(ScaffoldMessenger.of(context), app.strings.stillKeptElsewhere);
+  } else if (!await confirmRemoval(context, name: p.name, paths: paths)) {
+    return;
+  }
   await d.forgetPlaylist(p.accountId, p.id);
 }
 

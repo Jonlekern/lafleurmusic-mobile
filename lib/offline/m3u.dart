@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 
 import '../library/db.dart';
 import 'device.dart';
+import 'keep_origin.dart';
 import 'paths.dart';
 
 /// Une ligne d'un `.m3u8` : durée, artiste, titre, chemin relatif au fichier.
@@ -77,6 +78,11 @@ class PlaylistFiles {
         await _delete(root, k.fileName);
         ours.remove(k.fileName.toLowerCase());
         await db.dropKeptPlaylist(k.accountId, k.playlistId);
+        // ses morceaux restent gardés, pour eux-mêmes (règle Q15)
+        await db.renameOrigin(
+          KeepOrigin.playlist(k.accountId, k.playlistId),
+          KeepOrigin.song,
+        );
         continue;
       }
       final paths = await db.playlistPaths(k.accountId, k.playlistId);

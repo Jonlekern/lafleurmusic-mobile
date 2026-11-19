@@ -12,7 +12,7 @@ import '../../library/merge.dart';
 import '../../library/models.dart';
 import '../../offline/device.dart';
 import '../../offline/downloader.dart'
-    show Downloader, KeepOrigin, KeepResult, unknownTrackSize;
+    show Downloader, KeepResult, unknownTrackSize;
 import '../../offline/paths.dart' show fileOrPlaceholderExists;
 import '../../settings.dart';
 import '../../theme/colors.dart';
@@ -125,20 +125,25 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       switch (r.state) {
         case 'queued':
           queued.add(r);
-          (kept[t.album] ??= _Kept(
+          // un album par clé : deux albums du même nom (artistes différents) font deux lignes
+          (kept[albumKeyOf(t)] ??= _Kept(
             t.album,
             t.path,
             albumKeyOf(t),
           )).paths.add(r.trackPath);
         case 'done':
-          final k = kept[t.album] ??= _Kept(t.album, t.path, albumKeyOf(t));
+          final k = kept[albumKeyOf(t)] ??= _Kept(
+            t.album,
+            t.path,
+            albumKeyOf(t),
+          );
           k.paths.add(r.trackPath);
           k.done++;
           k.bytes += r.size;
           k.durationMs += t.durationMs;
           if (r.reason != OfflineReason.top100.name) k.top100Only = false;
         case 'failed':
-          final f = failed[t.album] ??= _Failed(t.album, t.path);
+          final f = failed[albumKeyOf(t)] ??= _Failed(t.album, t.path);
           final reason = r.reason == OfflineReason.top100.name
               ? OfflineReason.top100
               : OfflineReason.user;
@@ -421,15 +426,12 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     }
   }
 
-  /// Un album : seulement ce qu'il est seul à garder (règle Q13).
+  /// Ici on gère la place (règle Q14) : exactement les copies de la ligne partent (et leurs
+  /// jumeaux), quoi qui les garde, comme un morceau retiré seul.
   Future<void> _remove(_Kept k) async {
-    final d = AppScope.of(context).downloader;
-    if (d == null) return;
-    final origin = KeepOrigin.album(k.key);
-    final gone = await d.toForgetFrom(origin, k.paths);
-    if (!mounted) return;
-    if (!await confirmRemoval(context, name: k.name, paths: gone)) return;
-    await d.forgetFrom(origin, k.paths);
+    final app = AppScope.of(context);
+    if (!await confirmRemoval(context, name: k.name, paths: k.paths)) return;
+    await app.downloader?.forget(k.paths, byUser: true);
   }
 
   Future<void> _removeSheet(_Kept k) async {

@@ -91,6 +91,7 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
     List<Track> tracks, {
     OfflineReason reason = OfflineReason.user,
     String Function(Track)? origin,
+    bool unpause = true,
   }) async {
     kept.add([for (final t in tracks) t.path]);
     if (origin != null) {
@@ -107,7 +108,7 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
 
   @override
   Future<List<String>> toForgetFrom(String origin, List<String> paths) async =>
-      paths;
+      fromOrigin ?? paths;
 
   @override
   Future<void> forgetFrom(
@@ -140,11 +141,16 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
     return result;
   }
 
+  /// Réponse de [playlistSongsToForget] (vide : rien ne partirait) et de [toForgetFrom]
+  /// (null : tous les morceaux donnés).
+  List<String> playlistSongs = const [];
+  List<String>? fromOrigin;
+
   @override
   Future<List<String>> playlistSongsToForget(
     String accountId,
     String playlistId,
-  ) async => const [];
+  ) async => playlistSongs;
 
   @override
   Future<void> forgetPlaylist(String accountId, String playlistId) async =>

@@ -125,6 +125,7 @@ void main() {
       TargetPlatform.iOS,
       (tester) async {
         final f = await pumpPlaylists(tester);
+        f.downloader.playlistSongs = ['subsonic://demo/Night Drive/2'];
         await scrollTo(tester, find.text('Running'));
         await longPress(tester, find.text('Running'));
         await tester.tap(find.text('Retirer du téléphone'));
@@ -183,7 +184,61 @@ void main() {
     expect(f.downloader.origins.single.single, startsWith('album:'));
   });
 
+  phoneTest(
+    'N3 : une playlist dont tout est gardé autrement : pas de question, un mot, '
+    'la playlist part quand même',
+    TargetPlatform.iOS,
+    (tester) async {
+      final f = await pumpPlaylists(tester);
+      await scrollTo(tester, find.text('Running'));
+      await longPress(tester, find.text('Running'));
+      await tester.tap(find.text('Retirer du téléphone'));
+      await done(tester);
+      expect(find.text('Retirer du téléphone ?'), findsNothing);
+      expect(
+        find.text('Toujours gardé par un autre album ou une playlist.'),
+        findsOneWidget,
+      );
+      expect(f.downloader.forgottenPlaylists, [('demo', 'running')]);
+    },
+  );
+
+  phoneTest(
+    'N3 : un album dont tout est gardé autrement : pas de question, un mot',
+    TargetPlatform.iOS,
+    (tester) async {
+      final f = await pumpPlaylists(tester);
+      f.downloader.fromOrigin = const [];
+      await longPress(tester, find.text('Lafleur Surf').first);
+      await tester.tap(find.text('Retirer du téléphone'));
+      await done(tester);
+      expect(find.text('Retirer du téléphone ?'), findsNothing);
+      expect(
+        find.text('Toujours gardé par un autre album ou une playlist.'),
+        findsOneWidget,
+      );
+      expect(f.downloader.forgottenOrigins.single, startsWith('album:'));
+    },
+  );
+
   group('écran Playlist', () {
+    phoneTest(
+      'un morceau seul (appui long) se retire tel quel, sans raison',
+      TargetPlatform.iOS,
+      (tester) async {
+        final f = await pumpPlaylists(tester);
+        await openSoiree(tester);
+        await longPress(tester, find.text('Lafleur Surf').first);
+        await tester.tap(find.text('Retirer du téléphone'));
+        await done(tester);
+        await confirmRemoval(tester);
+        expect(f.downloader.forgotten, [
+          ['subsonic://demo/Lafleur Surf/1'],
+        ]);
+        expect(f.downloader.forgottenOrigins, isEmpty);
+      },
+    );
+
     phoneTest(
       'PLAYLIST · compte, l\'ordre du serveur, le doublon deux fois, '
       'l\'absent grisé (Review Focus 4)',

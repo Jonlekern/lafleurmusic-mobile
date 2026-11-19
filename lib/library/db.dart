@@ -1516,6 +1516,60 @@ class LibraryDb extends _$LibraryDb {
     };
   }
 
+  /// Every song kept for [from] is kept for [to] instead (a kept playlist the server no
+  /// longer has: its songs stay, kept for themselves, rule Q15).
+  Future<void> renameOrigin(String from, String to) => transaction(() async {
+    await customStatement(
+      'INSERT OR IGNORE INTO keep_origins (track_path, origin) '
+      'SELECT track_path, ? FROM keep_origins WHERE origin = ?',
+      [to, from],
+    );
+    await (delete(keepOrigins)..where((o) => o.origin.equals(from))).go();
+  });
+
+  /// The playlist is (still) kept on the phone.
+  Future<bool> isKeptPlaylist(String accountId, String playlistId) async =>
+      await (select(keptPlaylists)..where(
+            (k) =>
+                k.accountId.equals(accountId) & k.playlistId.equals(playlistId),
+          ))
+          .getSingleOrNull() !=
+      null;
+
+  /// In one query, for each kept playlist: its songs in the library that have no offline row
+  /// (own or a twin's on another account, any state) and that the user did not remove one
+  /// by one (no auto-keep block on them or a twin). The songs it gained on the server.
+  Future<Map<(String, String), List<Track>>> keptPlaylistsMissing() async {
+    final rows = await customSelect(
+      'SELECT DISTINCT k.account_id AS k_acc, k.playlist_id AS k_id, t.* '
+      'FROM kept_playlists k JOIN playlist_items i ON i.account_id = k.account_id '
+      'AND i.playlist_id = k.playlist_id JOIN tracks t ON t.path = i.track_path '
+      'WHERE NOT EXISTS (SELECT 1 FROM offline o WHERE o.track_path = t.path) '
+      "AND NOT EXISTS (SELECT 1 FROM tracks t2 JOIN offline o2 ON o2.track_path = t2.path "
+      "WHERE t.merge_key <> '' AND t2.merge_key = t.merge_key "
+      "AND t2.account_id <> t.account_id AND t2.account_id <> 'local') "
+      'AND NOT EXISTS (SELECT 1 FROM auto_keep_blocks b WHERE b.track_path = t.path '
+      'OR b.track_path IN (SELECT t3.path FROM tracks t3 '
+      "WHERE t.merge_key <> '' AND t3.merge_key = t.merge_key "
+      'AND t3.account_id <> t.account_id)) '
+      'ORDER BY k.account_id, k.playlist_id, t.path',
+      readsFrom: {
+        keptPlaylists,
+        playlistItems,
+        tracks,
+        offline,
+        autoKeepBlocks,
+      },
+    ).get();
+    final out = <(String, String), List<Track>>{};
+    for (final r in rows) {
+      (out[(r.read<String>('k_acc'), r.read<String>('k_id'))] ??= []).add(
+        _fromRow(tracks.map(r.data)),
+      );
+    }
+    return out;
+  }
+
   /// The playlists of a removed account go with it (a kept `.m3u8` stays on the phone).
   Future<void> deleteAccountPlaylists(String accountId) async {
     await (delete(

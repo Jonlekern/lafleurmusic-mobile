@@ -149,3 +149,37 @@ No schema change: the Task 1 v4 tables are used as they are.
 ### Notes
 - An album removal blocks only the songs it really deletes. The songs that stay are not blocked, because they are still kept by something else.
 - Origins attach to the row the user acted on. Lookups and removals use the twin group, so a change of representative row (account order) doesn't lose them.
+
+## Fix round 3 (rulings Q14, Q15; N1–N6)
+
+- **N1 / Q14 (« Sur mon iPhone » removes exactly what the row shows)**:
+  - `_remove` again runs `confirmRemoval(k.paths)` (exact count, twins included) and then `forget(k.paths, byUser: true)`. That forget is unconditional, clears the origins and takes the twins too.
+  - Kept and failed rows are now grouped by `albumKeyOf(t)` (albumMergeKey) instead of the album name, so two albums with the same name by different album artists are two rows.
+- **N2 / Q15**: when Q10 drops a kept playlist, `db.renameOrigin('playlist:<acc>/<id>', 'song')` turns its origins into `song`. `KeepOrigin` moved to `lib/offline/keep_origin.dart` (re-exported by `downloader.dart`) so `m3u.dart` can use it.
+- **N3**: when an album or playlist removal would delete nothing (`toForgetFrom` / `playlistSongsToForget` empty), there is no dialog. A SnackBar shows « Toujours gardé par un autre album ou une playlist. » / « Still kept by another album or playlist. » (`stillKeptElsewhere`), and only the origin is removed; the playlist's m3u8 goes too.
+- **N4**: real tests for the `still` re-check (a `_Db` hook drops the record between the listing and the check), for the single-song path in playlist_screen_test, and for on-device `_remove`.
+- **N5**: `syncPlaylists` and `forgetPlaylist` both run through `_playlistsSerial`, a chain on `_playlistsJob`, so they never interleave.
+- **N6**: the catch-up uses one query, `db.keptPlaylistsMissing()`. It lists, per kept playlist, the present songs with no offline row (own or non-local twin, any state) that are not blocked (themselves or a twin), with their full track rows.
+- **Pause**: the catch-up keeps with `unpause: false`, so a user Pause survives it.
+- **Doc**: `forgetPlaylist` in playlist_screen.dart now describes the Q13 rule.
+- **DemoDownloader**: has configurable `playlistSongs` and `fromOrigin` answers, and its `keep` takes `unpause`.
+
+### Tests
+- on_device_screen_test:
+  - Q14: the row is removed whole even with `song` and `playlist` origins; the dialog says 2 songs; no origin-based removal is used.
+  - Two « Twin » albums by Alpha and Beta show as two rows.
+- playlist_screen_test:
+  - N3 for a playlist (no dialog, SnackBar, `forgetPlaylist` still called) and for an album (SnackBar, album origin removed).
+  - A single song from the Soirée sheet is removed as is, with no origin.
+  - The existing « Retirer la playlist » test now sets `playlistSongs`.
+- downloader_test:
+  - The `still` re-check (record dropped in between → nothing kept).
+  - Retirer and the catch-up run concurrently → song 5 not kept, 4 gone, record gone.
+  - The catch-up keeps the Pause (song 5 queued, `userPaused` still true).
+  - Q15: origins become `song`, and an album removal then no longer takes song 4.
+- Mutation check: putting back name-based grouping fails the two-rows test, and dropping the `still` check fails the re-check test.
+
+### Runs
+- `flutter analyze`: No issues found!
+- `flutter test --exclude-tags golden`: `+756 ~3: All tests passed!` (0 warning or exception lines).
+- `flutter test --tags golden`: `+21: All tests passed!`

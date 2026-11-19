@@ -221,6 +221,12 @@ class Strings {
 
   /// Un morceau de la playlist que son compte n'a pas (grisé).
   String get missingSong => _t('Morceau absent', 'Missing song');
+
+  /// Retirer un album ou une playlist dont chaque morceau est gardé autrement : rien ne part.
+  String get stillKeptElsewhere => _t(
+    'Toujours gardé par un autre album ou une playlist.',
+    'Still kept by another album or playlist.',
+  );
   String notOnAccount(String account) =>
       _t('absent de $account', 'not on $account');
   String get allAccounts => _t('Tout', 'All');
