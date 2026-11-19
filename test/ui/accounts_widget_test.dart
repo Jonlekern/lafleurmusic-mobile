@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
+import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/ui/phone/account_form.dart';
@@ -272,20 +274,74 @@ void main() {
       ]);
     });
 
-    testWidgets('Affichage : Un compte actif, Tout et Perso « bientôt »', (
-      tester,
-    ) async {
-      await pumpAccounts(tester, home: () => const AccountsScreen());
-      await tester.ensureVisible(find.text('AFFICHAGE'));
-      expect(find.text('Un compte'), findsOneWidget);
-      expect(find.textContaining('Tout'), findsOneWidget);
-      expect(find.textContaining('Perso'), findsOneWidget);
-      expect(find.textContaining('bientôt'), findsWidgets);
-      await tapAndSettle(tester, find.textContaining('Perso'));
-      expect(
-        tester.widget<DisplaySegment>(find.byType(DisplaySegment)).value,
-        AccountsDisplay.one,
+    testWidgets(
+      'Affichage : Un compte / Tout / Perso enregistrés, cases en Perso',
+      (tester) async {
+        final f = await pumpAccounts(
+          tester,
+          home: () => const AccountsScreen(),
+        );
+        await tester.ensureVisible(find.text('AFFICHAGE'));
+        expect(find.text('Un compte'), findsOneWidget);
+        expect(find.text('Tout'), findsOneWidget);
+        expect(find.text('Perso'), findsOneWidget);
+        expect(find.textContaining('bientôt'), findsNothing);
+        expect(
+          tester.widget<DisplaySegment>(find.byType(DisplaySegment)).value,
+          DisplayMode.all,
+        );
+        expect(
+          find.byKey(ValueKey('check-${(await f.list(tester))[0].id}')),
+          findsNothing,
+        );
+        final saves = f.saves;
+        await tapAndSettle(tester, find.text('Perso'));
+        expect(f.settings.displayMode, DisplayMode.custom);
+        expect(f.saves, saves + 1);
+        // un premier Perso : tous les comptes cochés
+        final ids = [for (final a in await f.list(tester)) a.id];
+        expect(f.settings.customAccounts, ids);
+        for (final id in ids) {
+          expect(find.byKey(ValueKey('check-$id')), findsOneWidget);
+        }
+        await tapAndSettle(tester, find.byKey(ValueKey('check-${ids[2]}')));
+        expect(f.settings.customAccounts, [ids[0], ids[1]]);
+        await tapAndSettle(tester, find.text('Un compte'));
+        expect(f.settings.displayMode, DisplayMode.one);
+        expect(find.byKey(ValueKey('check-${ids[0]}')), findsNothing);
+        await tapAndSettle(tester, find.text('Tout'));
+        expect(f.settings.displayMode, DisplayMode.all);
+      },
+    );
+
+    testWidgets('Perso : le dernier compte coché reste coché', (tester) async {
+      final f = await pumpAccounts(tester, home: () => const AccountsScreen());
+      final ids = [for (final a in await f.list(tester)) a.id];
+      f.settings
+        ..displayMode = DisplayMode.custom
+        ..customAccounts = [ids[1]];
+      await tapAndSettle(tester, find.text('Perso')); // même mode : redessine
+      await tapAndSettle(tester, find.byKey(ValueKey('check-${ids[1]}')));
+      expect(f.settings.customAccounts, [ids[1]]);
+    });
+
+    testWidgets('l’ordre glissé change la meilleure source', (tester) async {
+      final f = await pumpAccounts(tester, home: () => const AccountsScreen());
+      final before = await f.list(tester);
+      final g = await tester.startGesture(
+        tester.getCenter(find.byKey(ValueKey('grip-${before.first.id}'))),
       );
+      await tester.pump(const Duration(milliseconds: 100));
+      for (var i = 0; i < 6; i++) {
+        await g.moveBy(const Offset(0, 15));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+      await settle(tester);
+      final after = await f.list(tester);
+      expect(after.first.id, before[1].id);
+      expect([for (final a in after) a.order], [0, 1, 2]);
     });
 
     testWidgets('« + Ajouter un compte » ouvre l’écran 7', (tester) async {
@@ -472,6 +528,138 @@ void main() {
       await tester.runAsync(f.service.syncAll);
       await tester.pump();
       expect(find.text('Hors ligne'), findsNothing);
+    });
+  });
+
+  group('Accueil, puces et listes', () {
+    /// Un album par compte : « Album 1 » sur le premier compte, etc.
+    Future<AccountsFixture> pumpHome(WidgetTester tester) async {
+      final f = await pumpAccounts(
+        tester,
+        home: () => const HomeScreen(),
+        view: true,
+      );
+      final ids = [for (final a in await f.list(tester)) a.id];
+      await tester.runAsync(
+        () => f.db.upsertTracks([
+          for (final (i, id) in ids.indexed)
+            Track(
+              path: 'subsonic://$id/t',
+              accountId: id,
+              remoteId: 't',
+              title: 'Titre ${i + 1}',
+              artist: 'Artiste ${i + 1}',
+              albumArtist: 'Artiste ${i + 1}',
+              album: 'Album ${i + 1}',
+              trackNo: 1,
+              durationMs: 1000,
+              hasCover: false,
+              size: 1,
+            ),
+        ]),
+      );
+      await settle(tester);
+      return f;
+    }
+
+    void expectAlbums(List<int> shown) {
+      for (final n in [1, 2, 3]) {
+        expect(
+          find.text('Album $n'),
+          shown.contains(n) ? findsOneWidget : findsNothing,
+          reason: 'Album $n',
+        );
+      }
+    }
+
+    testWidgets('« Tout » : un album par compte ; une puce par compte', (
+      tester,
+    ) async {
+      await pumpHome(tester);
+      expectAlbums([1, 2, 3]);
+      for (final n in ['Tout', 'Navidrome maison', 'Jellyfin de Max', 'Plex']) {
+        expect(find.text(n), findsOneWidget, reason: n);
+      }
+    });
+
+    testWidgets(
+      'une puce de compte = « Un compte », enregistré, listes à jour',
+      (tester) async {
+        final f = await pumpHome(tester);
+        final ids = [for (final a in await f.list(tester)) a.id];
+        final saves = f.saves;
+        await tapAndSettle(tester, find.text('Jellyfin de Max'));
+        expect(f.settings.displayMode, DisplayMode.one);
+        expect(f.settings.oneAccount, ids[1]);
+        expect(f.saves, saves + 1);
+        expectAlbums([2]);
+        await tapAndSettle(tester, find.text('Plex'));
+        expect(f.settings.oneAccount, ids[2]);
+        expectAlbums([3]);
+      },
+    );
+
+    testWidgets('« Tout ▾ » ouvre Tout / Perso ; Perso = les comptes cochés', (
+      tester,
+    ) async {
+      final f = await pumpHome(tester);
+      final ids = [for (final a in await f.list(tester)) a.id];
+      f.settings.customAccounts = [ids[0], ids[2]]; // deux comptes sur trois
+      await tapAndSettle(tester, find.text('Tout'));
+      await tester.pumpAndSettle(); // le petit choix s'ouvre
+      expect(find.text('Perso'), findsOneWidget);
+      await tapAndSettle(tester, find.text('Perso'));
+      expect(f.settings.displayMode, DisplayMode.custom);
+      expectAlbums([1, 3]);
+      // la puce se nomme Perso ; la rouvrir et choisir Tout
+      await tapAndSettle(tester, find.text('Perso').first);
+      await tester.pumpAndSettle();
+      await tapAndSettle(tester, find.text('Tout'));
+      await tester.pumpAndSettle();
+      expect(f.settings.displayMode, DisplayMode.all);
+      expectAlbums([1, 2, 3]);
+    });
+
+    testWidgets('le mode choisi dans Comptes met l’Accueil à jour', (
+      tester,
+    ) async {
+      final f = await pumpHome(tester);
+      final ids = [for (final a in await f.list(tester)) a.id];
+      f.settings.customAccounts = [ids[0], ids[1]];
+      await tester.tap(find.byIcon(Icons.settings_rounded));
+      await tester.pumpAndSettle();
+      await settle(tester);
+      await tapAndSettle(tester, find.text('Perso'));
+      await tapAndSettle(tester, find.text('Accueil'));
+      await settle(tester);
+      expectAlbums([1, 2]);
+      expect(find.text('Perso'), findsOneWidget);
+    });
+
+    testWidgets('un fichier posé à la main reste visible dans chaque mode', (
+      tester,
+    ) async {
+      final f = await pumpHome(tester);
+      await tester.runAsync(
+        () => f.db.upsertTracks([
+          const Track(
+            path: '/m/local.mp3',
+            title: 'Local',
+            artist: 'Moi',
+            albumArtist: '',
+            album: 'Album local',
+            trackNo: 1,
+            durationMs: 1000,
+            hasCover: false,
+            size: 1,
+          ),
+        ]),
+      );
+      await settle(tester);
+      for (final chip in ['Navidrome maison', 'Plex']) {
+        await tapAndSettle(tester, find.text(chip));
+        expect(find.text('Album local'), findsOneWidget, reason: chip);
+      }
     });
   });
 }

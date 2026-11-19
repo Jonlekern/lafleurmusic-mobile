@@ -1,0 +1,45 @@
+import '../../app_scope.dart';
+import '../../settings.dart';
+import '../../sources/accounts.dart';
+
+/// Changing what the library shows (one account, all, or the checked ones): saved in the
+/// settings, and every list follows at once. It only filters what is listed: playback may
+/// still use another account's copy of a song.
+extension DisplayChoice on AppScope {
+  /// [order]: the accounts in the order of the accounts screen (for the first Perso choice).
+  void chooseDisplay(
+    DisplayMode mode, {
+    String? account,
+    List<Account> order = const [],
+  }) {
+    final s = settings;
+    if (s == null) return;
+    s.displayMode = mode;
+    if (mode == DisplayMode.one && account != null) s.oneAccount = account;
+    if (mode == DisplayMode.custom && s.customAccounts.isEmpty) {
+      // a first Perso starts with every account checked
+      s.customAccounts = [for (final a in order) a.id];
+    }
+    _changed();
+  }
+
+  /// Checks or unchecks [id] in Perso (the last checked account stays).
+  void toggleCustom(String id) {
+    final s = settings;
+    if (s == null) return;
+    final l = [...s.customAccounts];
+    if (l.contains(id)) {
+      if (l.length == 1) return;
+      l.remove(id);
+    } else {
+      l.add(id);
+    }
+    s.customAccounts = l;
+    _changed();
+  }
+
+  void _changed() {
+    saveSettings?.call();
+    libraryView?.settingsChanged();
+  }
+}

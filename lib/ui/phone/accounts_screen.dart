@@ -4,14 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../settings.dart';
 import '../../sources/account_service.dart';
 import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
 import 'account_form.dart';
+import 'display_choice.dart';
 import 'phone_shell.dart';
-
-/// Affichage des albums de plusieurs comptes. Seul « Un compte » existe pour l'instant (plan 3).
-enum AccountsDisplay { one, all, custom }
 
 /// Réglages → Comptes (maquette 2, écran 6) : les comptes dans l'ordre (glisser ⋮⋮), leur état,
 /// « + Ajouter un compte », puis l'Affichage. Toucher un compte l'ouvre pour le modifier.
@@ -77,6 +76,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final app = AppScope.of(context);
     final s = app.strings;
     final service = app.accountService;
+    final mode = app.settings?.displayMode ?? DisplayMode.all;
     return PhoneScaffold(
       mini: false,
       // pas encore d'écran Réglages : ⚙︎ ouvre directement les comptes
@@ -150,17 +150,27 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     padding: const EdgeInsets.fromLTRB(4, 22, 4, 8),
                     child: Text(s.display, style: _secStyle),
                   ),
-                  DisplaySegment(value: AccountsDisplay.one, onChanged: (_) {}),
-                  const SizedBox(height: 12),
-                  // « Perso » : les comptes à mélanger (plan 3), montrés mais pas encore actifs
-                  Opacity(
-                    opacity: 0.45,
-                    child: Column(
-                      children: [
-                        for (final a in _list) _Check(label: a.name, on: true),
-                      ],
-                    ),
+                  DisplaySegment(
+                    value: mode,
+                    onChanged: (m) {
+                      app.chooseDisplay(m, order: _list);
+                      setState(() {});
+                    },
                   ),
+                  // « Perso » : les comptes à mélanger
+                  if (mode == DisplayMode.custom) ...[
+                    const SizedBox(height: 12),
+                    for (final a in _list)
+                      _Check(
+                        key: ValueKey('check-${a.id}'),
+                        label: a.name,
+                        on: app.settings!.customAccounts.contains(a.id),
+                        onTap: () {
+                          app.toggleCustom(a.id);
+                          setState(() {});
+                        },
+                      ),
+                  ],
                   const SizedBox(height: 8),
                   Text(
                     s.sameAlbumNote(
@@ -354,73 +364,83 @@ class _WidePill extends StatelessWidget {
 
 /// Case à cocher rose de la maquette (✓ sur fond rose).
 class _Check extends StatelessWidget {
-  const _Check({required this.label, required this.on});
+  const _Check({
+    super.key,
+    required this.label,
+    required this.on,
+    required this.onTap,
+  });
   final String label;
   final bool on;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-    child: Row(
-      children: [
-        Container(
-          width: 22,
-          height: 22,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: on ? LafleurColors.pink : null,
-            border: Border.all(
-              color: on ? LafleurColors.pink : const Color(0xFF555555),
-              width: 2,
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: on ? LafleurColors.pink : null,
+              border: Border.all(
+                color: on ? LafleurColors.pink : const Color(0xFF555555),
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(6),
             ),
-            borderRadius: BorderRadius.circular(6),
+            child: on
+                ? const Icon(
+                    Icons.check_rounded,
+                    size: 15,
+                    color: Color(0xFF111111),
+                  )
+                : null,
           ),
-          child: on
-              ? const Icon(
-                  Icons.check_rounded,
-                  size: 15,
-                  color: Color(0xFF111111),
-                )
-              : null,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: on ? LafleurColors.text : const Color(0xFF999999),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: on ? LafleurColors.text : const Color(0xFF999999),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }
 
-/// Un compte / Tout / Perso : seul « Un compte » est actif (les autres « bientôt », plan 3).
+/// Un compte / Tout / Perso.
 class DisplaySegment extends StatelessWidget {
   const DisplaySegment({
     super.key,
     required this.value,
     required this.onChanged,
   });
-  final AccountsDisplay value;
-  final ValueChanged<AccountsDisplay> onChanged;
+  final DisplayMode value;
+  final ValueChanged<DisplayMode> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context).strings;
-    return PhoneSegment<AccountsDisplay>(
+    return PhoneSegment<DisplayMode>(
       value: value,
       onChanged: onChanged,
       options: [
-        SegmentOption(AccountsDisplay.one, s.oneAccount),
-        SegmentOption(AccountsDisplay.all, s.allAccounts, enabled: false),
-        SegmentOption(AccountsDisplay.custom, s.customDisplay, enabled: false),
+        SegmentOption(DisplayMode.one, s.oneAccount),
+        SegmentOption(DisplayMode.all, s.allAccounts),
+        SegmentOption(DisplayMode.custom, s.customDisplay),
       ],
     );
   }

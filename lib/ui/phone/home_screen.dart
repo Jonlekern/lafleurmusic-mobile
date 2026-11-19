@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../library/library_view.dart';
 import '../../library/merge.dart';
 import '../../library/models.dart';
 import '../../player/player.dart';
+import '../../settings.dart';
 import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
 import '../cover_image.dart';
@@ -12,6 +14,7 @@ import '../coverflow_screen.dart';
 import '../track_menu.dart';
 import 'accounts_screen.dart';
 import 'album_screen.dart';
+import 'display_choice.dart';
 import 'names_screen.dart';
 import 'on_device_screen.dart';
 import 'phone_shell.dart';
@@ -221,9 +224,58 @@ class _OfflineLabel extends StatelessWidget {
   }
 }
 
-/// Puces des comptes : « Tout » (choisi), puis un par compte. Le tri par compte vient plus tard.
-class _AccountChips extends StatelessWidget {
+/// Puces des comptes (maquette 1) : « Tout ▾ » (ouvre Tout / Perso), puis une puce par compte
+/// (= « Un compte »). La puce du mode en cours est cerclée de rose. Toujours visibles, même
+/// avec un seul compte.
+class _AccountChips extends StatefulWidget {
   const _AccountChips();
+
+  @override
+  State<_AccountChips> createState() => _AccountChipsState();
+}
+
+class _AccountChipsState extends State<_AccountChips> {
+  final _first = GlobalKey();
+
+  Future<void> _chooseGroup(List<Account> list) async {
+    final app = AppScope.of(context);
+    final s = app.strings;
+    final box = _first.currentContext!.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final pos = RelativeRect.fromRect(
+      Rect.fromPoints(
+        box.localToGlobal(Offset(0, box.size.height), ancestor: overlay),
+        box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+    final mode = app.settings?.displayMode;
+    final picked = await showMenu<DisplayMode>(
+      context: context,
+      position: pos,
+      color: LafleurColors.bar,
+      items: [
+        for (final (m, label) in [
+          (DisplayMode.all, s.allAccounts),
+          (DisplayMode.custom, s.customDisplay),
+        ])
+          PopupMenuItem(
+            value: m,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: mode == m ? LafleurColors.pink : LafleurColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    app.chooseDisplay(picked, order: list);
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,48 +287,94 @@ class _AccountChips extends StatelessWidget {
       builder: (_, snap) {
         final list = snap.data ?? const <Account>[];
         if (list.isEmpty) return const SizedBox.shrink();
-        return Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            _Chip(app.strings.allAccounts, on: true),
-            for (final a in list) _Chip(a.name),
-          ],
+        final settings = app.settings;
+        final mode = settings?.displayMode ?? DisplayMode.all;
+        final shown = settings == null
+            ? const <String>{}
+            : LibraryView.visibleOf([for (final a in list) a.id], settings);
+        return ListenableBuilder(
+          // l'écran Comptes peut changer le mode pendant que l'Accueil est dessous
+          listenable: app.libraryView?.revision ?? const _Never(),
+          builder: (_, _) => Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _Chip(
+                mode == DisplayMode.custom
+                    ? app.strings.customDisplay
+                    : app.strings.allAccounts,
+                key: _first,
+                on: mode != DisplayMode.one,
+                menu: true,
+                onTap: () => _chooseGroup(list),
+              ),
+              for (final a in list)
+                _Chip(
+                  a.name,
+                  key: ValueKey('chip-${a.id}'),
+                  on: mode == DisplayMode.one && shown.contains(a.id),
+                  onTap: () {
+                    app.chooseDisplay(DisplayMode.one, account: a.id);
+                    setState(() {});
+                  },
+                ),
+            ],
+          ),
         );
       },
     );
   }
 }
 
+class _Never implements Listenable {
+  const _Never();
+  @override
+  void addListener(VoidCallback listener) {}
+  @override
+  void removeListener(VoidCallback listener) {}
+}
+
 class _Chip extends StatelessWidget {
-  const _Chip(this.label, {this.on = false});
+  const _Chip(
+    this.label, {
+    super.key,
+    this.on = false,
+    this.menu = false,
+    this.onTap,
+  });
   final String label;
   final bool on;
+  final bool menu; // ▾ : ouvre un choix
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final fg = on ? LafleurColors.pink : LafleurColors.text;
-    return Container(
-      padding: EdgeInsets.fromLTRB(12, 6, on ? 8 : 12, 6),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: on ? LafleurColors.pink : const Color(0xFF444444),
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: fg,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(12, 6, menu ? 8 : 12, 6),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: on ? LafleurColors.pink : const Color(0xFF444444),
           ),
-          if (on) Icon(Icons.arrow_drop_down_rounded, size: 16, color: fg),
-        ],
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: fg,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (menu) Icon(Icons.arrow_drop_down_rounded, size: 16, color: fg),
+          ],
+        ),
       ),
     );
   }

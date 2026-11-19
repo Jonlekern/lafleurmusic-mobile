@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show setEquals;
+import 'package:flutter/foundation.dart' show ValueNotifier, setEquals;
 
 import '../settings.dart';
 import 'db.dart';
@@ -53,8 +53,14 @@ class LibraryView {
     return s == null ? const {} : visibleOf(_order, s);
   }
 
+  /// Counts the display changes: widgets showing the mode (chips, settings) listen to it.
+  final revision = ValueNotifier<int>(0);
+
   /// The display mode or its accounts changed: every list shown follows.
-  void settingsChanged() => _emit();
+  void settingsChanged() {
+    revision.value++;
+    _emit();
+  }
 
   void _emit() {
     if (_sub == null) return;
@@ -131,5 +137,6 @@ class LibraryView {
   Future<void> dispose() async {
     await _sub?.cancel();
     await _visible.close();
+    revision.dispose();
   }
 }

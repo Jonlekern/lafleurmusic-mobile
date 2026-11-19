@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/library_view.dart';
 import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/player/equalizer.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
@@ -60,6 +61,10 @@ class AccountsFixture {
   final Accounts accounts;
   final FakeSecretStore secrets;
   final AccountService service;
+
+  /// Réglages de l'appli (mode d'affichage) et nombre d'enregistrements demandés.
+  final settings = AppSettings();
+  int saves = 0;
 
   /// Réponse de « Tester » pour un brouillon.
   TestResult draftResult = TestResult.ok;
@@ -116,6 +121,7 @@ Future<AccountsFixture> pumpAccounts(
   MediaResolver? resolver,
   FakeSecretStore? secretStore,
   bool fr = true,
+  bool view = false,
 }) async {
   phoneSize(tester);
   final db = LibraryDb(
@@ -135,7 +141,8 @@ Future<AccountsFixture> pumpAccounts(
     accounts,
     db: db,
     resolver: resolver,
-    wait: (_) => Completer<void>().future, // the 30 s follow-up sync never fires here
+    wait: (_) =>
+        Completer<void>().future, // the 30 s follow-up sync never fires here
     draftSource: (d, password) {
       f.drafts.add((d, password));
       return ProbeSource('draft', f.draftResult);
@@ -171,6 +178,11 @@ Future<AccountsFixture> pumpAccounts(
     }
   });
   if (results != null) f.results.addAll(results(list));
+  // view : les listes suivent le mode d'affichage comme dans l'appli
+  final libraryView = view ? LibraryView(db, settings: f.settings) : null;
+  if (libraryView != null) {
+    addTearDown(() => tester.runAsync(libraryView.dispose));
+  }
   await tester.pumpWidget(
     AppScope(
       db: db,
@@ -178,8 +190,9 @@ Future<AccountsFixture> pumpAccounts(
       covers: ReadyCovers(const {}),
       strings: Strings.of(Locale(fr ? 'fr' : 'en')),
       equalizer: ValueNotifier(Equalizer.named('flat')),
-      settings: AppSettings(),
-      saveSettings: () {},
+      settings: f.settings,
+      saveSettings: () => f.saves++,
+      libraryView: libraryView,
       accounts: accounts,
       accountService: service,
       child: MaterialApp(
