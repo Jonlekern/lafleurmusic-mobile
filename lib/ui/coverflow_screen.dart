@@ -344,7 +344,7 @@ Future<void> openCoverflow(
   final albums = await app.library.albums().first;
   if (!context.mounted || albums.isEmpty) return;
   final now = app.player.current.track;
-  final playing = now == null ? null : albumMergeKey(now);
+  final playing = now == null ? null : albumKeyOf(now);
   final i = albums.indexWhere((a) => a.key == playing);
   await Navigator.of(context).push(
     PageRouteBuilder<void>(

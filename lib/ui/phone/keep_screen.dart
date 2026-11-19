@@ -56,7 +56,7 @@ class _KeepScreenState extends State<KeepScreen> {
     if (_sub != null) return;
     final db = AppScope.of(context).db;
     unawaited(_load());
-    _sub = db.watchOffline().listen((m) async {
+    _sub = db.watchOfflineWithTwins().listen((m) async {
       final used = await db.offlineBytes();
       if (mounted) {
         setState(() {
@@ -73,7 +73,7 @@ class _KeepScreenState extends State<KeepScreen> {
     final all = await library.allTracks().first;
     final by = <String, List<Track>>{};
     for (final t in all.where(isRemote)) {
-      (by[albumMergeKey(t)] ??= []).add(t);
+      (by[albumKeyOf(t)] ??= []).add(t);
     }
     if (!mounted) return;
     setState(() {

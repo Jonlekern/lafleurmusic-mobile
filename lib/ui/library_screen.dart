@@ -120,10 +120,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     await for (final list in app.library.albumTracks(album)) {
       if (list.isEmpty && _shown.isNotEmpty) {
         final moved = await app.db.trackByPath(_shown.first);
-        if (moved != null && albumMergeKey(moved) != album) {
+        if (moved != null && albumKeyOf(moved) != album) {
           if (mounted) {
             setState(() {
-              _album = albumMergeKey(moved);
+              _album = albumKeyOf(moved);
               _albumName = moved.album;
             });
           }

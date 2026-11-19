@@ -192,7 +192,7 @@ class _KeepPill extends StatelessWidget {
     final app = AppScope.of(context);
     final remote = tracks.where(isRemote).toList();
     return StreamBuilder<Map<String, OfflineRow>>(
-      stream: app.db.watchOffline(),
+      stream: app.db.watchOfflineWithTwins(),
       builder: (context, snap) {
         final kept = remote.every((t) => isKept(t, snap.data ?? const {}));
         return PillButton(

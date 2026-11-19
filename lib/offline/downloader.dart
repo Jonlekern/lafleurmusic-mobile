@@ -166,12 +166,13 @@ class Downloader extends ChangeNotifier {
       return const KeepResult.folderUnavailable();
     }
     // le Top 100 laisse de côté ce que l'utilisateur a retiré (avant tout calcul de place)
-    final blocked = reason == OfflineReason.top100
-        ? await db.autoKeepBlocked()
-        : const <String>{};
+    // …ou ce qu'il a retiré d'un jumeau (le même morceau sur un autre compte, règle Q8)
     final remote = [
       for (final t in tracks)
-        if (parseRemoteKey(t.path) != null && !blocked.contains(t.path)) t,
+        if (parseRemoteKey(t.path) != null &&
+            !(reason == OfflineReason.top100 &&
+                await db.autoKeepBlockedFor(t.path)))
+          t,
     ];
     final batch = _albumOrder(remote);
     final fresh = <Track>[]; // ni terminés ni déjà en file
@@ -179,7 +180,10 @@ class Downloader extends ChangeNotifier {
     final done = <String>[];
     for (final t in batch) {
       // le même morceau sur un autre compte, déjà gardé ou en file : pas de seconde copie
-      final row = await db.offlineOf(t.path) ?? await db.twinOffline(t.path);
+      final own = await db.offlineOf(t.path);
+      final row = own == null || own.state == OfflineState.failed.name
+          ? await db.twinOffline(t.path) ?? own
+          : own;
       final path = row?.trackPath ?? t.path;
       if (row?.state == OfflineState.done.name) {
         done.add(path);
@@ -220,7 +224,12 @@ class Downloader extends ChangeNotifier {
     }
     await db.queueOffline(toQueue, reason);
     // un « Garder » de l'utilisateur lève le blocage du Top 100
-    if (reason == OfflineReason.user) await db.unblockAutoKeep(toQueue);
+    if (reason == OfflineReason.user) {
+      await db.unblockAutoKeep([
+        ...toQueue,
+        for (final p in toQueue) ...await db.twinPaths(p),
+      ]);
+    }
     _accessDenied = false;
     if (reason == OfflineReason.user) _userPaused = false;
     start();
@@ -646,10 +655,15 @@ class Downloader extends ChangeNotifier {
     OfflineReason? only,
     bool byUser = false,
   }) async {
-    final remote = [
+    final own = [
       for (final t in trackPaths)
         if (parseRemoteKey(t) != null) t,
     ];
+    // l'utilisateur retire un morceau : ses jumeaux (le même sur les autres comptes, montrés
+    // ou non) partent et sont bloqués aussi (règle Q8)
+    final remote = byUser
+        ? {...own, for (final t in own) ...await db.twinPaths(t)}.toList()
+        : own;
     // le blocage d'abord : un tour du Top 100 entre-temps ne remet pas le morceau en file
     if (byUser) await db.blockAutoKeep(remote);
     // les lignes d'abord : la boucle ne reprend pas un morceau qu'on oublie

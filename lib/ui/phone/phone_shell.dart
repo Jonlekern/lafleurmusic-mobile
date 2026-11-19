@@ -66,7 +66,7 @@ class _PhoneShellState extends State<PhoneShell> {
         if (ctx == null) return;
         final playing = AppScope.of(ctx).player.current.track;
         if (start == 'album' && playing != null) {
-          openAlbum(ctx, playing.album, albumMergeKey(playing));
+          openAlbum(ctx, playing.album, albumKeyOf(playing));
         } else if (start == 'now') {
           openNow(ctx);
         }

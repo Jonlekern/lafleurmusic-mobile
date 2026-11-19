@@ -259,6 +259,49 @@ void main() {
     expect((await db.offlineOf('subsonic://B/1'))!.reason, 'user');
   });
 
+  test('Retirer on the row shown removes the twin\'s copy on another account '
+      'and blocks every twin from the Top 100 (Q8)', () async {
+    final d = make();
+    await add(_t('1')); // kept on acc
+    await add(_t('1', acc: 'B')); // the row shown (acc hidden)
+    await d.keep([_t('1')]);
+    await d.whenIdle();
+    final file = File(
+      '${root.path}/${(await db.offlineOf('subsonic://acc/1'))!.filePath}',
+    );
+    expect(file.existsSync(), isTrue);
+    final seenBy = await db.watchOfflineWithTwins().first;
+    expect(seenBy['subsonic://B/1']?.state, 'done', reason: 'shown kept');
+    await d.forget(['subsonic://B/1'], byUser: true);
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    expect(file.existsSync(), isFalse);
+    expect(await db.autoKeepBlockedFor('subsonic://acc/1'), isTrue);
+    expect(await db.autoKeepBlockedFor('subsonic://B/1'), isTrue);
+    // the Top 100 meets the other twin: not kept again
+    final r = await d.keep([_t('1')], reason: OfflineReason.top100);
+    expect(r.count, 0);
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    // a user « Garder » lifts the blocks of the twins too
+    await d.keep([_t('1', acc: 'B')]);
+    await d.whenIdle();
+    expect(await db.autoKeepBlockedFor('subsonic://acc/1'), isFalse);
+  });
+
+  test('own row failed, the twin\'s copy done: no new download', () async {
+    final d = make();
+    await add(_t('1'));
+    await add(_t('1', acc: 'B'));
+    await db.queueOffline(['subsonic://B/1'], OfflineReason.user);
+    await db.markOfflineDone('subsonic://B/1', 'Art/Alb/01.mp3', 4);
+    await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+    for (var i = 0; i < 3; i++) {
+      await db.markOfflineFailed('subsonic://acc/1');
+    }
+    final r = await d.keep([_t('1')]);
+    expect(r.count, 0);
+    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'failed');
+  });
+
   test(
     'cancelAuto drops the top100 download in flight, user rows go on',
     () async {

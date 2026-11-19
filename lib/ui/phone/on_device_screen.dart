@@ -128,10 +128,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           (kept[t.album] ??= _Kept(
             t.album,
             t.path,
-            albumMergeKey(t),
+            albumKeyOf(t),
           )).paths.add(r.trackPath);
         case 'done':
-          final k = kept[t.album] ??= _Kept(t.album, t.path, albumMergeKey(t));
+          final k = kept[t.album] ??= _Kept(t.album, t.path, albumKeyOf(t));
           k.paths.add(r.trackPath);
           k.done++;
           k.bytes += r.size;

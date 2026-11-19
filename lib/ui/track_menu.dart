@@ -100,7 +100,7 @@ Future<void> showTrackSheet(
   final remote = list.where(isRemote).toList();
   final rows = app.downloader == null || remote.isEmpty
       ? const <String, OfflineRow>{}
-      : await app.db.watchOffline().first;
+      : await app.db.watchOfflineWithTwins().first;
   final canKeep = app.downloader != null && remote.isNotEmpty;
   final allKept = canKeep && remote.every((t) => isKept(t, rows));
   if (!context.mounted) return;

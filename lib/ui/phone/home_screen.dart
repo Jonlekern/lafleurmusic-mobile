@@ -161,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     initialData: app.player.current,
                     builder: (context, st) {
                       final now = st.data?.track;
-                      final playing = now == null ? null : albumMergeKey(now);
+                      final playing = now == null ? null : albumKeyOf(now);
                       final kept = keptSnap.data ?? const <String>{};
                       return Column(
                         children: [

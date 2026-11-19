@@ -174,6 +174,99 @@ void main() {
     ]);
   });
 
+  test('a copy kept on a hidden account: the row shown is kept, '
+      'its album too', () async {
+    await twoAccounts();
+    for (final p in ['subsonic://A/a1', 'subsonic://A/a2']) {
+      await db.queueOffline([p], OfflineReason.user);
+      await db.markOfflineDone(p, 'f$p', 1);
+    }
+    await db.upsertTracks([tr('A', 'a3', title: 'Three', no: 3)]);
+    await db.queueOffline(['subsonic://A/a3'], OfflineReason.user);
+    await db.markOfflineDone('subsonic://A/a3', 'fa3', 1);
+    final v = view(AppSettings(displayMode: DisplayMode.one, oneAccount: 'B'));
+    final album = (await v.albums().first).single;
+    expect(paths(await v.albumTracks(album.key).first), [
+      'subsonic://B/b1',
+      'subsonic://B/b2',
+      'subsonic://B/b3',
+    ]);
+    expect(await v.keptAlbums().first, {album.key});
+    final rows = await db.watchOfflineWithTwins().first;
+    expect(rows['subsonic://B/b1']?.trackPath, 'subsonic://A/a1');
+  });
+
+  test('part of an album placed by hand, the rest on Navidrome: one album, '
+      'the files win for their songs (Q5b)', () async {
+    await twoAccounts();
+    await db.upsertTracks([
+      tr('local', 'x', albumArtist: '', title: 'two', no: 2), // song 2
+      tr(
+        'local',
+        'y',
+        albumArtist: '',
+        title: 'Bonus',
+        no: 9,
+      ), // not on the server
+    ]);
+    final v = view();
+    final albums = await v.albums().first;
+    expect(albums, hasLength(1));
+    expect(paths(await v.albumTracks(albums.single.key).first), [
+      'subsonic://A/a1',
+      '/m/x.mp3',
+      'subsonic://B/b3',
+      '/m/y.mp3',
+    ]);
+    // the server album goes: the files are their own album again
+    await db.deletePaths([
+      for (final p in ['a1', 'a2']) 'subsonic://A/$p',
+      for (final p in ['b1', 'b2', 'b3']) 'subsonic://B/$p',
+    ]);
+    final alone = await v.albums().first;
+    expect(alone.single.key, albumMergeKey(tr('local', 'x', albumArtist: '')));
+    expect(alone.single.trackCount, 2);
+  });
+
+  test(
+    'a local album of the same name with no common song stays apart',
+    () async {
+      await twoAccounts();
+      await db.upsertTracks([
+        tr('local', 'x', albumArtist: '', title: 'Other', no: 5),
+      ]);
+      expect(await view().albums().first, hasLength(2));
+    },
+  );
+
+  test('album lists: by disc, then number', () async {
+    await account('A', 0);
+    Track d(String id, int? disc, int? no) => Track(
+      path: 'subsonic://A/$id',
+      accountId: 'A',
+      title: id,
+      artist: 'x',
+      albumArtist: 'x',
+      album: 'Double',
+      disc: disc,
+      trackNo: no,
+      durationMs: 1,
+      hasCover: false,
+      size: 1,
+    );
+    await db.upsertTracks([d('d2t1', 2, 1), d('d1t2', 1, 2), d('d1t1', 1, 1)]);
+    final v = view();
+    final key = (await v.albums().first).single.key;
+    expect(
+      [for (final t in await v.albumTracks(key).first) t.title],
+      ['d1t1', 'd1t2', 'd2t1'],
+    );
+    expect(
+      [for (final t in await v.artistTracks('x').first) t.title],
+      ['d1t1', 'd1t2', 'd2t1'],
+    );
+  });
+
   test('mode One with no account chosen: the first account', () async {
     await twoAccounts();
     final v = view(AppSettings(displayMode: DisplayMode.one));

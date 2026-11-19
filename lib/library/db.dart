@@ -209,6 +209,7 @@ class LibraryDb extends _$LibraryDb {
             );
           }
         });
+        await _relinkAlbums({for (final r in rows) albumNameKey(r.album)});
       }
     },
   );
@@ -218,12 +219,12 @@ class LibraryDb extends _$LibraryDb {
   Future<void> queueOffline(List<String> trackPaths, OfflineReason reason) =>
       transaction(() async {
         final now = DateTime.now().millisecondsSinceEpoch;
-        // retirés par l'utilisateur : le Top 100 ne les remet pas en file (relu ici, dans la transaction)
-        final blocked = reason == OfflineReason.top100
-            ? await autoKeepBlocked()
-            : const <String>{};
+        // retirés par l'utilisateur (ou un jumeau) : le Top 100 ne les remet pas en file
+        // (relu ici, dans la transaction)
         for (final (i, p) in trackPaths.indexed) {
-          if (blocked.contains(p)) continue;
+          if (reason == OfflineReason.top100 && await autoKeepBlockedFor(p)) {
+            continue;
+          }
           final old = await offlineOf(p);
           if (old == null) {
             await into(offline).insert(
@@ -434,11 +435,65 @@ class LibraryDb extends _$LibraryDb {
     mtime: r.mtime,
     size: r.size,
     missing: r.missing,
+    albumGroup: r.albumMergeKey,
   );
 
   Future<void> upsertTrack(Track t) => upsertTracks([t]);
 
-  Future<void> upsertTracks(List<Track> list) => batch((b) {
+  /// Writes [list] (same path: every column replaced), then settles the albums of those
+  /// names (rule Q5b, [_relinkAlbums]).
+  Future<void> upsertTracks(List<Track> list) => transaction(() async {
+    await _upsert(list);
+    await _relinkAlbums({for (final t in list) albumNameKey(t.album)});
+  });
+
+  /// Rule Q5b: files placed by hand without album artist (key `name NUL`) join the server
+  /// album of the same name that has one of their songs (title + number), the one with the
+  /// most such songs; otherwise they keep their own key. Run for the album names [names]
+  /// after any write of tracks of those names.
+  Future<void> _relinkAlbums(Set<String> names) async {
+    for (final n in names) {
+      final rows = await customSelect(
+        'SELECT * FROM tracks WHERE album_merge_key >= ? AND album_merge_key < ?',
+        variables: [
+          Variable.withString('$n\u0000'),
+          Variable.withString('$n\u0001'),
+        ],
+        readsFrom: {tracks},
+      ).map((r) => tracks.map(r.data)).get();
+      final loose = [
+        for (final r in rows)
+          if (r.accountId == 'local' && r.albumArtist.isEmpty) r,
+      ];
+      if (loose.isEmpty) continue;
+      final mine = {for (final r in loose) songKey(_fromRow(r))};
+      final hits = <String, Set<String>>{};
+      for (final r in rows) {
+        if (r.accountId == 'local' || r.albumArtist.isEmpty) continue;
+        final song = songKey(_fromRow(r));
+        if (mine.contains(song)) (hits[r.albumMergeKey] ??= {}).add(song);
+      }
+      var target = '$n\u0000';
+      var best = 0;
+      for (final e in hits.entries) {
+        final c = e.value.length;
+        if (c > best || (c == best && e.key.compareTo(target) < 0)) {
+          best = c;
+          target = e.key;
+        }
+      }
+      final moved = [
+        for (final r in loose)
+          if (r.albumMergeKey != target) r.id,
+      ];
+      if (moved.isEmpty) continue;
+      await (update(tracks)..where((t) => t.id.isIn(moved))).write(
+        TracksCompanion(albumMergeKey: Value(target)),
+      );
+    }
+  }
+
+  Future<void> _upsert(List<Track> list) => batch((b) {
     for (final t in list) {
       final row = TracksCompanion.insert(
         path: t.path,
@@ -597,7 +652,16 @@ class LibraryDb extends _$LibraryDb {
   }
 
   Future<void> deletePaths(List<String> paths) => transaction(() async {
+    final names = {
+      for (final r
+          in await (selectOnly(tracks)
+                ..addColumns([tracks.album])
+                ..where(tracks.path.isIn(paths)))
+              .get())
+        albumNameKey(r.read(tracks.album)!),
+    };
     await (delete(tracks)..where((t) => t.path.isIn(paths))).go();
+    await _relinkAlbums(names);
     await (delete(playCounts)..where((t) => t.path.isIn(paths))).go();
     await (delete(loudness)..where((t) => t.path.isIn(paths))).go();
   });
@@ -776,18 +840,28 @@ class LibraryDb extends _$LibraryDb {
   /// account in the order of the accounts screen. A file on the phone stands for its server
   /// twins; local files are never merged together (each one always shows), nor two rows of
   /// one account (the server's own duplicates: its 2nd one pairs with the other account's 2nd).
-  (String, List<Variable<Object>>) _reps(Set<String>? accounts) {
+  /// [scope] (SQL on the tracks' columns, with [scopeVars]) limits the work to the songs
+  /// having a row that matches it: the caller still filters the rows shown.
+  (String, List<Variable<Object>>) _reps(
+    Set<String>? accounts, {
+    String? scope,
+    List<Variable<Object>> scopeVars = const [],
+  }) {
     final ids = accounts?.toList() ?? const <String>[];
-    final filter = accounts == null
-        ? ''
+    final visible = accounts == null
+        ? '1'
         : ids.isEmpty
-        ? "WHERE t.account_id = 'local' "
-        : "WHERE t.account_id = 'local' OR t.account_id IN "
-              '(${List.filled(ids.length, '?').join(', ')}) ';
+        ? "t.account_id = 'local'"
+        : "(t.account_id = 'local' OR t.account_id IN "
+              '(${List.filled(ids.length, '?').join(', ')}))';
+    final songs = scope == null
+        ? '1'
+        : "(($scope) OR t.merge_key IN (SELECT merge_key FROM tracks "
+              "WHERE merge_key <> '' AND ($scope)))";
     return (
       'WITH occ AS (SELECT t.*, ROW_NUMBER() OVER '
           '(PARTITION BY t.account_id, t.merge_key ORDER BY t.path) AS n '
-          'FROM tracks t $filter), '
+          'FROM tracks t WHERE $visible AND $songs), '
           'ranked AS (SELECT t.*, o.state AS offline_state, '
           'ROW_NUMBER() OVER (PARTITION BY CASE '
           "WHEN t.account_id = 'local' OR t.merge_key = '' THEN t.path "
@@ -803,6 +877,7 @@ class LibraryDb extends _$LibraryDb {
       [
         // in the order of the `?` above
         for (final i in ids) Variable.withString(i),
+        if (scope != null) ...[...scopeVars, ...scopeVars],
         Variable.withString(OfflineState.done.name),
       ],
     );
@@ -812,8 +887,9 @@ class LibraryDb extends _$LibraryDb {
     Set<String>? accounts,
     String select, [
     List<Variable<Object>> vars = const [],
+    String? scope,
   ]) {
-    final (sql, v) = _reps(accounts);
+    final (sql, v) = _reps(accounts, scope: scope, scopeVars: vars);
     return customSelect(
       '$sql$select',
       variables: [...v, ...vars],
@@ -832,7 +908,12 @@ class LibraryDb extends _$LibraryDb {
     'SELECT * FROM reps WHERE $where ORDER BY $order, id'
     '${limit == null ? '' : ' LIMIT $limit'}',
     vars,
+    where == '1' ? null : where,
   ).map((r) => _fromRow(tracks.map(r.data)));
+
+  // album, artist, genre: by disc, then number, those without one at the end
+  static const _byDisc =
+      'disc IS NULL, disc, track_no IS NULL, track_no, title';
 
   /// The albums shown (one per [albumMergeKey], whatever the account): name, songs, length.
   Stream<List<Album>> watchAlbums({Set<String>? accounts}) =>
@@ -854,14 +935,21 @@ class LibraryDb extends _$LibraryDb {
         ],
       );
 
-  /// Albums ([Album.key]) whose every server track shown has a finished copy (⬇ rose de l'Accueil).
-  Stream<Set<String>> watchKeptAlbums({Set<String>? accounts}) => _shown(
-    accounts,
-    "SELECT album_merge_key AS k FROM reps WHERE path LIKE 'subsonic://%' "
-    'GROUP BY album_merge_key '
-    'HAVING COUNT(*) = SUM(CASE WHEN offline_state = ? THEN 1 ELSE 0 END)',
-    [Variable.withString(OfflineState.done.name)],
-  ).watch().map((rows) => {for (final r in rows) r.read<String>('k')});
+  /// Albums ([Album.key]) whose every server track shown has a finished copy, its own or a
+  /// twin's on any account, shown or not (⬇ rose de l'Accueil).
+  Stream<Set<String>> watchKeptAlbums({Set<String>? accounts}) {
+    final (sql, v) = _reps(accounts);
+    return customSelect(
+      "${sql}SELECT r.album_merge_key AS k FROM reps r WHERE r.path LIKE 'subsonic://%' "
+      'GROUP BY r.album_merge_key HAVING COUNT(*) = SUM(CASE WHEN EXISTS ('
+      'SELECT 1 FROM tracks t2 JOIN offline o ON o.track_path = t2.path '
+      'WHERE o.state = ? AND (t2.path = r.path OR (r.merge_key <> \'\' '
+      'AND t2.merge_key = r.merge_key AND t2.account_id <> r.account_id))) '
+      'THEN 1 ELSE 0 END)',
+      variables: [...v, Variable.withString(OfflineState.done.name)],
+      readsFrom: {tracks, offline, accountRows},
+    ).watch().map((rows) => {for (final r in rows) r.read<String>('k')});
+  }
 
   /// The songs of album [key] ([Album.key]), by number, those without one at the end.
   Stream<List<Track>> watchAlbumTracks(String key, {Set<String>? accounts}) =>
@@ -869,7 +957,7 @@ class LibraryDb extends _$LibraryDb {
         accounts,
         where: 'album_merge_key = ?',
         vars: [Variable.withString(key)],
-        order: 'track_no IS NULL, track_no, title',
+        order: _byDisc,
       ).watch();
 
   Future<List<Track>> search(String q, {Set<String>? accounts}) async {
@@ -920,7 +1008,7 @@ class LibraryDb extends _$LibraryDb {
     accounts,
     where: 'artist = ?',
     vars: [Variable.withString(artist)],
-    order: 'album_key, track_no, title',
+    order: 'album_key, $_byDisc',
   ).watch();
 
   Stream<List<Track>> watchGenreTracks(String genre, {Set<String>? accounts}) =>
@@ -928,7 +1016,7 @@ class LibraryDb extends _$LibraryDb {
         accounts,
         where: 'genre = ?',
         vars: [Variable.withString(genre)],
-        order: 'album_key, track_no, title',
+        order: 'album_key, $_byDisc',
       ).watch();
 
   /// Every row of the song of [path] (same `merge_key` on the phone or another account,
@@ -987,6 +1075,57 @@ class LibraryDb extends _$LibraryDb {
     ],
     readsFrom: {tracks, offline},
   ).map((r) => offline.map(r.data)).getSingleOrNull();
+
+  /// The rows of the song of [path] on the OTHER accounts (its twins), shown or not.
+  Future<List<String>> twinPaths(String path) => customSelect(
+    'SELECT t2.path AS p FROM tracks t1 JOIN tracks t2 ON t2.merge_key = t1.merge_key '
+    "WHERE t1.path = ? AND t1.merge_key <> '' AND t2.account_id <> t1.account_id "
+    "AND t2.account_id <> 'local' ORDER BY t2.path",
+    variables: [Variable.withString(path)],
+    readsFrom: {tracks},
+  ).map((r) => r.read<String>('p')).get();
+
+  /// The user removed [path] or one of its twins: the Top 100 leaves it alone (rule Q8).
+  Future<bool> autoKeepBlockedFor(String path) async => (await customSelect(
+    'SELECT 1 FROM auto_keep_blocks b WHERE b.track_path = ? '
+    'OR b.track_path IN (SELECT t2.path FROM tracks t1 JOIN tracks t2 '
+    "ON t2.merge_key = t1.merge_key WHERE t1.path = ? AND t1.merge_key <> '' "
+    'AND t2.account_id <> t1.account_id) LIMIT 1',
+    variables: [Variable.withString(path), Variable.withString(path)],
+    readsFrom: {autoKeepBlocks, tracks},
+  ).get()).isNotEmpty;
+
+  /// The offline rows as the screens see them: each row under its own track, and for a
+  /// server track the best copy of the song among its twins on any account, shown or not
+  /// (done, then queued, then failed; its own first on a tie). « Retirer » then removes
+  /// them all ([Downloader.forget] with `byUser`).
+  Stream<Map<String, OfflineRow>> watchOfflineWithTwins() =>
+      customSelect(
+        'SELECT t.path AS shown, o.* FROM offline o '
+        'JOIN tracks t2 ON t2.path = o.track_path '
+        "JOIN tracks t ON t.merge_key = t2.merge_key AND t.merge_key <> '' "
+        "AND t.account_id <> t2.account_id AND t.account_id <> 'local' "
+        'UNION ALL SELECT o.track_path AS shown, o.* FROM offline o',
+        readsFrom: {offline, tracks},
+      ).watch().map((rows) {
+        int rank(OfflineRow o) => o.state == OfflineState.done.name
+            ? 0
+            : o.state == OfflineState.queued.name
+            ? 1
+            : 2;
+        final m = <String, OfflineRow>{};
+        for (final r in rows) {
+          final shown = r.read<String>('shown');
+          final o = offline.map(r.data);
+          final old = m[shown];
+          final better =
+              old == null ||
+              rank(o) < rank(old) ||
+              (rank(o) == rank(old) && o.trackPath == shown);
+          if (better) m[shown] = o;
+        }
+        return m;
+      });
 
   /// The accounts' ids in the order of the accounts screen.
   Stream<List<String>> watchAccountIds() =>

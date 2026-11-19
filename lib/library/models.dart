@@ -21,6 +21,7 @@ class Track {
     this.mtime = 0,
     required this.size,
     this.missing = false,
+    this.albumGroup,
   });
 
   final int? id;
@@ -42,6 +43,10 @@ class Track {
   final int mtime;
   final int size;
   final bool missing;
+
+  /// The album it is shown in, as the library stored it (`Tracks.albumMergeKey`; a file
+  /// placed by hand may have joined a server album). Null for a track not read from the library.
+  final String? albumGroup;
 }
 
 /// Un album = une playlist (les albums compilés de Johnny).
