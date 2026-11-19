@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../../app_scope.dart';
 import '../../library/merge.dart';
+import '../../library/models.dart';
 import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
+import '../coverflow_screen.dart';
 import '../library_screen.dart';
 import 'account_form.dart';
 import 'album_screen.dart';
@@ -55,6 +58,38 @@ class PhoneShell extends StatefulWidget {
 class _PhoneShellState extends State<PhoneShell> {
   final _nav = GlobalKey<NavigatorState>();
   StreamSubscription<String>? _skipped;
+  StreamSubscription<List<Album>>? _albumsSub;
+  List<Album> _albums = const [];
+
+  // Cover Flow couché : l'écran du dessus (En cours reste debout), l'album ouvert en dernier, et
+  // « Ouvrir l'album » depuis le Cover Flow (l'album s'affiche couché jusqu'au retour ou au redressement)
+  late final _routes = _RouteWatcher(_routesChanged);
+  bool _suppressFlow = false;
+  int _suppressDepth = 0;
+  String? _lastAlbumKey;
+  bool _lockedUpright = false;
+
+  static bool get _mobile => isMobilePlatform(defaultTargetPlatform);
+
+  void _routesChanged() {
+    final top = _routes.top?.settings;
+    final key = top?.name == 'album' ? top?.arguments : null;
+    if (key is String) _lastAlbumKey = key;
+    if (_suppressFlow && _routes.depth < _suppressDepth) _suppressFlow = false;
+    // En cours reste dessiné debout : le téléphone ne se couche pas pendant qu'on y est
+    final now = top?.name == 'now';
+    if (_mobile && now != _lockedUpright) {
+      _lockedUpright = now;
+      SystemChrome.setPreferredOrientations(
+        now ? uprightOnly : mobileOrientations,
+      );
+    }
+    // (appelé pendant que le navigateur se construit : on redessine après)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
 
   @override
   void initState() {
@@ -87,6 +122,11 @@ class _PhoneShellState extends State<PhoneShell> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final app = AppScope.of(context);
+    if (_mobile) {
+      _albumsSub ??= app.library.albums().listen((a) {
+        if (mounted) setState(() => _albums = a);
+      });
+    }
     // même message que sur le Mac quand un morceau illisible est passé
     _skipped ??= app.player.skipped.listen((path) {
       if (!mounted) return;
@@ -111,18 +151,102 @@ class _PhoneShellState extends State<PhoneShell> {
   @override
   void dispose() {
     _skipped?.cancel();
+    _albumsSub?.cancel();
+    if (_mobile && _lockedUpright) {
+      SystemChrome.setPreferredOrientations(mobileOrientations);
+    }
     super.dispose();
   }
 
+  void _openFromFlow(Album a) {
+    final ctx = _nav.currentContext;
+    if (ctx == null) return;
+    setState(() {
+      _suppressFlow = true;
+      _suppressDepth = _routes.depth + 1;
+    });
+    openAlbum(ctx, a.name, a.key);
+  }
+
   @override
-  Widget build(BuildContext context) => NavigatorPopHandler<Object?>(
-    onPopWithResult: (_) => _nav.currentState?.maybePop(),
-    child: Navigator(
-      key: _nav,
-      onGenerateRoute: (_) =>
-          CupertinoPageRoute<void>(builder: (_) => const _Start()),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final nav = NavigatorPopHandler<Object?>(
+      onPopWithResult: (_) => _nav.currentState?.maybePop(),
+      child: Navigator(
+        key: _nav,
+        observers: [_routes],
+        onGenerateRoute: (_) =>
+            CupertinoPageRoute<void>(builder: (_) => const _Start()),
+      ),
+    );
+    if (!_mobile) return nav;
+    final size = MediaQuery.sizeOf(context);
+    final landscape = size.width > size.height;
+    if (!landscape) _suppressFlow = false;
+    final onNow = _routes.top?.settings.name == 'now';
+    if (!landscape || onNow || _suppressFlow || _albums.isEmpty) return nav;
+    final app = AppScope.of(context);
+    final now = app.player.current.track;
+    final key = now != null ? albumKeyOf(now) : _lastAlbumKey;
+    final i = _albums.indexWhere((a) => a.key == key);
+    // le Cover Flow se pose sur l'écran ; dessous, le navigateur reste où il était
+    return Stack(
+      children: [
+        Positioned.fill(child: nav),
+        Positioned.fill(
+          child: CoverflowScreen(
+            phone: true,
+            albums: _albums,
+            initial: i < 0 ? 0 : i,
+            onOpen: _openFromFlow,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Orientations du téléphone : debout et couché des deux côtés (le Cover Flow est l'écran couché).
+const mobileOrientations = [
+  DeviceOrientation.portraitUp,
+  DeviceOrientation.landscapeLeft,
+  DeviceOrientation.landscapeRight,
+];
+const uprightOnly = [DeviceOrientation.portraitUp];
+
+/// Suit les écrans empilés : celui du dessus et leur nombre.
+class _RouteWatcher extends NavigatorObserver {
+  _RouteWatcher(this._changed);
+  final VoidCallback _changed;
+  Route<dynamic>? top;
+  int depth = 0;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    top = route;
+    depth++;
+    _changed();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    top = previousRoute;
+    depth--;
+    _changed();
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    top = newRoute;
+    _changed();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    depth--;
+    if (route == top) top = previousRoute;
+    _changed();
+  }
 }
 
 /// Premier écran : l'Accueil ; sur un téléphone sans aucun compte, « Ajouter un compte » (premier lancement),
@@ -169,9 +293,12 @@ class _StartState extends State<_Start> {
 }
 
 /// Ouvre un écran du téléphone : glisse depuis la droite, retour en glissant depuis le bord gauche.
-Future<void> pushPhone(BuildContext context, Widget screen) =>
-    Navigator.of(context)
-        .push(CupertinoPageRoute<void>(builder: (_) => screen));
+Future<void> pushPhone(
+  BuildContext context,
+  Widget screen, {
+  RouteSettings? settings,
+}) => Navigator.of(context)
+    .push(CupertinoPageRoute<void>(settings: settings, builder: (_) => screen));
 
 /// Barre du haut du téléphone : logo LAFLEURMUSIC, « ‹ retour » rose à gauche, bouton à droite.
 class PhoneHeader extends StatelessWidget {

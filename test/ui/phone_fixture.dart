@@ -30,6 +30,16 @@ void phoneSize(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+/// Le même iPhone couché : 844 × 390, encoche à gauche, barre d'accueil en bas.
+void landscapeSize(WidgetTester tester) {
+  tester.view.physicalSize = const Size(844, 390);
+  tester.view.devicePixelRatio = 1;
+  const pad = FakeViewPadding(left: 47, right: 47, bottom: 21);
+  tester.view.padding = pad;
+  tester.view.viewPadding = pad;
+  addTearDown(tester.view.reset);
+}
+
 class PhoneFixture {
   PhoneFixture(this.db, this.player, this.covers);
   final LibraryDb db;

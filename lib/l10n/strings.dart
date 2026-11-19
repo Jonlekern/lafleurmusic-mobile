@@ -132,6 +132,14 @@ class Strings {
     'Molette, trackpad ou ← → pour défiler · Entrée pour jouer',
     'Wheel, trackpad or ← → to browse · Enter to play',
   );
+  // téléphone couché (maquette 2, écran 5)
+  String get coverFlowHelpPhone => _t(
+    'Glisse pour défiler · touche pour jouer',
+    'Swipe to browse · tap to play',
+  );
+  String keptOnDevice(bool iphone) => iphone
+      ? _t('sur l’iPhone', 'on the iPhone')
+      : _t('sur le téléphone', 'on the phone');
   String playlistN(int n) => _t('Album · $n morceaux', 'Album · $n songs');
   String get scanning => _t('Je range ta musique…', 'Sorting your music…');
 

@@ -35,9 +35,9 @@ import 'ui/phone/phone_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // plan 1 : téléphone debout seulement (le Cover Flow couché viendra plus tard)
+  // téléphone : debout, ou couché des deux côtés (Cover Flow) ; En cours le remet debout le temps qu'on y est
   if (isMobilePlatform(defaultTargetPlatform)) {
-    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    await SystemChrome.setPreferredOrientations(mobileOrientations);
   }
   // --dart-define=LAFLEUR_DEMO=true : bibliothèque inventée des maquettes, sans serveur ni son (debug seulement)
   if (kDebugMode && const bool.fromEnvironment('LAFLEUR_DEMO')) {

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:lafleurmusic/ui/coverflow_screen.dart';
+import 'package:lafleurmusic/ui/cover_image.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:flutter/foundation.dart';
+import 'package:lafleurmusic/player/player.dart';
 import 'package:lafleurmusic/ui/equalizer_panel.dart';
 import 'package:lafleurmusic/ui/library_screen.dart';
 import 'package:lafleurmusic/ui/phone/album_screen.dart';
@@ -274,5 +278,192 @@ void main() {
     expect(find.byType(PhoneShell), findsNothing);
     await tester.pumpWidget(const SizedBox());
     debugDefaultTargetPlatformOverride = null;
+  });
+
+  group('Cover Flow couché', () {
+    // Johnny : « couché sur l'Accueil → Cover Flow, relevé → retour au même endroit ;
+    // couché pendant la lecture sur En cours : rien ne bascule »
+    Future<void> turn(WidgetTester tester, {required bool landscape}) async {
+      if (landscape) {
+        landscapeSize(tester);
+      } else {
+        phoneSize(tester);
+      }
+      await tester.pump();
+      await settle(tester);
+    }
+
+    testWidgets(
+      'Accueil couché : Cover Flow sur l’album en cours, relevé : retour',
+      (tester) async {
+        await pumpPhone(tester);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        await turn(tester, landscape: true);
+        expect(find.byType(CoverflowScreen), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(CoverflowScreen),
+            matching: find.text('Studio Lafleur'),
+          ),
+          findsOneWidget,
+        ); // l'album du morceau en cours, au centre
+        expect(find.text('Album · 9 morceaux'), findsOneWidget);
+        await turn(tester, landscape: false);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        expect(find.byType(HomeScreen), findsOneWidget);
+      },
+    );
+
+    testWidgets('relevé : on retrouve l’écran d’avant (l’album ouvert)', (
+      tester,
+    ) async {
+      await pumpPhone(tester);
+      await openStudio(tester);
+      await turn(tester, landscape: true);
+      expect(find.byType(CoverflowScreen), findsOneWidget);
+      await turn(tester, landscape: false);
+      expect(find.byType(CoverflowScreen), findsNothing);
+      expect(find.byType(AlbumScreen), findsOneWidget);
+      expect(find.text('Night Swim'), findsOneWidget);
+    });
+
+    testWidgets('couché, le Cover Flow part de l’album ouvert en dernier', (
+      tester,
+    ) async {
+      final f = await pumpPhone(tester);
+      f.player.current =
+          const PlayerState(); // rien en cours : le dernier album ouvert
+      await tester.tap(find.text('Summer Mix'));
+      await tester.pumpAndSettle();
+      await settle(tester);
+      await tester.tap(find.text('Albums'));
+      await tester.pumpAndSettle();
+      await turn(tester, landscape: true);
+      final flow = tester.widget<CoverflowScreen>(find.byType(CoverflowScreen));
+      expect(flow.albums[flow.initial].name, 'Summer Mix');
+    });
+
+    testWidgets(
+      'En cours : couché, rien ne bascule, et le téléphone reste debout',
+      (tester) async {
+        final orientations = <Object?>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'SystemChrome.setPreferredOrientations') {
+              orientations.add(call.arguments);
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        await pumpPhone(tester);
+        await tester.tap(find.byType(MiniPlayer));
+        await tester.pumpAndSettle();
+        expect(find.byType(NowScreen), findsOneWidget);
+        expect(orientations.last, ['DeviceOrientation.portraitUp']);
+        await turn(tester, landscape: true);
+        expect(find.byType(NowScreen), findsOneWidget);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        // on quitte En cours : toutes les orientations reviennent, donc le Cover Flow couché
+        await tester.tap(find.byIcon(Icons.keyboard_arrow_down_rounded));
+        await tester.pumpAndSettle();
+        expect(orientations.last, hasLength(3));
+        expect(find.byType(CoverflowScreen), findsOneWidget);
+      },
+    );
+
+    testWidgets('Lecture joue l’album du centre', (tester) async {
+      final f = await pumpPhone(tester);
+      await turn(tester, landscape: true);
+      await tester.tap(find.text('Lecture'));
+      await settle(tester);
+      expect(f.player.calls, contains('play'));
+      expect(f.player.lastTracks!.map((t) => t.album).toSet(), {
+        DemoLibrary.playing.album,
+      });
+    });
+
+    testWidgets('toucher la pochette du centre la joue', (tester) async {
+      final f = await pumpPhone(tester);
+      await turn(tester, landscape: true);
+      final flow = tester.widget<CoverflowScreen>(find.byType(CoverflowScreen));
+      final centre = flow.albums[flow.initial].coverTrackPath;
+      await tester.tap(
+        find
+            .byWidgetPredicate((w) => w is CoverImage && w.trackPath == centre)
+            .first,
+      );
+      await settle(tester);
+      expect(f.player.lastTracks!.map((t) => t.album).toSet(), {
+        DemoLibrary.playing.album,
+      });
+    });
+
+    testWidgets('glisser le doigt défile, toucher une voisine la centre', (
+      tester,
+    ) async {
+      await pumpPhone(tester);
+      await turn(tester, landscape: true);
+      final inFlow = find.descendant(
+        of: find.byType(CoverflowScreen),
+        matching: find.text('Studio Lafleur'),
+      );
+      expect(inFlow, findsOneWidget);
+      await tester.dragFrom(const Offset(420, 120), const Offset(-160, 0));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(inFlow, findsNothing);
+    });
+
+    testWidgets('« Ouvrir l’album » ouvre l’album, relevé on y est', (
+      tester,
+    ) async {
+      await pumpPhone(tester);
+      await turn(tester, landscape: true);
+      await tester.tap(find.text('Ouvrir l’album'));
+      await tester.pumpAndSettle();
+      await settle(tester);
+      expect(find.byType(AlbumScreen), findsOneWidget);
+      expect(
+        find.byType(CoverflowScreen),
+        findsNothing,
+      ); // l'album s'affiche couché
+      await turn(tester, landscape: false);
+      expect(find.byType(AlbumScreen), findsOneWidget);
+      // couché de nouveau : Cover Flow de nouveau
+      await turn(tester, landscape: true);
+      expect(find.byType(CoverflowScreen), findsOneWidget);
+    });
+
+    testWidgets(
+      '« ‹ Albums » depuis l’album ouvert du Cover Flow : Cover Flow',
+      (tester) async {
+        await pumpPhone(tester);
+        await turn(tester, landscape: true);
+        await tester.tap(find.text('Ouvrir l’album'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Albums'));
+        await tester.pumpAndSettle();
+        expect(find.byType(CoverflowScreen), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'sur Mac, fenêtre large et basse : pas de Cover Flow du téléphone',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+        await pumpPhone(tester);
+        await turn(tester, landscape: true);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        debugDefaultTargetPlatformOverride = null;
+      },
+    );
   });
 }

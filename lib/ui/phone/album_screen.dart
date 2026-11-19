@@ -28,6 +28,7 @@ Future<void> openAlbum(BuildContext context, String album, String key) {
       tracks: app.library.albumTracks(key),
       isAlbum: true,
     ),
+    settings: RouteSettings(name: 'album', arguments: key),
   );
 }
 

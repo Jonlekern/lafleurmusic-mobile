@@ -12,8 +12,11 @@ import '../playback_card.dart';
 import '../track_menu.dart';
 import 'phone_shell.dart';
 
-Future<void> openNow(BuildContext context) =>
-    pushPhone(context, const NowScreen());
+Future<void> openNow(BuildContext context) => pushPhone(
+  context,
+  const NowScreen(),
+  settings: const RouteSettings(name: 'now'),
+);
 
 enum _Tab { upNext, equalizer, playback }
 
