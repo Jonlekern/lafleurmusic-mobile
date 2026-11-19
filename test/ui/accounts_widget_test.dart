@@ -215,7 +215,7 @@ void main() {
       expect(find.textContaining('Il manque'), findsOneWidget);
     });
 
-    testWidgets('Jellyfin choisissable, Plex grisé « bientôt »', (
+    testWidgets('Subsonic, Jellyfin et Plex choisissables', (
       tester,
     ) async {
       await pumpAccounts(
@@ -226,13 +226,14 @@ void main() {
       expect(find.text('Subsonic'), findsOneWidget);
       expect(find.text('Jellyfin'), findsOneWidget);
       expect(find.text('Plex'), findsOneWidget);
-      expect(find.textContaining('bientôt'), findsWidgets);
-      await tapAndSettle(tester, find.text('Plex'));
+      expect(find.textContaining('bientôt'), findsNothing);
       AccountType shown() => tester
           .widget<AccountTypeSegment>(find.byType(AccountTypeSegment))
           .value;
       expect(shown(), AccountType.subsonic);
-      expect(find.textContaining('Navidrome, Airsonic'), findsOneWidget);
+      await tapAndSettle(tester, find.text('Plex'));
+      expect(shown(), AccountType.plex);
+      expect(find.textContaining('Navidrome, Airsonic'), findsNothing);
       await tapAndSettle(tester, find.text('Jellyfin'));
       expect(shown(), AccountType.jellyfin);
       expect(find.textContaining('Navidrome, Airsonic'), findsNothing);

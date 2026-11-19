@@ -15,6 +15,9 @@ import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/sources/subsonic.dart';
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' hide Track;
 
+import '../sources/fake_plex.dart' show Pms;
+
+
 SubsonicSource source(String id, {http.Client? client}) => SubsonicSource(
   accountId: id,
   base: Uri.parse('https://music.example.com'),
@@ -567,6 +570,39 @@ void preparedSourceTests() {
     for (final e in h.entries) {
       expect(e.key, isNot(matches(RegExp('[\\r\\n,\\x00:]'))));
       expect(e.value, isNot(matches(RegExp('[\\r\\n,\\x00]'))));
+    }
+  });
+
+
+  test('plex:// → the original file, headers mpv accepts, token not in the address',
+      () async {
+    final pms = Pms();
+    final m = await MediaResolver((_) async => pms.source()).media(
+      'plex://acc1/101',
+    );
+    final u = Uri.parse(m.uri);
+    expect(u.path, '/library/parts/1010/1700000000/file.flac');
+    expect(u.hasQuery, isFalse);
+    expect(m.uri, isNot(contains('server-token')));
+    final h = m.httpHeaders!;
+    expect(h['X-Plex-Token'], 'server-token-home');
+    for (final e in h.entries) {
+      expect(e.key, isNot(matches(RegExp('[\\r\\n,\\x00:]'))));
+      expect(e.value, isNot(matches(RegExp('[\\r\\n,\\x00]'))));
+    }
+    // a single song: one read of that song, not of its album
+    expect(pms.paths, ['/library/metadata/101']);
+  });
+
+  test('plex:// a song the server lost or a revoked token: the raw key (skipped)',
+      () async {
+    final gone = Pms()..gone = {'101'};
+    final revoked = Pms()..songStatus = 401;
+    for (final f in [gone, revoked]) {
+      final m = await MediaResolver((_) async => f.source()).media(
+        'plex://acc1/101',
+      );
+      expect(m.uri, 'plex://acc1/101');
     }
   });
 

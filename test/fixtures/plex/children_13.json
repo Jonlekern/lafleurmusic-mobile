@@ -1,0 +1,37 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "totalSize": 1,
+  "offset": 0,
+  "Metadata": [
+   {
+    "ratingKey": "131",
+    "type": "track",
+    "title": "Lone",
+    "grandparentTitle": "Solo",
+    "parentTitle": "[Unknown Album]",
+    "index": 1,
+    "parentIndex": null,
+    "duration": 60000,
+    "Media": [
+     {
+      "id": 1310,
+      "duration": 60000,
+      "container": "ogg",
+      "audioCodec": "ogg",
+      "Part": [
+       {
+        "id": 1310,
+        "key": "/library/parts/1310/1700000000/file.ogg",
+        "duration": 60000,
+        "file": "/media/x",
+        "size": 900,
+        "container": "ogg"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

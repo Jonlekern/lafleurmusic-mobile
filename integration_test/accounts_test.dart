@@ -1,6 +1,6 @@
-// End-to-end run of plans 3 and 4 (several accounts merged): the real app against TWO fake
+// End-to-end run of plans 3 to 5 (several accounts merged): the real app against TWO fake
 // Subsonic servers (fake_subsonic.dart, both "Navidrome") and then a fake Jellyfin
-// (fake_jellyfin.dart), all three carrying the same album.
+// (fake_jellyfin.dart) and a fake Plex (fake_plex.dart), all carrying the same album.
 //
 //   flutter test integration_test/accounts_test.dart -d <phone>
 //
@@ -11,27 +11,38 @@
 // Navidrome servers are cut → the song plays from Jellyfin, the best source left, and the
 // listen goes to the Jellyfin account, none to Navidrome.
 //
+// Plan 5: a Plex account is added through the real code screen (the fake plex.tv validates the
+// code at the first poll) → the album still shows once → the other three are cut → the song
+// plays from Plex and the listen goes to Plex (none to the others) → a song is kept on the phone,
+// copied from Plex.
+//
 // One test, one app: a second app in the same process would need a second OS media session.
 //
 // Same clean start as the other runs (own library folder, own keychain namespace) and the
 // same safe cleanup (`mountGuarded`): the copies and the `.m3u8` the run made are removed,
 // nothing else in the phone's folder is touched.
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:lafleurmusic/library/db.dart' show TrackRow;
+import 'package:lafleurmusic/library/db.dart' show OfflineRow, TrackRow;
+import 'package:lafleurmusic/library/models.dart' show OfflineState;
 import 'package:lafleurmusic/main.dart';
 import 'package:lafleurmusic/offline/paths.dart' show isPartialName;
+import 'package:lafleurmusic/ui/phone/account_form.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/sources/accounts.dart' show AccountType;
+import 'package:lafleurmusic/sources/plex_link.dart' show PlexLink;
 import 'package:lafleurmusic/sources/secret_store.dart';
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' show MpvAudioKit;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'fake_jellyfin.dart';
+import 'fake_plex.dart';
 import 'fake_subsonic.dart';
 import 'offline_test.dart' show waitFor;
 import 'ui_helpers.dart';
@@ -42,6 +53,7 @@ void main() {
 
   late FakeSubsonic first, second;
   late FakeJellyfin jellyfin;
+  late FakePlex plex;
   late Directory support;
 
   setUpAll(() async {
@@ -55,6 +67,7 @@ void main() {
     );
     second = await FakeSubsonic.start(topPlays: false, password: 'second-e2e');
     jellyfin = await FakeJellyfin.start();
+    plex = await FakePlex.start();
     support = Directory(
       '${(await getTemporaryDirectory()).path}/lafleurmusic-e2e-accounts',
     );
@@ -68,14 +81,21 @@ void main() {
     await first.close();
     await second.close();
     await jellyfin.close();
+    await plex.close();
   });
 
   testWidgets('two accounts: album once → first cut → plays and listens on the second → '
-      'kept playlist → .m3u8 → Jellyfin', (tester) async {
+      'kept playlist → .m3u8 → Jellyfin → Plex', (tester) async {
     final app = await mountGuarded(
       () => buildLafleurApp(
         support: support,
         secrets: SecureSecretStore(testStorage),
+        // the code screen talks to the fake plex.tv, never the real one
+        plexLink: (id) => PlexLink(
+          clientId: id,
+          plexTv: plex.plexTv,
+          pollEvery: const Duration(milliseconds: 300),
+        ),
       ),
     );
     await tester.pumpWidget(app);
@@ -314,6 +334,163 @@ void main() {
       'par lui (${jellyfin.playCount('jf-s-1')}), aucune par Navidrome',
     );
     if (player.current.playing) await player.toggle();
+    first.down = false;
+    second.down = false;
+
+    // ---- plan 5: a Plex account, added through the real code screen ----
+    final s = app.strings;
+    final nav = tester.state<NavigatorState>(find.byType(Navigator).first);
+    unawaited(
+      nav.push<void>(
+        CupertinoPageRoute(builder: (_) => const AccountFormScreen()),
+      ),
+    );
+    await pumpUntil(tester, find.text(s.typeName(AccountType.plex)));
+    await tapVisible(tester, find.text(s.typeName(AccountType.plex)));
+    await typeInto(tester, 'account-name', 'Plex e2e');
+    await tapVisible(tester, find.text(s.plexSignIn));
+    // the code screen asks plex.tv for a code, polls it, finds the one server, and saves
+    await waitFor(
+      tester,
+      () async =>
+          (await app.accounts.watch().first).any((a) => a.name == 'Plex e2e'),
+      'Plex account saved by the code screen',
+      timeout: const Duration(seconds: 30),
+      why: () async => 'plex.tv: ${plex.tvRequests}, plex: ${plex.requests}',
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      find.byType(AccountFormScreen),
+      findsNothing,
+      reason: 'screens closed',
+    );
+    final idPlex = (await app.accounts.watch().first)
+        .firstWhere((a) => a.name == 'Plex e2e')
+        .id;
+    expect(plex.tvRequests.map((r) => r.method), containsAll(['pin', 'poll']));
+    Future<List<TrackRow>> plexRows() async =>
+        (await rows()).where((t) => t.accountId == idPlex).toList();
+    await waitFor(
+      tester,
+      () async => (await plexRows()).length >= 2,
+      'Plex library synced',
+      why: () async => 'plex: ${plex.requests}',
+    );
+    expect(
+      (await plexRows()).every((t) => t.path.startsWith('plex://')),
+      isTrue,
+    );
+
+    // still one album, its songs once
+    final albumsPx = await app.library.albums().first;
+    expect(albumsPx.where((a) => a.name == 'Studio Lafleur'), hasLength(1));
+    final albumPx = albumsPx.firstWhere((a) => a.name == 'Studio Lafleur');
+    final songsPx = await app.library.albumTracks(albumPx.key).first;
+    expect(songsPx.map((t) => t.title), ['Night Drive', 'Surf Break']);
+    debugPrint(
+      'PREUVE fusion Plex : ${(await rows()).length} lignes, '
+      '${albumsPx.where((a) => a.name == 'Studio Lafleur').length} album, '
+      '${songsPx.length} morceaux',
+    );
+
+    // the three others cut: Plex is the only source left
+    first.down = true;
+    second.down = true;
+    jellyfin.down = true;
+    await app.accountService.checkAccounts();
+    await waitFor(
+      tester,
+      () async =>
+          app.accountService.stateOf(id1) == AccountState.absent &&
+          app.accountService.stateOf(id2) == AccountState.absent &&
+          app.accountService.stateOf(idJf) == AccountState.absent,
+      'the other three accounts unreachable',
+    );
+    expect(app.accountService.stateOf(idPlex), isNot(AccountState.absent));
+    int othersCalls(String method) =>
+        [
+          ...first.requests,
+          ...second.requests,
+        ].where((r) => r.method == method).length +
+        jellyfin.requests
+            .where(
+              (r) => r.method == (method == 'scrobble' ? 'played' : method),
+            )
+            .length;
+    final otherStreams = othersCalls('stream');
+    final otherScrobbles = othersCalls('scrobble');
+    // a song (never played yet) is kept on the phone: the copy comes from Plex
+    final surf = songsPx.firstWhere((t) => t.title == 'Surf Break');
+    final kept = await app.downloader.keep([surf]);
+    expect(kept.ok, isTrue);
+    // the copy is filed under the Plex address of the song (the source it came from)
+    Future<(String, OfflineRow)?> plexCopy() async =>
+        (await app.db.watchOffline().first).entries
+            .where((e) => e.key.startsWith('plex://'))
+            .map((e) => (e.key, e.value))
+            .firstOrNull;
+    await waitFor(
+      tester,
+      () async => (await plexCopy())?.$2.state == OfflineState.done.name,
+      'copy from Plex done',
+      timeout: const Duration(seconds: 60),
+      why: () async =>
+          'copy: ${(await plexCopy())?.$2.state}, '
+          'last error: ${app.downloader.lastError}, plex: ${plex.requests}',
+    );
+    final (copyPath, row) = (await plexCopy())!;
+    final file = File(p.join(root.path, row.filePath!));
+    expect(file.existsSync(), isTrue);
+    expect(await file.length(), row.size);
+    expect(
+      plex.requests.any(
+        (r) => r.method == 'download' && r.params['part'] == '9002',
+      ),
+      isTrue,
+      reason:
+          'plex: ${plex.requests.map((r) => '${r.method} ${r.params}').join(' ; ')}; '
+          'row: $copyPath ${row.filePath}',
+    );
+    // forgotten again, so the next step plays it from Plex
+    await app.downloader.forget([copyPath]);
+    expect(file.existsSync(), isFalse);
+    debugPrint('PREUVE copie Plex : ${row.filePath} (${row.size} octets)');
+
+    // Surf Break: Night Drive was just played from Jellyfin and may still be on the phone's cache
+    await app.player.playTracks(songsPx, 1);
+    await waitFor(
+      tester,
+      () async => plex.requests.any(
+        (r) => r.method == 'stream' && r.params['part'] == '9002',
+      ),
+      'plays from Plex',
+      timeout: const Duration(seconds: 30),
+      why: () async =>
+          '${player.current.track?.title} playing ${player.current.playing} at '
+          '${player.current.position}, plex: ${plex.requests.where((r) => r.method == 'stream' || r.method == 'download').map((r) => '${r.method} ${r.params}').join(' ; ')}',
+    );
+    expect(
+      othersCalls('stream'),
+      otherStreams,
+      reason: 'nothing streamed from the cut servers',
+    );
+
+    // the listen goes to Plex, none to the others
+    await waitFor(
+      tester,
+      () async => plex.playCount('322') > 0,
+      'listen sent to Plex',
+      timeout: const Duration(seconds: 60),
+      why: () async => 'plex: ${plex.requests}',
+    );
+    expect(othersCalls('scrobble'), otherScrobbles);
+    debugPrint(
+      'PREUVE écoute Plex : Surf Break lu depuis Plex, écoute reçue par lui '
+      '(${plex.playCount('322')}), aucune par les autres',
+    );
+    if (player.current.playing) await player.toggle();
+
+    jellyfin.down = false;
     first.down = false;
     second.down = false;
   });

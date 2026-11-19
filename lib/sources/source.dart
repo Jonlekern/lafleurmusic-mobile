@@ -27,7 +27,7 @@ bool sameHostHop(Uri from, Uri to) {
   return _portOf(to) == _portOf(from) || (upgrade && _portOf(to) == 443);
 }
 
-/// A music source (Subsonic, Jellyfin) as seen by sync and playback.
+/// A music source (Subsonic, Jellyfin, Plex) as seen by sync and playback.
 class SourceAlbum {
   const SourceAlbum({
     required this.id,
@@ -125,6 +125,10 @@ enum TestResult {
 
   /// https: the server's certificate was refused (self-signed, expired, wrong name).
   certificateRejected,
+
+  /// The token was revoked (Plex: access removed on plex.tv) and can't be renewed by the app:
+  /// the account needs a new code (« À reconnecter »).
+  tokenRevoked,
 }
 
 abstract interface class MusicSource {
@@ -159,6 +163,20 @@ abstract interface class AuthRenewable {
 
   /// The server refused the token: signs in again (once per call). Throws when it can't.
   Future<void> renewAuth();
+}
+
+/// A source that must look a song's file address up on the server before [MusicSource.streamUri]
+/// and [MusicSource.downloadUri] (both synchronous) can answer (Plex: the file's `Part` key).
+/// Callers wait for it after [AuthRenewable.prepare].
+abstract interface class SongResolving {
+  /// Looks the file of [songId] up. Throws when the server doesn't have it (Plex: a
+  /// `PlexException` with status 404: this song only is refused). [batch]: a run over many
+  /// songs (offline copies): the rest of the song's album may be read at once.
+  Future<void> resolveSong(String songId, {bool batch = false});
+
+  /// The server refused the file found for [songId] (404: it was rescanned): forgets that
+  /// address, and the album's, so the next [resolveSong] asks the server again.
+  Future<void> forgetSong(String songId);
 }
 
 /// A source reached over HTTP: its client also fetches the covers (same connection pool, mockable in tests).

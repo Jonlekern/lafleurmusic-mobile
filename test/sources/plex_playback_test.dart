@@ -1,0 +1,298 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/library/play_counter.dart' show scrobbleRefused;
+import 'package:lafleurmusic/sources/plex.dart';
+import 'package:lafleurmusic/sources/plex_link.dart';
+import 'package:lafleurmusic/sources/source.dart';
+
+import 'fake_plex.dart';
+
+void main() {
+  setUp(PlexSource.resetStateForTests);
+  tearDown(PlexSource.resetStateForTests);
+
+  group('stream and download addresses', () {
+    test('the original file, token in a header only', () async {
+      final f = Pms();
+      final s = f.source();
+      await s.resolveSong('101');
+      final stream = s.streamUri('101');
+      expect(stream.host, homeLocal);
+      expect(stream.path, '/library/parts/1010/1700000000/file.flac');
+      expect(stream.hasQuery, isFalse);
+      final dl = s.downloadUri('101');
+      expect(dl.path, stream.path);
+      expect(dl.queryParameters, {'download': '1'});
+      for (final u in [stream, dl]) {
+        expect(u.toString(), isNot(contains('server-token-home')));
+      }
+      expect(s.headers['X-Plex-Token'], 'server-token-home');
+    });
+
+    test('headers mpv accepts: no comma, no control character', () async {
+      final f = Pms();
+      final s = f.source();
+      await s.prepare();
+      for (final e in s.headers.entries) {
+        expect(e.key, isNot(matches(RegExp('[\\r\\n,\\x00:]'))));
+        expect(e.value, isNot(matches(RegExp('[\\r\\n,\\x00]'))));
+      }
+    });
+
+    test('a song not resolved yet has no address (never a guess)', () async {
+      final s = Pms().source();
+      await s.prepare();
+      expect(() => s.streamUri('101'), throwsStateError);
+      expect(() => s.downloadUri('101'), throwsStateError);
+    });
+
+    test('several Parts: the first one is played and kept', () async {
+      final f = Pms()..twoParts = true;
+      final s = f.source();
+      await s.resolveSong('101');
+      expect(
+        s.streamUri('101').path,
+        '/library/parts/1010/1700000000/file.flac',
+      );
+    });
+
+    test('a song without a file is refused like a missing one (404)', () async {
+      final f = Pms()..noPart = {'101'};
+      final s = f.source();
+      await expectLater(
+        s.resolveSong('101'),
+        throwsA(
+          isA<PlexException>().having((e) => e.statusCode, 'status', 404),
+        ),
+      );
+    });
+  });
+
+  group('looking the Part up', () {
+    test('one song: a single read of that song, cached', () async {
+      final f = Pms();
+      final s = f.source();
+      await s.resolveSong('101');
+      await s.resolveSong('101');
+      expect(f.paths, ['/library/metadata/101']);
+      expect(f.log.single.headers['X-Plex-Token'], 'server-token-home');
+    });
+
+    test(
+      'a download run: the album is read once, its other songs cost nothing',
+      () async {
+        final f = Pms();
+        final s = f.source();
+        await s.resolveSong('101', batch: true);
+        await s.resolveSong('102', batch: true);
+        expect(f.paths, [
+          '/library/metadata/101',
+          '/library/metadata/11/children',
+        ]);
+        expect(
+          s.downloadUri('102').path,
+          '/library/parts/1020/1700000000/file.mp3',
+        );
+        // another album: its own two reads
+        await s.resolveSong('121', batch: true);
+        await s.resolveSong('122', batch: true);
+        expect(f.paths.length, 4);
+      },
+    );
+
+    test(
+      'the album read failing is not fatal: songs are read one by one',
+      () async {
+        final f = Pms()..childrenFailing = {'11'};
+        final s = f.source();
+        await s.resolveSong('101', batch: true);
+        await s.resolveSong('102', batch: true);
+        expect(
+          f.paths.where((p) => p == '/library/metadata/102'),
+          hasLength(1),
+        );
+        expect(s.streamUri('102').path, contains('1020'));
+      },
+    );
+
+    test(
+      'a kept answer is forgotten after a while (the file may change)',
+      () async {
+        var now = DateTime(2026, 1, 1);
+        final f = Pms();
+        final s = f.source(now: () => now);
+        await s.resolveSong('101');
+        now = now.add(const Duration(hours: 2));
+        await s.resolveSong('101');
+        expect(f.paths, ['/library/metadata/101', '/library/metadata/101']);
+      },
+    );
+
+    test(
+      'the album read is repeated once it is older than the delay',
+      () async {
+        var now = DateTime(2026, 1, 1);
+        final f = Pms();
+        final s = f.source(now: () => now);
+        await s.resolveSong('101', batch: true);
+        now = now.add(PlexSource.partTtl + const Duration(minutes: 1));
+        await s.resolveSong('102', batch: true); // its entry expired too
+        expect(f.paths.where((p) => p.endsWith('/children')), hasLength(2));
+        expect(
+          f.paths.where((p) => p == '/library/metadata/102'),
+          hasLength(1),
+        );
+      },
+    );
+
+    test('a download run uses what the album gave; a single stream re-reads after a minute', () async {
+      var now = DateTime(2026, 1, 1);
+      final f = Pms();
+      final s = f.source(now: () => now);
+      await s.resolveSong('101', batch: true);
+      now = now.add(const Duration(minutes: 5));
+      await s.resolveSong(
+        '102',
+        batch: true,
+      ); // from the album read: no request
+      expect(f.paths, [
+        '/library/metadata/101',
+        '/library/metadata/11/children',
+      ]);
+      await s.resolveSong(
+        '102',
+      ); // playback: asks again (the server may have rescanned)
+      expect(f.paths.last, '/library/metadata/102');
+    });
+
+    test(
+      'forgetSong drops the song and its album: the next look-up asks again',
+      () async {
+        final f = Pms();
+        final s = f.source();
+        await s.resolveSong('101', batch: true);
+        await s.forgetSong('101');
+        expect(() => s.streamUri('101'), throwsStateError);
+        await s.resolveSong('102', batch: true);
+        expect(f.paths.where((p) => p.endsWith('/children')), hasLength(2));
+      },
+    );
+
+    test('the cache is cleared when it reaches its cap', () async {
+      final f = Pms();
+      final s = f.source(partsMax: 2);
+      await s.resolveSong('101');
+      await s.resolveSong('102');
+      await s.resolveSong('121'); // full: cleared, then 121 only
+      expect(s.streamUri('121').path, contains('/library/parts/'));
+      expect(() => s.streamUri('101'), throwsStateError);
+      expect(() => s.streamUri('102'), throwsStateError);
+    });
+
+    test('a token refusal is reported to the account', () async {
+      final f = Pms()..songStatus = 401;
+      final seen = <String>[];
+      PlexSource.onTokenRefused = seen.add;
+      final s = f.source();
+      await expectLater(s.resolveSong('101'), throwsA(isA<PlexException>()));
+      await expectLater(s.renewAuth(), throwsA(isA<PlexException>()));
+      expect(seen, ['acc1', 'acc1']);
+    });
+
+    test(
+      '404 is a refusal of this song; 401 asks for a new code; 500 is neither',
+      () async {
+        final f = Pms()..gone = {'101'};
+        final s = f.source();
+        await expectLater(
+          s.resolveSong('101'),
+          throwsA(isA<PlexException>().having((e) => e.statusCode, 's', 404)),
+        );
+        f.songStatus = 401;
+        await expectLater(
+          s.resolveSong('102'),
+          throwsA(
+            isA<PlexException>().having((e) => e.tokenRefused, 't', isTrue),
+          ),
+        );
+        f.songStatus = 500;
+        await expectLater(
+          s.resolveSong('122'),
+          throwsA(
+            isA<PlexException>()
+                .having((e) => e.statusCode, 's', 500)
+                .having((e) => e.tokenRefused, 't', isFalse),
+          ),
+        );
+      },
+    );
+
+    test('errors never carry the token', () async {
+      final f = Pms()..songStatus = 500;
+      final s = f.source();
+      try {
+        await s.resolveSong('101');
+      } on PlexException catch (e) {
+        expect(e.toString(), isNot(contains('server-token')));
+      }
+    });
+  });
+
+  group('listens (scrobble)', () {
+    test('GET /:/scrobble with the song and the library identifier', () async {
+      final f = Pms();
+      final s = f.source();
+      await s.scrobble('101', DateTime(2026, 5, 1));
+      final r = f.log.single;
+      expect(r.method, 'GET');
+      expect(r.url.path, '/:/scrobble');
+      expect(r.url.queryParameters, {
+        'key': '101',
+        'identifier': 'com.plexapp.plugins.library',
+      });
+      expect(r.headers['X-Plex-Token'], 'server-token-home');
+      expect(r.url.toString(), isNot(contains('server-token-home')));
+      // Plex has no date: the one given is not sent
+      expect(r.url.toString(), isNot(contains('2026')));
+    });
+
+    test(
+      '404 (the song is gone) is refused for good; other failures retry',
+      () async {
+        final f = Pms()..scrobbleStatus = {'1': 404, '2': 500, '3': 401};
+        final s = f.source();
+        Future<Object?> err(String id) async {
+          try {
+            await s.scrobble(id, DateTime(2026));
+          } on Object catch (e) {
+            return e;
+          }
+          return null;
+        }
+
+        expect(scrobbleRefused((await err('1'))!), isTrue);
+        expect(scrobbleRefused((await err('2'))!), isFalse);
+        final unauthorized = (await err('3'))! as PlexException;
+        expect(unauthorized.tokenRefused, isTrue);
+        expect(scrobbleRefused(unauthorized), isFalse);
+      },
+    );
+
+    test(
+      'a network failure is a SourceNetworkException (retried later)',
+      () async {
+        final f = Pms();
+        final s = f.source();
+        await s.prepare();
+        f.pms.down = {homeLocal, homeRemote};
+        Object? e;
+        try {
+          await s.scrobble('101', DateTime(2026));
+        } on Object catch (x) {
+          e = x;
+        }
+        expect(e, isA<SourceNetworkException>());
+        expect(scrobbleRefused(e!), isFalse);
+      },
+    );
+  });
+}

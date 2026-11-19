@@ -4,15 +4,16 @@ import 'accounts.dart';
 /// This file owns the schemes; nothing else spells them out.
 const subsonicScheme = 'subsonic://';
 const jellyfinScheme = 'jellyfin://';
+const plexScheme = 'plex://';
 
 /// Every scheme a server track can have (rows written before Jellyfin keep `subsonic://`).
-const remoteSchemes = [subsonicScheme, jellyfinScheme];
+const remoteSchemes = [subsonicScheme, jellyfinScheme, plexScheme];
 
 /// Scheme of the keys of [type]'s tracks.
 String schemeOf(AccountType type) => switch (type) {
   AccountType.subsonic => subsonicScheme,
   AccountType.jellyfin => jellyfinScheme,
-  AccountType.plex => throw UnsupportedError('plex is not supported yet'),
+  AccountType.plex => plexScheme,
 };
 
 /// Library key of song [id] of account [acc].

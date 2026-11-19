@@ -12,6 +12,7 @@ import '../../theme/colors.dart';
 import 'account_form.dart';
 import 'display_choice.dart';
 import 'phone_shell.dart';
+import 'plex_link_screen.dart';
 
 /// Réglages → Comptes (maquette 2, écran 6) : les comptes dans l'ordre (glisser ⋮⋮), leur état,
 /// « + Ajouter un compte », puis l'Affichage. Toucher un compte l'ouvre pour le modifier.
@@ -135,6 +136,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     headers: _headerCount[a.id] ?? 0,
                     state: service?.stateOf(a.id),
                     onTap: () => _edit(a),
+                    onRelink: () =>
+                        pushPhone(context, PlexLinkScreen(relink: a)),
                   );
                 },
               ),
@@ -143,6 +146,21 @@ class _AccountsScreenState extends State<AccountsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 30),
               sliver: SliverList.list(
                 children: [
+                  // un compte Plex coupé : la musique gardée reste (maquette 14 D)
+                  if (_list.any(
+                    (a) => service?.stateOf(a.id) == AccountState.relink,
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 6, 4, 14),
+                      child: Text(
+                        s.plexKeptStillPlays,
+                        style: const TextStyle(
+                          color: Color(0xFF999999),
+                          fontSize: 12,
+                          height: 1.6,
+                        ),
+                      ),
+                    ),
                   _WidePill(
                     label: s.addAccount,
                     onTap: () => pushPhone(context, const AccountFormScreen()),
@@ -214,12 +232,16 @@ class _AccountRow extends StatelessWidget {
     required this.headers,
     required this.state,
     required this.onTap,
+    this.onRelink,
   });
   final int index;
   final Account account;
   final int headers;
   final AccountState? state;
   final VoidCallback onTap;
+
+  /// « Nouveau code » d'un compte « À reconnecter ».
+  final VoidCallback? onRelink;
 
   static Color colorOf(AccountType t) => switch (t) {
     AccountType.subsonic => LafleurColors.pink,
@@ -235,11 +257,18 @@ class _AccountRow extends StatelessWidget {
     final sub =
         '${s.typeName(a.type)} · ${headers > 0 ? s.nHeaders(headers) : host}';
     final st = state;
+    // jeton retiré (Plex) : bord rose, « À reconnecter », « Nouveau code » (maquette 14 D)
+    final relink = st == AccountState.relink;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: relink
+              ? const BorderSide(color: LafleurColors.pink)
+              : BorderSide.none,
+        ),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(10),
@@ -296,19 +325,27 @@ class _AccountRow extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        sub,
+                        relink ? s.plexRelink : sub,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF999999),
-                          fontSize: 12,
-                        ),
+                        style: relink
+                            ? const TextStyle(
+                                color: LafleurColors.pink,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              )
+                            : const TextStyle(
+                                color: Color(0xFF999999),
+                                fontSize: 12,
+                              ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 10),
-                if (st != null)
+                if (relink)
+                  _Chip(label: s.plexNewCode, onTap: onRelink)
+                else if (st != null)
                   Text(
                     s.accountState(st),
                     style: TextStyle(
@@ -318,11 +355,13 @@ class _AccountRow extends StatelessWidget {
                       fontSize: 12,
                     ),
                   ),
-                const SizedBox(width: 10),
-                const Text(
-                  '›',
-                  style: TextStyle(color: Color(0xFF666666), fontSize: 16),
-                ),
+                if (!relink) ...[
+                  const SizedBox(width: 10),
+                  const Text(
+                    '›',
+                    style: TextStyle(color: Color(0xFF666666), fontSize: 16),
+                  ),
+                ],
               ],
             ),
           ),
@@ -330,6 +369,34 @@ class _AccountRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Petite pilule à contour rose (« Nouveau code »).
+class _Chip extends StatelessWidget {
+  const _Chip({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: LafleurColors.pink),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: LafleurColors.pink,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+  );
 }
 
 /// Pilule grise sur toute la largeur (« + Ajouter un compte »).

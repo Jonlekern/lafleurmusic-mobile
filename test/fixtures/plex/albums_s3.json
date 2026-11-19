@@ -1,0 +1,31 @@
+{
+ "MediaContainer": {
+  "size": 2,
+  "totalSize": 2,
+  "offset": 0,
+  "Metadata": [
+   {
+    "ratingKey": "21",
+    "key": "/library/metadata/21/children",
+    "parentRatingKey": "5",
+    "type": "album",
+    "title": "Live 1990",
+    "parentTitle": "Max",
+    "leafCount": 1,
+    "year": 1969,
+    "thumb": "/library/metadata/21/thumb/1700000021"
+   },
+   {
+    "ratingKey": "11",
+    "key": "/library/metadata/11/children",
+    "parentRatingKey": "5",
+    "type": "album",
+    "title": "Abbey Road",
+    "parentTitle": "The Beatles",
+    "leafCount": 2,
+    "year": 1969,
+    "thumb": "/library/metadata/11/thumb/1700000011"
+   }
+  ]
+ }
+}

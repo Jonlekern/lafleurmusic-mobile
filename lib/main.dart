@@ -28,6 +28,7 @@ import 'player/player.dart';
 import 'settings.dart';
 import 'sources/account_service.dart';
 import 'sources/accounts.dart';
+import 'sources/plex_link.dart' show PlexLink;
 import 'sources/secret_store.dart';
 import 'tags/tag_reader.dart';
 import 'theme/lafleur_theme.dart';
@@ -60,6 +61,7 @@ Future<void> main() async {
 Future<LafleurApp> buildLafleurApp({
   required Directory support,
   required SecretStore secrets,
+  PlexLink Function(String clientId)? plexLink, // tests: a fake plex.tv
 }) async {
   // réglages (égaliseur) : rechargés, appliqués tout de suite, enregistrés à chaque changement
   final settingsFile = File(p.join(support.path, 'settings.json'));
@@ -97,6 +99,7 @@ Future<LafleurApp> buildLafleurApp({
     resolver: resolver,
     forgetCovers: covers.forgetAccount, // compte retiré : ses pochettes aussi
     device: device, // …mais ses copies gardées restent, en morceaux locaux
+    plexLink: plexLink,
   );
   await accountService.watchOffline();
   // à la maison : Wi-Fi et un serveur qui répond ; le Top 100 ne se garde que là
@@ -108,7 +111,7 @@ Future<LafleurApp> buildLafleurApp({
     settings: () async => settings,
     mayAutoDownload: () => home.atHome,
     // un compte qui ne répond pas : ses morceaux viennent d'un jumeau qui répond
-    reachable: (id) => accountService.stateOf(id) != AccountState.absent,
+    reachable: (id) => accountService.mayAnswer(id),
   );
   downloader.followPlaylists(); // synchro, compte retiré : les .m3u8 suivent
   unawaited(downloader.resumeAtLaunch());
@@ -116,7 +119,7 @@ Future<LafleurApp> buildLafleurApp({
     db: db,
     downloader: downloader,
     atHome: () => home.atHome,
-    reachable: (id) => accountService.stateOf(id) != AccountState.absent,
+    reachable: (id) => accountService.mayAnswer(id),
   );
   // le Top 100 change (une écoute comptée) : un tour de plus, sans rafale
   final topSub = db.watchTop(100).listen((_) => topKeeper.schedule());
@@ -171,8 +174,7 @@ Future<LafleurApp> buildLafleurApp({
     }
   });
   // le même morceau sur plusieurs comptes : joué depuis le premier qui répond (P8)
-  resolver.reachable = (id) =>
-      accountService.stateOf(id) != AccountState.absent;
+  resolver.reachable = (id) => accountService.mayAnswer(id);
   final library = LibraryView(db, settings: settings);
   final player = LafleurPlayer(resolver: resolver)
     // écran verrouillé : la pochette du serveur en octets, jamais une URL

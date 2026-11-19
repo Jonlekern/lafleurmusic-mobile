@@ -175,7 +175,7 @@ void main() {
     expect(seen.first.url.host, 'music.example.com');
   });
 
-  test('source() for plex is unsupported for now', () async {
+  test('source() for a plex account without its server: refused', () async {
     final a = await accounts.add(
       type: AccountType.plex,
       name: 'P',
@@ -183,7 +183,7 @@ void main() {
       user: 'u',
       password: 'p',
     );
-    expect(() => accounts.source(a.id), throwsUnsupportedError);
+    expect(() => accounts.source(a.id), throwsStateError);
   });
 
   Future<Accounts> with_(FakeSecretStore st) async {
