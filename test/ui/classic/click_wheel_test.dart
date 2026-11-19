@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/theme/lafleur_theme.dart';
@@ -198,6 +199,25 @@ void main() {
       expect(log.steps, isEmpty);
       expect(log.buttons, isEmpty);
     });
+
+    testWidgets(
+      'un seul saut de 60 pt par-dessus le centre : ni cran, ni choix',
+      (tester) async {
+        final log = await pump(tester);
+        final g = await tester.startGesture(at(tester, 270, 110));
+        await g.moveTo(at(tester, 270, 30));
+        await tester.pump(const Duration(milliseconds: 16));
+        await g.moveTo(
+          at(tester, 90, 30),
+        ); // de 30 pt à gauche à 30 pt à droite
+        await tester.pump(const Duration(milliseconds: 16));
+        await g.moveTo(at(tester, 90, 110));
+        await g.up();
+        await tester.pump();
+        expect(log.steps, isEmpty);
+        expect(log.buttons, isEmpty);
+      },
+    );
   });
 
   group('tapes', () {
@@ -274,4 +294,49 @@ void main() {
     }
     handle.dispose();
   });
+
+  testWidgets(
+    'VoiceOver / TalkBack : augmenter / diminuer fait tourner d\'un cran',
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      final log = await pump(tester);
+      final node = tester.getSemantics(find.byType(ClickWheel));
+      expect(
+        node.getSemanticsData().hasAction(SemanticsAction.increase),
+        isTrue,
+      );
+      node.owner!.performAction(node.id, SemanticsAction.increase);
+      node.owner!.performAction(node.id, SemanticsAction.increase);
+      node.owner!.performAction(node.id, SemanticsAction.decrease);
+      await tester.pump();
+      expect(log.steps, [1, 1, -1]);
+      expect(log.buttons, isEmpty);
+      handle.dispose();
+    },
+  );
+
+  testWidgets(
+    'tourner la molette dans une liste ne fait pas défiler la liste',
+    (tester) async {
+      final steps = <int>[];
+      final scroll = ScrollController();
+      addTearDown(scroll.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ListView(
+            controller: scroll,
+            children: [
+              const SizedBox(height: 100),
+              Center(child: ClickWheel(onRotate: steps.add)),
+              const SizedBox(height: 2000),
+            ],
+          ),
+        ),
+      );
+      // de 3 heures à 9 heures par le bas : le doigt descend de 220 pt
+      await turn(tester, 90, 270, by: 10);
+      expect(steps, List.filled(12, 1));
+      expect(scroll.offset, 0);
+    },
+  );
 }

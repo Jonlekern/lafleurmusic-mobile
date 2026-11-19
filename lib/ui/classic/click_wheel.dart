@@ -57,6 +57,7 @@ const _label = Color(0xFFDDDDDD);
 class _ClickWheelState extends State<ClickWheel> {
   int? _pointer;
   Offset _down = Offset.zero;
+  Offset _last = Offset.zero;
   double? _lastAngle;
   double _turned = 0;
   bool _moved = false;
@@ -68,6 +69,7 @@ class _ClickWheelState extends State<ClickWheel> {
     if (_pointer != null) return; // un seul doigt fait tourner
     _pointer = e.pointer;
     _down = e.localPosition - _center;
+    _last = _down;
     _lastAngle = _down.distance < _deadRadius ? null : _down.direction;
     _turned = 0;
     _moved = false;
@@ -78,7 +80,11 @@ class _ClickWheelState extends State<ClickWheel> {
     if (e.pointer != _pointer) return;
     final v = e.localPosition - _center;
     if ((v - _down).distance > kTouchSlop) _moved = true;
-    if (v.distance < _deadRadius) {
+    final from = _last;
+    _last = v;
+    // Un doigt rapide peut sauter par-dessus le centre en un seul événement : c'est le trajet
+    // qui compte, pas seulement le point d'arrivée.
+    if (_distanceToCenter(from, v) < _deadRadius) {
       _lastAngle = null; // on repart de là où le doigt ressort
       return;
     }
@@ -100,6 +106,15 @@ class _ClickWheelState extends State<ClickWheel> {
       _turned += ClickWheel.step;
       _click(-1);
     }
+  }
+
+  /// Distance du centre au segment [a]–[b] (positions par rapport au centre).
+  static double _distanceToCenter(Offset a, Offset b) {
+    final ab = b - a;
+    final len2 = ab.distanceSquared;
+    if (len2 == 0) return b.distance;
+    final t = (-(a.dx * ab.dx + a.dy * ab.dy) / len2).clamp(0.0, 1.0);
+    return (a + ab * t).distance;
   }
 
   void _click(int dir) {
@@ -148,73 +163,79 @@ class _ClickWheelState extends State<ClickWheel> {
           ),
         );
     // La molette prend tout le geste : une liste ou une page autour ne défile pas en même temps.
-    return RawGestureDetector(
-      gestures: {
-        EagerGestureRecognizer:
-            GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
-              EagerGestureRecognizer.new,
-              (_) {},
-            ),
-      },
-      child: Listener(
-        onPointerDown: _onDown,
-        onPointerMove: _onMove,
-        onPointerUp: _onUp,
-        onPointerCancel: _onCancel,
-        child: CustomPaint(
-          painter: const _WheelPainter(),
-          size: const Size.square(ClickWheel.size),
-          child: SizedBox.square(
-            dimension: ClickWheel.size,
-            child: Stack(
-              children: [
-                const Positioned(
-                  top: 22,
-                  left: 0,
-                  right: 0,
-                  child: IgnorePointer(
-                    child: ExcludeSemantics(
-                      child: Text(
-                        'MENU',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          letterSpacing: 1,
-                          color: _label,
-                          decoration: TextDecoration.none,
+    // VoiceOver / TalkBack : balayer vers le haut / le bas fait tourner d'un cran.
+    return Semantics(
+      container: true,
+      onIncrease: () => widget.onRotate(1),
+      onDecrease: () => widget.onRotate(-1),
+      child: RawGestureDetector(
+        gestures: {
+          EagerGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
+                EagerGestureRecognizer.new,
+                (_) {},
+              ),
+        },
+        child: Listener(
+          onPointerDown: _onDown,
+          onPointerMove: _onMove,
+          onPointerUp: _onUp,
+          onPointerCancel: _onCancel,
+          child: CustomPaint(
+            painter: const _WheelPainter(),
+            size: const Size.square(ClickWheel.size),
+            child: SizedBox.square(
+              dimension: ClickWheel.size,
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 22,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
+                        child: Text(
+                          s.wheelMenu,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            letterSpacing: 1,
+                            color: _label,
+                            decoration: TextDecoration.none,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                zone(
-                  const Rect.fromLTWH(75, 0, 120, 70),
-                  s.wheelMenu,
-                  widget.onMenu,
-                ),
-                zone(
-                  const Rect.fromLTWH(0, 75, 70, 120),
-                  s.previousTrack,
-                  widget.onPrevious,
-                ),
-                zone(
-                  const Rect.fromLTWH(200, 75, 70, 120),
-                  s.nextTrack,
-                  widget.onNext,
-                ),
-                zone(
-                  const Rect.fromLTWH(75, 200, 120, 70),
-                  s.playPause,
-                  widget.onPlayPause,
-                ),
-                zone(
-                  Rect.fromCircle(center: _center, radius: _hubRadius),
-                  s.wheelSelect,
-                  widget.onSelect,
-                ),
-              ],
+                  zone(
+                    const Rect.fromLTWH(75, 0, 120, 70),
+                    s.wheelMenu,
+                    widget.onMenu,
+                  ),
+                  zone(
+                    const Rect.fromLTWH(0, 75, 70, 120),
+                    s.previousTrack,
+                    widget.onPrevious,
+                  ),
+                  zone(
+                    const Rect.fromLTWH(200, 75, 70, 120),
+                    s.nextTrack,
+                    widget.onNext,
+                  ),
+                  zone(
+                    const Rect.fromLTWH(75, 200, 120, 70),
+                    s.playPause,
+                    widget.onPlayPause,
+                  ),
+                  zone(
+                    Rect.fromCircle(center: _center, radius: _hubRadius),
+                    s.wheelSelect,
+                    widget.onSelect,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
