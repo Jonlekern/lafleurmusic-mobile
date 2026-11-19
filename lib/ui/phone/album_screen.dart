@@ -34,7 +34,8 @@ Future<void> openAlbum(BuildContext context, String album, String key) {
 }
 
 /// Album, et toute liste de morceaux (Morceaux, artiste, genre, Top 100) : la colonne du milieu du Mac
-/// (maquette 1, écran 2). Toucher une ligne joue la liste à partir d'elle ; glisser à gauche = Lire ensuite ;
+/// (maquette 1, écran 2). Toucher une ligne joue la liste à partir d'elle ; glisser à gauche = Lire ensuite,
+/// à droite = Ajouter à la file ;
 /// appui long = feuille du bas.
 class AlbumScreen extends StatelessWidget {
   const AlbumScreen({
@@ -386,8 +387,9 @@ class PhoneTrackRow extends StatelessWidget {
     if (!menu) return Opacity(opacity: t.missing ? 0.35 : 1, child: row);
     return Opacity(
       opacity: t.missing ? 0.35 : 1,
-      child: SwipeToPlayNext(
+      child: SwipeToQueue(
         track: t,
+        playable: playable,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,

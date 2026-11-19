@@ -132,6 +132,13 @@ class FakePlayer implements PlayerController {
   }
 
   @override
+  Future<void> removeAdded(List<Track> tracks) async {
+    calls.add('removeAdded');
+    queue?.removeLastAdded(tracks);
+    queueCtrl.add(null);
+  }
+
+  @override
   Future<void> removeTrack(String path) async {
     calls.add('removeTrack $path');
     final q = queue;

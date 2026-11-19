@@ -162,4 +162,21 @@ void main() {
   test('supprimer un autre morceau : pas de fin de liste', () async {
     expect(await sync.removeAt(q, 2), isFalse);
   });
+
+  test('Annuler un ajout : mpv suit, le reste ne bouge pas', () async {
+    await sync.enqueue(q, ['X', 'Y']);
+    await sync.removeLastAdded(q, ['Y']);
+    same();
+    expect(q.added, ['X']);
+  });
+
+  test('Annuler un ajout déjà en cours : rien ne bouge dans mpv', () async {
+    await sync.enqueue(q, ['X']);
+    await sync.next(q); // X joue
+    final before = List.of(port.calls);
+    await sync.removeLastAdded(q, ['X']);
+    expect(port.calls, before);
+    same();
+    expect(q.current, 'X');
+  });
 }

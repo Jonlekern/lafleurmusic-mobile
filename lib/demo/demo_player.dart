@@ -100,6 +100,12 @@ class DemoPlayer implements PlayerController {
   }
 
   @override
+  Future<void> removeAdded(List<Track> tracks) async {
+    queue?.removeLastAdded(tracks);
+    _queue.add(null);
+  }
+
+  @override
   Future<void> removeTrack(String path) async {}
   @override
   Future<void> replaceTrack(String oldPath, Track now) async {}

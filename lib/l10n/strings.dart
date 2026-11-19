@@ -249,6 +249,12 @@ class Strings {
 
   String get upNextTab => _t('À suivre', 'Up next');
   String get swipePlayNext => '← $playNextAction';
+
+  // plan 8 : glisser à droite = Ajouter à la file, la bulle de confirmation
+  String get swipeEnqueue => '+ $addToQueue';
+  String get queueAdded => _t('✓ Ajouté à la file', '✓ Added to queue');
+  String get queueUndo => _t('Annuler', 'Undo');
+  String get queueView => _t('Voir la file', 'View queue');
   String unreadableSkipped(String title) =>
       _t('Illisible, passé : $title', 'Unreadable, skipped: $title');
   // plan 1 (téléphone) : comptes (maquette 2, écrans 6 et 7)

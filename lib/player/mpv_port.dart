@@ -113,6 +113,13 @@ class QueueSync<T> {
     }
   }
 
+  /// Annuler un ajout : [items] repartent de la file et de mpv, s'ils attendent encore.
+  Future<void> removeLastAdded(PlayQueue<T> q, List<T> items) async {
+    for (final i in q.removeLastAdded(items)) {
+      await port.remove(i);
+    }
+  }
+
   /// Suivant demandé par l'appli ; false en fin de liste.
   Future<bool> next(PlayQueue<T> q) async {
     if (!q.next()) return false;

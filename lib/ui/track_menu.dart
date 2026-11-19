@@ -8,6 +8,7 @@ import '../library/models.dart';
 import '../theme/colors.dart';
 import '../offline/downloader.dart' show KeepOrigin;
 import 'keep_actions.dart';
+import 'queue_toast.dart';
 import 'tablet.dart';
 import 'phone/keep_screen.dart';
 import 'phone/phone_shell.dart' show pushPhone;
@@ -237,7 +238,12 @@ Future<void> showTrackSheet(
     case _Action.playNext:
       await app.player.playNext(list);
     case _Action.enqueue:
-      await app.player.enqueue(list);
+      // téléphone : la bulle « Ajouté à la file » (pas sur la tablette, qui a sa colonne En cours)
+      if (!onTablet && context.mounted) {
+        await enqueueWithToast(context, list);
+      } else {
+        await app.player.enqueue(list);
+      }
     case _Action.keep:
       if (onKeep != null) {
         await onKeep();
@@ -275,20 +281,28 @@ class _NotFromEdge extends HorizontalDragGestureRecognizer {
       event.position.dx > 24 && super.isPointerAllowed(event);
 }
 
-/// Téléphone : glisser une ligne vers la gauche → « Lire ensuite » (bandeau rose, maquette 1 écran 2).
-class SwipeToPlayNext extends StatefulWidget {
-  const SwipeToPlayNext({super.key, required this.track, required this.child});
+/// Téléphone : glisser une ligne vers la gauche → « Lire ensuite », vers la droite → « Ajouter à la file »
+/// (bandeau rose, maquettes 1 écran 2 et 13 écran A). Ajouter à la file dit « Ajouté » dans une bulle.
+/// [playable] faux (morceau grisé) : rien n'est ajouté à la file, un petit message le dit.
+class SwipeToQueue extends StatefulWidget {
+  const SwipeToQueue({
+    super.key,
+    required this.track,
+    required this.child,
+    this.playable = true,
+  });
   final Track track;
   final Widget child;
+  final bool playable;
 
-  /// Assez loin pour déclencher ; le bandeau ne dépasse pas [band].
-  static const trigger = 80.0, band = 130.0;
+  /// Assez loin pour déclencher ; le bandeau ne dépasse pas [band] (à gauche) ou [bandRight] (à droite).
+  static const trigger = 80.0, band = 130.0, bandRight = 150.0;
 
   @override
-  State<SwipeToPlayNext> createState() => _SwipeToPlayNextState();
+  State<SwipeToQueue> createState() => _SwipeToQueueState();
 }
 
-class _SwipeToPlayNextState extends State<SwipeToPlayNext>
+class _SwipeToQueueState extends State<SwipeToQueue>
     with SingleTickerProviderStateMixin {
   late final AnimationController _back = AnimationController(
     vsync: this,
@@ -303,8 +317,18 @@ class _SwipeToPlayNextState extends State<SwipeToPlayNext>
   }
 
   void _end() {
-    if (_dx <= -SwipeToPlayNext.trigger) {
-      AppScope.of(context).player.playNext([widget.track]);
+    final app = AppScope.of(context);
+    if (_dx <= -SwipeToQueue.trigger) {
+      app.player.playNext([widget.track]);
+    } else if (_dx >= SwipeToQueue.trigger) {
+      if (widget.playable && !widget.track.missing) {
+        enqueueWithToast(context, [widget.track]);
+      } else {
+        say(
+          ScaffoldMessenger.of(context),
+          app.strings.nothingOffline(onIphone, tablet: onTablet),
+        );
+      }
     }
     _from = _dx;
     _back.forward(from: 0);
@@ -312,7 +336,8 @@ class _SwipeToPlayNextState extends State<SwipeToPlayNext>
 
   @override
   Widget build(BuildContext context) {
-    final w = -_dx;
+    final w = _dx.abs();
+    final toRight = _dx > 0;
     final s = AppScope.of(context).strings;
     return RawGestureDetector(
       gestures: {
@@ -321,7 +346,10 @@ class _SwipeToPlayNextState extends State<SwipeToPlayNext>
           (r) {
             r.onStart = (_) => _back.stop();
             r.onUpdate = (d) => setState(
-              () => _dx = (_dx + d.delta.dx).clamp(-SwipeToPlayNext.band, 0),
+              () => _dx = (_dx + d.delta.dx).clamp(
+                -SwipeToQueue.band,
+                SwipeToQueue.bandRight,
+              ),
             );
             r.onEnd = (_) => _end();
             r.onCancel = _end;
@@ -335,11 +363,16 @@ class _SwipeToPlayNextState extends State<SwipeToPlayNext>
               color: w > 0 ? const Color(0xFF262626) : null,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: widget.child,
+            // à droite, la ligne suit le doigt et découvre le bandeau (maquette 13) ; à gauche le bandeau la couvre
+            child: Transform.translate(
+              offset: Offset(toRight ? _dx : 0, 0),
+              child: widget.child,
+            ),
           ),
           if (w > 0)
             Positioned(
-              right: 0,
+              left: toRight ? 0 : null,
+              right: toRight ? null : 0,
               top: 0,
               bottom: 0,
               width: w,
@@ -349,9 +382,9 @@ class _SwipeToPlayNextState extends State<SwipeToPlayNext>
                   color: LafleurColors.pink,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: w >= 110
+                child: w >= (toRight ? 130 : 110)
                     ? Text(
-                        s.swipePlayNext,
+                        toRight ? s.swipeEnqueue : s.swipePlayNext,
                         maxLines: 1,
                         style: const TextStyle(
                           color: LafleurColors.ink,

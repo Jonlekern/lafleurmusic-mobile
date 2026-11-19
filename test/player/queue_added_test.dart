@@ -119,4 +119,58 @@ void main() {
     expect(q.upcomingIndexes(4), [2, 3, 0, 2]);
     expect(q.upcoming(4), ['B', 'C', 'A', 'B']);
   });
+
+  group('removeLastAdded (Annuler)', () {
+    test('retire ces ajouts, ni plus ni moins', () {
+      final q = abc()..enqueue(['X', 'Y']);
+      q.enqueue(['Z']);
+      expect(q.removeLastAdded(['Z']), [3]);
+      expect(q.order, ['A', 'X', 'Y', 'B', 'C']);
+      expect(q.addedCount, 2);
+    });
+
+    test('la suite de l’album n’est jamais touchée', () {
+      final q = abc()..enqueue(['B']); // même nom qu’un morceau de l’album
+      q.removeLastAdded(['B']);
+      expect(q.order, ['A', 'B', 'C']);
+      expect(q.addedCount, 0);
+    });
+
+    test('déjà joué (en cours) : rien n’est retiré', () {
+      final q = abc()..enqueue(['X']);
+      q.next(); // X joue
+      expect(q.removeLastAdded(['X']), isEmpty);
+      expect(q.order, ['A', 'X', 'B', 'C']);
+      expect(q.current, 'X');
+    });
+
+    test('déjà joué et fini : rien n’est retiré, la file reste cohérente', () {
+      final q = abc()..enqueue(['X', 'Y']);
+      q.next();
+      q.next(); // X fini et sorti de l’ordre, Y joue
+      expect(q.removeLastAdded(['X', 'Y']), isEmpty);
+      expect(q.order, ['A', 'Y', 'B', 'C']);
+      expect(q.current, 'Y');
+    });
+
+    test('un album : seuls ceux qui attendent encore partent', () {
+      final q = abc()..enqueue(['X', 'Y', 'Z']);
+      q.next(); // X joue
+      expect(q.removeLastAdded(['X', 'Y', 'Z']), [3, 2]);
+      expect(q.order, ['A', 'X', 'B', 'C']);
+      expect(q.current, 'X');
+    });
+
+    test('le même morceau ajouté deux fois : le dernier part', () {
+      final q = abc()
+        ..enqueue(['X'])
+        ..enqueue(['X']);
+      expect(q.removeLastAdded(['X']), [2]);
+      expect(q.order, ['A', 'X', 'B', 'C']);
+    });
+
+    test('file vide : rien', () {
+      expect(PlayQueue<String>.empty().removeLastAdded(['X']), isEmpty);
+    });
+  });
 }

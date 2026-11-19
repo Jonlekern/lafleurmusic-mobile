@@ -89,6 +89,27 @@ class PlayQueue<T> {
     _added.removeRange(_pos + 1, _pos + 1 + n);
   }
 
+  /// Annuler un ajout : retire [items] des ajouts qui attendent encore (les derniers d'abord) et rend
+  /// leurs places dans [order], de la plus grande à la plus petite. Un ajout déjà joué (ou en cours) et
+  /// la suite de l'album ne sont jamais touchés.
+  List<int> removeLastAdded(List<T> items) {
+    final out = <int>[];
+    final first = _pos + 1, end = first + addedCount;
+    for (final t in items.reversed) {
+      for (var i = end - 1 - out.length; i >= first; i--) {
+        if (out.contains(i) || _order[i] != t) continue;
+        out.add(i);
+        break;
+      }
+    }
+    out.sort((a, b) => b.compareTo(a));
+    for (final i in out) {
+      _order.removeAt(i);
+      _added.removeAt(i);
+    }
+    return out;
+  }
+
   void _dropIfAdded(int i) {
     if (i == _pos || i >= _order.length || !_added[i]) return;
     _order.removeAt(i);

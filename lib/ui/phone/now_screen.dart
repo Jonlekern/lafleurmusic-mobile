@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
@@ -16,6 +17,14 @@ Future<void> openNow(BuildContext context) => pushPhone(
   context,
   const NowScreen(),
   settings: const RouteSettings(name: 'now'),
+);
+
+/// Comme [openNow], depuis le navigateur lui-même (la bulle « Voir la file » survit à l'écran qui l'a montrée).
+Future<void> openNowOn(NavigatorState nav) => nav.push(
+  CupertinoPageRoute<void>(
+    settings: const RouteSettings(name: 'now'),
+    builder: (_) => const NowScreen(),
+  ),
 );
 
 enum _Tab { upNext, equalizer, playback }

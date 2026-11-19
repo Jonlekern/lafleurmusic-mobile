@@ -72,6 +72,9 @@ abstract interface class PlayerController {
   /// Vider : retire les ajouts.
   Future<void> clearAdded();
 
+  /// Annuler un ajout : retire [tracks] des ajouts qui n'ont pas encore joué.
+  Future<void> removeAdded(List<Track> tracks);
+
   /// Retire ce fichier de toute la file (supprimé du disque) ; s'il joue, on passe au suivant.
   Future<void> removeTrack(String path);
 
@@ -324,6 +327,9 @@ class LafleurPlayer implements PlayerController {
       _edit((q) => _sync.move(q, fromOrder, toOrder));
   @override
   Future<void> clearAdded() => _edit(_sync.clearAdded);
+  @override
+  Future<void> removeAdded(List<Track> tracks) =>
+      _edit((q) => _sync.removeLastAdded(q, tracks));
   @override
   Future<void> removeTrack(String path) async {
     var ended = false;
