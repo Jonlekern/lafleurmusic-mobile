@@ -279,6 +279,29 @@ class SubsonicSource implements MusicSource, HttpSource {
     ];
   }
 
+  @override
+  Future<List<SourcePlaylist>> playlists() async {
+    final r = await _call('getPlaylists', const {});
+    final raw = r['playlists'] is Map
+        ? (r['playlists'] as Map)['playlist']
+        : null;
+    final heads = [
+      for (final p in (raw is List ? raw : const []).whereType<Map>())
+        ('${p['id']}', '${p['name'] ?? ''}'),
+    ];
+    return [
+      for (final (id, name) in heads)
+        SourcePlaylist(id: id, name: name, songIds: await _playlistSongs(id)),
+    ];
+  }
+
+  Future<List<String>> _playlistSongs(String id) async {
+    final r = await _call('getPlaylist', {'id': id});
+    final p = r['playlist'] is Map ? r['playlist'] as Map : const {};
+    final entries = p['entry'] is List ? p['entry'] as List : const [];
+    return [for (final e in entries.whereType<Map>()) '${e['id']}'];
+  }
+
   // Servers differ on JSON types (a cover id as a number, a size as a string): read leniently.
   static String? _str(Object? v) => v?.toString();
   static num? _num(Object? v) => v is num ? v : num.tryParse('${v ?? ''}');

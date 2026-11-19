@@ -13,6 +13,7 @@ import '../sources/source.dart';
 import '../tags/tag_reader.dart';
 import '../tags/tag_writer.dart';
 import 'device.dart';
+import 'm3u.dart';
 import 'paths.dart';
 
 /// Place laissée libre sur le téléphone.
@@ -94,6 +95,19 @@ class Downloader extends ChangeNotifier {
   /// Les copies `top100` ne partent que si ceci répond vrai (à la maison) ; les `user` toujours.
   /// Quand ça redevient vrai, l'appelant refait [start].
   final bool Function()? mayAutoDownload;
+
+  /// Les `.m3u8` des playlists gardées, réécrits quand une copie arrive ou part.
+  late final playlistFiles = PlaylistFiles(db, device);
+
+  Future<void> _refreshPlaylists() async {
+    try {
+      await playlistFiles.refresh();
+    } catch (e) {
+      _lastError = _describe(
+        e,
+      ); // un fichier de playlist n'arrête pas les copies
+    }
+  }
 
   Future<void>? _loop;
   bool _paused = false;
@@ -238,6 +252,56 @@ class Downloader extends ChangeNotifier {
     if (reason == OfflineReason.user) _userPaused = false;
     start();
     return KeepResult.queued(fresh.length, need);
+  }
+
+  /// « Garder » une playlist du serveur : ses morceaux (chacun une fois, les absents de son
+  /// compte laissés de côté), puis son `.m3u8` sous `Playlists/`, écrit au fil des copies.
+  Future<KeepResult> keepPlaylist(String accountId, String playlistId) async {
+    final seen = <String>{};
+    final tracks = <Track>[];
+    for (final path in await db.playlistPaths(accountId, playlistId)) {
+      if (!seen.add(path)) continue;
+      final t = await db.trackByPath(path);
+      if (t != null) tracks.add(t);
+    }
+    final r = await keep(tracks);
+    if (r.ok) {
+      await db.addKeptPlaylist(accountId, playlistId);
+      await _refreshPlaylists();
+    }
+    return r;
+  }
+
+  /// Ce que « Retirer » une playlist retire : ses morceaux, sauf ceux (ou leurs jumeaux)
+  /// d'une autre playlist gardée.
+  Future<List<String>> playlistSongsToForget(
+    String accountId,
+    String playlistId,
+  ) async {
+    final others = <String>{};
+    for (final k in await db.keptPlaylistRows()) {
+      if (k.accountId == accountId && k.playlistId == playlistId) continue;
+      for (final path in await db.playlistPaths(k.accountId, k.playlistId)) {
+        others
+          ..add(path)
+          ..addAll(await db.twinPaths(path));
+      }
+    }
+    final out = <String>[];
+    for (final path in {...await db.playlistPaths(accountId, playlistId)}) {
+      if (others.contains(path)) continue;
+      if ((await db.twinPaths(path)).any(others.contains)) continue;
+      out.add(path);
+    }
+    return out;
+  }
+
+  /// « Retirer » une playlist : son `.m3u8` (le nôtre) part, puis ses morceaux comme un
+  /// « Retirer » de l'utilisateur ([forget] `byUser`), sauf ceux d'une autre playlist gardée.
+  Future<void> forgetPlaylist(String accountId, String playlistId) async {
+    final paths = await playlistSongsToForget(accountId, playlistId);
+    await playlistFiles.remove(accountId, playlistId);
+    await forget(paths, byUser: true);
   }
 
   /// Fait de la place pour un « Garder » de l'utilisateur : efface des copies `top100`,
@@ -502,6 +566,7 @@ class Downloader extends ChangeNotifier {
     try {
       await device.announce(file.path);
     } catch (_) {} // la médiathèque du système n'est pas vitale
+    await _refreshPlaylists();
     return rel;
   }
 
@@ -646,6 +711,7 @@ class Downloader extends ChangeNotifier {
         _sweeping = false;
       }
     }
+    await _refreshPlaylists();
     start();
   }
 
@@ -655,6 +721,18 @@ class Downloader extends ChangeNotifier {
   /// [byUser] : c'est l'utilisateur qui retire (« Retirer du téléphone ») ; le Top 100 ne
   /// regarde plus ces morceaux jusqu'à un « Garder » de l'utilisateur.
   Future<void> forget(
+    List<String> trackPaths, {
+    OfflineReason? only,
+    bool byUser = false,
+  }) async {
+    try {
+      await _forget(trackPaths, only: only, byUser: byUser);
+    } finally {
+      await _refreshPlaylists();
+    }
+  }
+
+  Future<void> _forget(
     List<String> trackPaths, {
     OfflineReason? only,
     bool byUser = false,
@@ -859,6 +937,11 @@ class Downloader extends ChangeNotifier {
       await _announce(src.path);
       _pruneEmpty(from, src.parent);
     }
+    // nos .m3u8 quittent l'ancien dossier ; réécrits dans le nouveau
+    try {
+      await playlistFiles.leave(from);
+    } catch (_) {}
+    await _refreshPlaylists();
     return KeepResult.queued(newRel.length, bytes);
   }
 
@@ -884,6 +967,10 @@ class Downloader extends ChangeNotifier {
         await db.failDoneCopies();
         await commit();
       });
+      // l'ancien dossier ne répond plus : ses .m3u8 y restent, plus à nous
+      try {
+        await playlistFiles.forgetFiles();
+      } catch (_) {}
       return const KeepResult.queued(0, 0);
     } catch (_) {
       await _releaseQuietly();

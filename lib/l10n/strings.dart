@@ -209,6 +209,20 @@ class Strings {
   // plan 1 (téléphone) : écrans debout (maquette 1)
   String get home => _t('Accueil', 'Home');
   String get albumsBack => 'Albums';
+
+  /// Accueil, sous les albums (maquette 7, écran 10).
+  String get serverPlaylists => _t('PLAYLISTS DU SERVEUR', 'SERVER PLAYLISTS');
+
+  /// En-tête d'une playlist du serveur (maquette 7, écran 11).
+  String playlistOf(String account) => 'PLAYLIST · ${account.toUpperCase()}';
+
+  /// Sous-titre d'un morceau de playlist.
+  String artistAlbum(String artist, String album) => '$artist · $album';
+
+  /// Un morceau de la playlist que son compte n'a pas (grisé).
+  String get missingSong => _t('Morceau absent', 'Missing song');
+  String notOnAccount(String account) =>
+      _t('absent de $account', 'not on $account');
   String get allAccounts => _t('Tout', 'All');
   String onDevice(bool iphone) => iphone
       ? _t('Sur mon iPhone', 'On my iPhone')

@@ -105,6 +105,26 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
   @override
   Future<void> whenIdle() => Future.value();
 
+  /// Playlists demandées à [keepPlaylist] et à [forgetPlaylist] : (compte, playlist).
+  final keptPlaylists = <(String, String)>[];
+  final forgottenPlaylists = <(String, String)>[];
+
+  @override
+  Future<KeepResult> keepPlaylist(String accountId, String playlistId) async {
+    keptPlaylists.add((accountId, playlistId));
+    return result;
+  }
+
+  @override
+  Future<List<String>> playlistSongsToForget(
+    String accountId,
+    String playlistId,
+  ) async => const [];
+
+  @override
+  Future<void> forgetPlaylist(String accountId, String playlistId) async =>
+      forgottenPlaylists.add((accountId, playlistId));
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -137,6 +157,58 @@ Future<void> seedKept(LibraryDb db, List<String> paths, int bytes) async {
 Future<void> seedKeepDemo(LibraryDb db) async {
   await db.upsertTracks(DemoLibrary.remote);
   await seedKept(db, DemoLibrary.keptPaths, 4509715661); // 4,2 Go
+}
+
+/// Les playlists du serveur de la maquette 7 (écrans 10, 11) : « Soirée » et « Running » (gardée)
+/// sur [navidrome], « Chill du dimanche » sur [jellyfin]. « Soirée » joue « Ocean Drive » deux fois et
+/// finit sur un morceau absent de son compte. Après [seedKeepDemo].
+Future<void> seedPlaylistDemo(
+  LibraryDb db, {
+  required String navidrome,
+  required String jellyfin,
+}) async {
+  String of(String album, int no) => 'subsonic://demo/$album/$no';
+  await db.upsertTracks([DemoLibrary.goldenHour]);
+  final running = [
+    of('Night Drive', 2),
+    of('Lafleur Surf', 2),
+    of('Ports', 1),
+    of('Studio Lafleur', 7),
+  ];
+  await db.replacePlaylists(navidrome, [
+    (
+      id: 'soiree',
+      name: 'Soirée',
+      paths: [
+        of('Studio Lafleur', 1),
+        of('Lafleur Surf', 1),
+        of('Night Drive', 1),
+        of('Studio Lafleur', 4),
+        DemoLibrary.goldenHour.path,
+        of('Studio Lafleur', 1),
+        of('Gone', 1), // plus dans la bibliothèque du compte
+      ],
+    ),
+    (id: 'running', name: 'Running', paths: running),
+  ]);
+  await db.replacePlaylists(jellyfin, [
+    (
+      id: 'chill',
+      name: 'Chill du dimanche',
+      paths: [
+        of('Studio Lafleur', 3),
+        of('Lafleur Surf', 1),
+        of('Summer Mix', 1),
+        of('Night Drive', 3),
+      ],
+    ),
+  ]);
+  // « Running » gardée : ses morceaux copiés (Surf Radio l'est déjà), son .m3u8 noté
+  await seedKept(db, [
+    for (final p in running)
+      if (!DemoLibrary.keptPaths.contains(p)) p,
+  ], 30 * _mib);
+  await db.setKeptPlaylist(navidrome, 'running', 'Running.m3u8');
 }
 
 const _mib = 1024 * 1024, _gib = 1024 * _mib;

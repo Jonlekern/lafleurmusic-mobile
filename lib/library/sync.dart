@@ -77,6 +77,7 @@ class LibrarySync {
     }
     if (complete) {
       removed = await _removeUnseen(s.accountId, seen);
+      await _storePlaylists(s);
     }
     return SyncResult(
       added: added,
@@ -84,6 +85,24 @@ class LibrarySync {
       removed: removed,
       complete: complete,
     );
+  }
+
+  /// The server's playlists replace the stored ones; if they can't be read, the old ones stay.
+  Future<void> _storePlaylists(MusicSource s) async {
+    final List<SourcePlaylist> lists;
+    try {
+      lists = await s.playlists();
+    } on Object {
+      return;
+    }
+    await _db.replacePlaylists(s.accountId, [
+      for (final l in lists)
+        (
+          id: l.id,
+          name: l.name,
+          paths: [for (final id in l.songIds) trackKey(s.accountId, id)],
+        ),
+    ]);
   }
 
   Future<(int, int)> _store(

@@ -57,6 +57,18 @@ class SourceSong {
   final int playCount;
 }
 
+/// A playlist of a server: its songs in the server's order (a song may come back twice).
+class SourcePlaylist {
+  const SourcePlaylist({
+    required this.id,
+    required this.name,
+    required this.songIds,
+  });
+
+  final String id, name;
+  final List<String> songIds;
+}
+
 /// A network failure talking to a source (refused, timeout, TLS…).
 /// Its text never carries the request URL: the query holds the credentials.
 class SourceNetworkException implements Exception {
@@ -106,6 +118,9 @@ abstract interface class MusicSource {
   /// One page at a time, fetched lazily.
   Stream<List<SourceAlbum>> albums({int pageSize = 500});
   Future<List<SourceSong>> albumSongs(String albumId);
+
+  /// The server's playlists, each with its songs in order.
+  Future<List<SourcePlaylist>> playlists();
 
   /// Full authenticated URL (account headers are separate: [headers]).
   Uri streamUri(String songId);

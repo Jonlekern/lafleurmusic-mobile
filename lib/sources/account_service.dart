@@ -632,6 +632,14 @@ class _CancellableSource implements MusicSource {
   }
 
   @override
+  Future<List<SourcePlaylist>> playlists() async {
+    _check();
+    final lists = await _inner.playlists();
+    _check();
+    return lists;
+  }
+
+  @override
   Uri streamUri(String songId) => _inner.streamUri(songId);
 
   @override

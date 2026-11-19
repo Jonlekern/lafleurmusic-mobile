@@ -117,6 +117,10 @@ class LibraryView {
   Future<List<Track>> search(String q) async =>
       db.search(q, accounts: await _now());
 
+  /// The server playlists of the accounts shown (never merged across accounts).
+  Stream<List<ServerPlaylist>> playlists() =>
+      _follow((a) => db.watchPlaylists(accounts: a));
+
   Stream<List<(String, int)>> artists() =>
       _follow((a) => db.watchArtists(accounts: a));
 

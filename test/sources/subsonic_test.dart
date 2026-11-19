@@ -739,6 +739,81 @@ void main() {
     });
   });
 
+  group('playlists()', () {
+    String body(Map<String, Object?> r) => jsonEncode({
+      'subsonic-response': {'status': 'ok', 'version': '1.16.1', ...r},
+    });
+
+    test(
+      'getPlaylists then getPlaylist for each, songs in order with duplicates',
+      () async {
+        final calls = <String>[];
+        final s = make(
+          MockClient((r) async {
+            calls.add(r.url.pathSegments.last);
+            expect(r.headers['X-Gate'], 'open');
+            if (r.url.path.endsWith('getPlaylists.view')) {
+              return json(
+                body({
+                  'playlists': {
+                    'playlist': [
+                      {'id': 'p1', 'name': 'Soirée', 'songCount': 3},
+                      {'id': 7, 'name': 'Running'},
+                    ],
+                  },
+                }),
+              );
+            }
+            final id = r.url.queryParameters['id'];
+            return json(
+              body({
+                'playlist': {
+                  'id': id,
+                  'name': id == 'p1' ? 'Soirée' : 'Running',
+                  if (id == 'p1')
+                    'entry': [
+                      {'id': 's1', 'title': 'Ocean Drive'},
+                      {'id': 's2', 'title': 'Lafleur Surf'},
+                      {'id': 's1', 'title': 'Ocean Drive'},
+                    ],
+                },
+              }),
+            );
+          }),
+          headers: {'X-Gate': 'open'},
+        );
+        final lists = await s.playlists();
+        expect(calls, [
+          'getPlaylists.view',
+          'getPlaylist.view',
+          'getPlaylist.view',
+        ]);
+        expect(
+          [for (final p in lists) (p.id, p.name)],
+          [('p1', 'Soirée'), ('7', 'Running')],
+        );
+        expect(lists[0].songIds, ['s1', 's2', 's1']);
+        expect(lists[1].songIds, isEmpty);
+      },
+    );
+
+    test('no playlist at all: an empty list', () async {
+      final s = make(MockClient((r) async => json(body({'playlists': {}}))));
+      expect(await s.playlists(), isEmpty);
+    });
+
+    test('a Subsonic error surfaces as an exception', () async {
+      final s = make(
+        MockClient(
+          (r) async => json(
+            '{"subsonic-response":{"status":"failed","error":{"code":0,"message":"x"}}}',
+          ),
+        ),
+      );
+      await expectLater(s.playlists(), throwsA(isA<SubsonicException>()));
+    });
+  });
+
   test('close() closes the HTTP client', () {
     var closed = false;
     final s = make(_ClosingClient(() => closed = true));

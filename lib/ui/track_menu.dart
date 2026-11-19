@@ -88,11 +88,16 @@ class TrackMenuArea extends StatelessWidget {
 /// Téléphone (maquette 1, écran 4) : appui long → feuille du bas « Lire ensuite » / « Ajouter à la file »
 /// pour [tracks] (un morceau, ou tout un album), puis « Garder sur mon iPhone » (ou « Retirer du téléphone »
 /// quand tout est gardé) et « Sélectionner… » pour les morceaux d'un serveur. En-tête : [title] · [sub].
+/// Une playlist du serveur dit elle-même si elle est gardée ([kept]) et se garde ou se retire
+/// entière ([onKeep], [onRemove] : son `.m3u8` avec).
 Future<void> showTrackSheet(
   BuildContext context, {
   required String title,
   String? sub,
   required Future<List<Track>> Function() tracks,
+  bool? kept,
+  Future<void> Function()? onKeep,
+  Future<void> Function()? onRemove,
 }) async {
   final app = AppScope.of(context);
   final s = app.strings;
@@ -102,7 +107,7 @@ Future<void> showTrackSheet(
       ? const <String, OfflineRow>{}
       : await app.db.watchOfflineWithTwins().first;
   final canKeep = app.downloader != null && remote.isNotEmpty;
-  final allKept = canKeep && remote.every((t) => isKept(t, rows));
+  final allKept = canKeep && (kept ?? remote.every((t) => isKept(t, rows)));
   if (!context.mounted) return;
   Widget option(BuildContext ctx, _Action a, String label, {bool hl = false}) =>
       Material(
@@ -208,9 +213,17 @@ Future<void> showTrackSheet(
     case _Action.enqueue:
       await app.player.enqueue(list);
     case _Action.keep:
-      if (context.mounted) await keepTracks(context, remote);
+      if (onKeep != null) {
+        await onKeep();
+      } else if (context.mounted) {
+        await keepTracks(context, remote);
+      }
     case _Action.remove:
-      if (context.mounted) await forgetTracks(context, remote, name: title);
+      if (onRemove != null) {
+        await onRemove();
+      } else if (context.mounted) {
+        await forgetTracks(context, remote, name: title);
+      }
     case _Action.select:
       if (context.mounted) {
         await pushPhone(

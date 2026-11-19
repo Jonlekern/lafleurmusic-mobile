@@ -49,6 +49,7 @@ Future<KeepFixture> pumpKeep(
   AppSettings? settings,
   VoidCallback? saveSettings,
   AccountService Function(Accounts, LibraryDb)? makeService,
+  bool addAccount = true,
 }) async {
   phoneSize(tester);
   final dir = Directory.systemTemp.createTempSync('keep');
@@ -86,13 +87,15 @@ Future<KeepFixture> pumpKeep(
   await tester.runAsync(() async {
     await (seed ?? seedKeepDemo)(db);
     await db.upsertTracks(extra);
-    await accounts.add(
-      type: AccountType.subsonic,
-      name: 'Navidrome',
-      base: Uri.parse('https://music.example'),
-      user: 'demo',
-      password: 'demo',
-    );
+    if (addAccount) {
+      await accounts.add(
+        type: AccountType.subsonic,
+        name: 'Navidrome',
+        base: Uri.parse('https://music.example'),
+        user: 'demo',
+        password: 'demo',
+      );
+    }
   });
   final service =
       makeService?.call(accounts, db) ??

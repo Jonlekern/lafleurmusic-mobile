@@ -23,6 +23,7 @@ import '../ui/phone/accounts_screen.dart';
 import '../ui/phone/phone_shell.dart';
 import '../ui/phone/keep_screen.dart';
 import '../ui/phone/on_device_screen.dart';
+import '../ui/phone/playlist_screen.dart';
 import 'demo_library.dart';
 import 'demo_offline.dart';
 import 'demo_player.dart';
@@ -34,6 +35,7 @@ import 'demo_player.dart';
 /// `keephome|keep|greyed` : la bibliothèque d'un serveur dont Lafleur Surf est gardé : l'Accueil (⬇ rose),
 /// « Garder sur mon iPhone » (maquette 2, écran 8), l'album dont « Night Swim » est grisé (maquette 1, écran 4).
 /// `ondevice` : « Sur mon iPhone » (maquette 4).
+/// `playlists|playlist` : les playlists du serveur (maquette 7) : l'Accueil, la playlist « Soirée ».
 Future<Widget> demoApp() async {
   const screen = String.fromEnvironment('LAFLEUR_DEMO_SCREEN');
   final remote = const {
@@ -41,7 +43,10 @@ Future<Widget> demoApp() async {
     'keep',
     'greyed',
     'ondevice',
+    'playlists',
+    'playlist',
   }.contains(screen);
+  final lists = screen == 'playlists' || screen == 'playlist';
   final db = LibraryDb(NativeDatabase.memory());
   if (screen == 'ondevice') {
     await seedOnDeviceDemo(db);
@@ -86,6 +91,11 @@ Future<Widget> demoApp() async {
     );
     answers[a.id] = answer;
   }
+  final ids = [for (final a in await accounts.watch().first) a.id];
+  if (lists) {
+    await seedPlaylistDemo(db, navidrome: ids[0], jellyfin: ids[1]);
+  }
+  final soiree = lists ? (await db.watchPlaylists().first).first : null;
   // rien ne part sur le réseau : réponses inventées, synchro vide
   final service = DemoAccountService(
     accounts,
@@ -139,7 +149,7 @@ Future<Widget> demoApp() async {
       home: AdaptiveHome(
         debugStart: screen == 'greyed'
             ? 'album'
-            : (screen.isEmpty ? null : screen),
+            : (screen.isEmpty || lists ? null : screen),
         debugScreens: switch (screen) {
           'accounts' => () => [const AccountsScreen()],
           'account' => () => [
@@ -147,6 +157,7 @@ Future<Widget> demoApp() async {
             const AccountFormScreen(initial: demoDraft),
           ],
           'ondevice' => () => [const OnDeviceScreen()],
+          'playlist' => () => [PlaylistScreen(playlist: soiree!)],
           'keep' => () => [
             const KeepScreen(preselect: {'Studio Lafleur', 'Summer Mix'}),
           ],

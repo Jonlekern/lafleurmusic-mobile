@@ -10,6 +10,7 @@ import '../../settings.dart';
 import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
 import '../cover_image.dart';
+import '../cover_mosaic.dart';
 import '../coverflow_screen.dart';
 import '../track_menu.dart';
 import 'accounts_screen.dart';
@@ -18,6 +19,7 @@ import 'display_choice.dart';
 import 'names_screen.dart';
 import 'on_device_screen.dart';
 import 'phone_shell.dart';
+import 'playlist_screen.dart';
 
 /// Accueil du téléphone = la barre de côté du Mac (maquette 1, écran 1) : comptes, recherche, bibliothèque,
 /// albums. L'album du morceau en cours est en rose.
@@ -191,10 +193,46 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+              const _ServerPlaylists(),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+/// « PLAYLISTS DU SERVEUR » sous les albums (maquette 7, écran 10) : mosaïque, nom, ⬇ rose si
+/// gardée, le compte en petit en mode Tout / Perso. Rien quand aucun compte n'en a.
+class _ServerPlaylists extends StatelessWidget {
+  const _ServerPlaylists();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    return StreamBuilder<List<ServerPlaylist>>(
+      stream: app.library.playlists(),
+      builder: (context, snap) {
+        final lists = snap.data ?? const <ServerPlaylist>[];
+        if (lists.isEmpty) return const SizedBox.shrink();
+        final tagged = app.settings?.displayMode != DisplayMode.one;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PhoneSection(app.strings.serverPlaylists),
+            for (final p in lists)
+              PhoneItem(
+                key: ValueKey('playlist-${p.accountId}-${p.id}'),
+                kept: p.kept,
+                tag: tagged ? p.accountName : null,
+                leading: CoverMosaic(tracks: p.covers, size: 30, radius: 4),
+                label: p.name,
+                onTap: () => openPlaylist(context, p),
+                onLongPress: () => showPlaylistSheet(context, p),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -408,10 +446,13 @@ class PhoneItem extends StatelessWidget {
     this.leading,
     this.selected = false,
     this.kept = false,
+    this.tag,
     this.onTap,
     this.onLongPress,
   });
   final bool kept; // ⬇ rose : tout l'album est sur le téléphone
+  final String?
+  tag; // en petit après le nom (le compte d'une playlist du serveur)
   final String label;
   final Widget? leading;
   final bool selected;
@@ -462,6 +503,20 @@ class PhoneItem extends StatelessWidget {
                         color: selected
                             ? LafleurColors.ink
                             : LafleurColors.pink,
+                      ),
+                    ],
+                    if (tag != null) ...[
+                      const SizedBox(width: 10),
+                      Text(
+                        tag!,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: selected
+                              ? LafleurColors.ink
+                              : const Color(0xFF999999),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ],

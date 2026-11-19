@@ -7,7 +7,7 @@ import '../app_scope.dart';
 import '../l10n/strings.dart';
 import '../library/db.dart' show OfflineRow;
 import '../library/models.dart';
-import '../offline/downloader.dart' show KeepResult;
+import '../offline/downloader.dart' show Downloader, KeepResult;
 import '../player/media_resolver.dart';
 import '../theme/colors.dart';
 
@@ -33,16 +33,26 @@ void say(ScaffoldMessengerState messenger, String text) =>
     );
 
 /// Garde [tracks] (ceux d'un serveur) : dit pourquoi si c'est refusé. Vrai si c'est en file.
-Future<bool> keepTracks(BuildContext context, List<Track> tracks) async {
+Future<bool> keepTracks(BuildContext context, List<Track> tracks) => keepWith(
+  context,
+  (d) => d.keep([
+    for (final t in tracks)
+      if (isRemote(t)) t,
+  ]),
+);
+
+/// Un « Garder » ([keep] : ce qu'on demande au téléchargeur) : dit pourquoi si c'est refusé,
+/// et si l'accès au stockage manque. Vrai si c'est en file.
+Future<bool> keepWith(
+  BuildContext context,
+  Future<KeepResult> Function(Downloader) keep,
+) async {
   final app = AppScope.of(context);
   final downloader = app.downloader;
   if (downloader == null) return false;
   final s = app.strings;
   final messenger = ScaffoldMessenger.of(context);
-  final result = await downloader.keep([
-    for (final t in tracks)
-      if (isRemote(t)) t,
-  ]);
+  final result = await keep(downloader);
   if (result.ok) {
     // l'accès au dossier Musique (Android) se demande au premier téléchargement
     void warn() {

@@ -13,6 +13,8 @@ class FakeSource implements MusicSource {
   final String accountId;
   Map<SourceAlbum, List<SourceSong>> library;
   String? failSongsOf; // album id whose songs fetch throws
+  List<SourcePlaylist> lists = const [];
+  bool failPlaylists = false;
   int? failAtPage; // 1-based page whose fetch throws
   int produced = 0, processed = 0, maxAlive = 0;
 
@@ -35,6 +37,12 @@ class FakeSource implements MusicSource {
     processed++;
     if (albumId == failSongsOf) throw const SocketException('cut');
     return library.entries.firstWhere((e) => e.key.id == albumId).value;
+  }
+
+  @override
+  Future<List<SourcePlaylist>> playlists() async {
+    if (failPlaylists) throw const SocketException('cut');
+    return lists;
   }
 
   @override
@@ -409,6 +417,173 @@ void main() {
         (await db.trackByPath('docs://Art/Album/s3.mp3'))!.accountId,
         'local',
       );
+    });
+  });
+
+  group('server playlists', () {
+    Future<List<List<Object>>> lists(String acc) async => [
+      for (final p in await db.playlistsOf(acc)) [p.id, p.name, p.paths],
+    ];
+
+    FakeSource withLists(String acc, List<SourcePlaylist> l) =>
+        FakeSource(acc, lib3x())..lists = l;
+
+    test(
+      'a complete sync stores them in order, a song twice stays twice',
+      () async {
+        await LibrarySync(db).run(
+          withLists('acc1', const [
+            SourcePlaylist(
+              id: 'p1',
+              name: 'Soirée',
+              songIds: ['s1', 's2', 's1'],
+            ),
+            SourcePlaylist(id: 'p2', name: 'Running', songIds: ['s5']),
+          ]),
+        );
+        expect(await lists('acc1'), [
+          [
+            'p1',
+            'Soirée',
+            ['subsonic://acc1/s1', 'subsonic://acc1/s2', 'subsonic://acc1/s1'],
+          ],
+          [
+            'p2',
+            'Running',
+            ['subsonic://acc1/s5'],
+          ],
+        ]);
+      },
+    );
+
+    test('the next complete sync replaces them', () async {
+      await LibrarySync(db).run(
+        withLists('acc1', const [
+          SourcePlaylist(id: 'p1', name: 'Soirée', songIds: ['s1', 's2']),
+          SourcePlaylist(id: 'p2', name: 'Running', songIds: ['s5']),
+        ]),
+      );
+      await LibrarySync(db).run(
+        withLists('acc1', const [
+          SourcePlaylist(id: 'p1', name: 'Soirée 2', songIds: ['s3']),
+        ]),
+      );
+      expect(await lists('acc1'), [
+        [
+          'p1',
+          'Soirée 2',
+          ['subsonic://acc1/s3'],
+        ],
+      ]);
+    });
+
+    test('playlists that fail to read: the old ones stay, the sync is still complete', () async {
+      await LibrarySync(db).run(
+        withLists('acc1', const [
+          SourcePlaylist(id: 'p1', name: 'Soirée', songIds: ['s1']),
+        ]),
+      );
+      final r = await LibrarySync(db)
+          .run(FakeSource('acc1', lib3x(drop: 's9'))..failPlaylists = true);
+      expect(r.complete, isTrue);
+      expect(r.removed, 1);
+      expect(await lists('acc1'), [
+        [
+          'p1',
+          'Soirée',
+          ['subsonic://acc1/s1'],
+        ],
+      ]);
+    });
+
+    test('an incomplete sync keeps the old ones', () async {
+      await LibrarySync(db).run(
+        withLists('acc1', const [
+          SourcePlaylist(id: 'p1', name: 'Soirée', songIds: ['s1']),
+        ]),
+      );
+      final r = await LibrarySync(db)
+          .run(withLists('acc1', const [])..failSongsOf = 'al1');
+      expect(r.complete, isFalse);
+      expect(await lists('acc1'), [
+        [
+          'p1',
+          'Soirée',
+          ['subsonic://acc1/s1'],
+        ],
+      ]);
+    });
+
+    test('watchPlaylists: the accounts shown only, never a removed account\'s; '
+        'kept once recorded and every present song copied (a twin\'s copy counts)', () async {
+      for (final (i, id) in ['acc1', 'acc2'].indexed) {
+        await db
+            .into(db.accountRows)
+            .insert(
+              AccountRowsCompanion.insert(
+                id: id,
+                type: 'subsonic',
+                name: id.toUpperCase(),
+                base: 'https://x',
+                user: 'u',
+                position: i,
+              ),
+            );
+      }
+      await LibrarySync(db).run(
+        withLists('acc1', const [
+          SourcePlaylist(
+            id: 'p1',
+            name: 'Soirée',
+            songIds: ['s1', 'gone', 's1'],
+          ),
+        ]),
+      );
+      await LibrarySync(db).run(
+        withLists('acc2', const [
+          SourcePlaylist(id: 'q', name: 'Autre', songIds: ['s2']),
+        ]),
+      );
+      await LibrarySync(db).run(
+        withLists('acc3', const [
+          SourcePlaylist(id: 'r', name: 'Orpheline', songIds: ['s2']),
+        ]),
+      ); // acc3 is not an account
+      List<String> names(List<ServerPlaylist> l) => [
+        for (final p in l)
+          '${p.accountName}/${p.name}/${p.songCount}/${p.kept}',
+      ];
+      expect(names(await db.watchPlaylists().first), [
+        'ACC1/Soirée/3/false',
+        'ACC2/Autre/1/false',
+      ]);
+      expect(names(await db.watchPlaylists(accounts: {'acc2'}).first), [
+        'ACC2/Autre/1/false',
+      ]);
+      expect(await db.watchPlaylists(accounts: {}).first, isEmpty);
+      // s1 copied through its twin on acc2 (same song): not kept until recorded
+      await db.queueOffline(['subsonic://acc2/s1'], OfflineReason.user);
+      await db.markOfflineDone('subsonic://acc2/s1', 'a.mp3', 4);
+      expect((await db.watchPlaylists().first).first.kept, isFalse);
+      await db.addKeptPlaylist('acc1', 'p1');
+      expect((await db.watchPlaylists().first).first.kept, isTrue);
+    });
+
+    test('another account keeps its own', () async {
+      await LibrarySync(db).run(
+        withLists('acc2', const [
+          SourcePlaylist(id: 'p1', name: 'Autre', songIds: ['s1']),
+        ]),
+      );
+      await LibrarySync(db).run(withLists('acc1', const []));
+      expect(await lists('acc2'), [
+        [
+          'p1',
+          'Autre',
+          ['subsonic://acc2/s1'],
+        ],
+      ]);
+      expect(await lists('acc1'), isEmpty);
     });
   });
 }

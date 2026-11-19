@@ -1184,6 +1184,275 @@ class LibraryDb extends _$LibraryDb {
         return m;
       });
 
+  /// Replaces every playlist of [accountId] by [lists] (id, name, song paths in order;
+  /// a song may come back twice), in one transaction.
+  Future<void> replacePlaylists(
+    String accountId,
+    List<({String id, String name, List<String> paths})> lists,
+  ) => transaction(() async {
+    await (delete(
+      playlistItems,
+    )..where((i) => i.accountId.equals(accountId))).go();
+    await (delete(playlists)..where((p) => p.accountId.equals(accountId))).go();
+    await batch((b) {
+      for (final (pos, l) in lists.indexed) {
+        b.insert(
+          playlists,
+          PlaylistsCompanion.insert(
+            accountId: accountId,
+            remoteId: l.id,
+            name: l.name,
+            position: pos,
+          ),
+          mode: InsertMode.insertOrReplace, // an id listed twice: the last one
+        );
+        b.deleteWhere(
+          playlistItems,
+          (i) => i.accountId.equals(accountId) & i.playlistId.equals(l.id),
+        );
+        for (final (i, path) in l.paths.indexed) {
+          b.insert(
+            playlistItems,
+            PlaylistItemsCompanion.insert(
+              accountId: accountId,
+              playlistId: l.id,
+              index: i,
+              trackPath: path,
+            ),
+          );
+        }
+      }
+    });
+  });
+
+  /// The playlists of [accountId], in the server's order, with their song paths.
+  Future<List<({String id, String name, List<String> paths})>> playlistsOf(
+    String accountId,
+  ) async {
+    final lists =
+        await (select(playlists)
+              ..where((p) => p.accountId.equals(accountId))
+              ..orderBy([(p) => OrderingTerm.asc(p.position)]))
+            .get();
+    return [
+      for (final l in lists)
+        (
+          id: l.remoteId,
+          name: l.name,
+          paths: await playlistPaths(accountId, l.remoteId),
+        ),
+    ];
+  }
+
+  /// The song paths of one playlist, in order (absent songs included).
+  Future<List<String>> playlistPaths(String accountId, String playlistId) =>
+      (select(playlistItems)
+            ..where(
+              (i) =>
+                  i.accountId.equals(accountId) &
+                  i.playlistId.equals(playlistId),
+            )
+            ..orderBy([(i) => OrderingTerm.asc(i.index)]))
+          .map((i) => i.trackPath)
+          .get();
+
+  /// The name of a playlist, null if the server no longer has it.
+  Future<String?> playlistName(String accountId, String playlistId) async =>
+      (await (select(playlists)..where(
+                (p) =>
+                    p.accountId.equals(accountId) &
+                    p.remoteId.equals(playlistId),
+              ))
+              .getSingleOrNull())
+          ?.name;
+
+  /// SQL: the row `t` (a track) has a finished copy, its own or a twin's on another account.
+  static const _hasDoneCopy =
+      'EXISTS (SELECT 1 FROM tracks t2 JOIN offline o ON o.track_path = t2.path '
+      'WHERE o.state = ? AND (t2.path = t.path OR (t.merge_key <> \'\' '
+      'AND t2.merge_key = t.merge_key AND t2.account_id <> t.account_id)))';
+
+  /// The playlists shown (the accounts of [accounts]; null: all), the accounts in the
+  /// order of the accounts screen, each in the server's order. A playlist whose account
+  /// was removed is never shown.
+  Stream<List<ServerPlaylist>> watchPlaylists({Set<String>? accounts}) {
+    final ids = accounts?.toList() ?? const <String>[];
+    final where = accounts == null
+        ? '1'
+        : ids.isEmpty
+        ? '0'
+        : 'p.account_id IN (${List.filled(ids.length, '?').join(', ')})';
+    final vars = [for (final i in ids) Variable.withString(i)];
+    final done = Variable.withString(OfflineState.done.name);
+    return customSelect(
+      'SELECT p.account_id AS acc, p.remote_id AS id, p.name AS name, '
+      'a.name AS acc_name, '
+      '(SELECT COUNT(*) FROM playlist_items i WHERE i.account_id = p.account_id '
+      'AND i.playlist_id = p.remote_id) AS c, '
+      '(SELECT COUNT(*) FROM playlist_items i JOIN tracks t ON t.path = i.track_path '
+      'WHERE i.account_id = p.account_id AND i.playlist_id = p.remote_id) AS present, '
+      '(SELECT COUNT(*) FROM playlist_items i JOIN tracks t ON t.path = i.track_path '
+      'WHERE i.account_id = p.account_id AND i.playlist_id = p.remote_id '
+      'AND NOT $_hasDoneCopy) AS uncopied, '
+      'EXISTS (SELECT 1 FROM kept_playlists k WHERE k.account_id = p.account_id '
+      'AND k.playlist_id = p.remote_id) AS rec '
+      'FROM playlists p JOIN accounts a ON a.id = p.account_id '
+      'WHERE $where ORDER BY a.position, p.position',
+      variables: [done, ...vars],
+      readsFrom: {
+        playlists,
+        playlistItems,
+        tracks,
+        offline,
+        accountRows,
+        keptPlaylists,
+      },
+    ).watch().asyncMap((rows) async {
+      final out = <ServerPlaylist>[];
+      for (final r in rows) {
+        final acc = r.read<String>('acc'), id = r.read<String>('id');
+        final present = r.read<int>('present');
+        out.add(
+          ServerPlaylist(
+            accountId: acc,
+            id: id,
+            name: r.read<String>('name'),
+            accountName: r.read<String>('acc_name'),
+            songCount: r.read<int>('c'),
+            kept:
+                r.read<bool>('rec') &&
+                present > 0 &&
+                r.read<int>('uncopied') == 0,
+            covers: await _coverTracks(acc, id),
+          ),
+        );
+      }
+      return out;
+    });
+  }
+
+  /// The first songs of a playlist that show 4 different albums (its mosaic).
+  Future<List<Track>> _coverTracks(String acc, String id) async {
+    final rows = await customSelect(
+      'SELECT t.* FROM playlist_items i JOIN tracks t ON t.path = i.track_path '
+      'WHERE i.account_id = ? AND i.playlist_id = ? AND t.has_cover = 1 '
+      'ORDER BY i."index" LIMIT 200',
+      variables: [Variable.withString(acc), Variable.withString(id)],
+      readsFrom: {playlistItems, tracks},
+    ).get();
+    final albums = <String>{};
+    return [
+      for (final r in rows)
+        if (albums.length < 4 && albums.add(r.read<String>('album')))
+          _fromRow(tracks.map(r.data)),
+    ];
+  }
+
+  /// The songs of a playlist in order, a song listed twice twice: (its path, its row, or null
+  /// when the song is not in its account's library: absent).
+  Stream<List<(String, Track?)>> watchPlaylistItems(
+    String accountId,
+    String playlistId,
+  ) =>
+      customSelect(
+        'SELECT i.track_path AS item_path, t.* FROM playlist_items i '
+        'LEFT JOIN tracks t ON t.path = i.track_path '
+        'WHERE i.account_id = ? AND i.playlist_id = ? ORDER BY i."index"',
+        variables: [
+          Variable.withString(accountId),
+          Variable.withString(playlistId),
+        ],
+        readsFrom: {playlistItems, tracks},
+      ).watch().map(
+        (rows) => [
+          for (final r in rows)
+            (
+              r.read<String>('item_path'),
+              r.read<int?>('id') == null ? null : _fromRow(tracks.map(r.data)),
+            ),
+        ],
+      );
+
+  /// For each of [paths] that has one, its finished copy: its own, else a twin's on another account.
+  Future<Map<String, OfflineRow>> doneCopies(List<String> paths) async {
+    final out = <String, OfflineRow>{};
+    for (final path in {...paths}) {
+      final rows = await customSelect(
+        'SELECT o.* FROM tracks t JOIN tracks t2 ON (t2.path = t.path OR '
+        "(t.merge_key <> '' AND t2.merge_key = t.merge_key "
+        'AND t2.account_id <> t.account_id)) '
+        'JOIN offline o ON o.track_path = t2.path '
+        'WHERE t.path = ? AND o.state = ? AND o.file_path IS NOT NULL '
+        'ORDER BY o.track_path <> t.path, o.track_path LIMIT 1',
+        variables: [
+          Variable.withString(path),
+          Variable.withString(OfflineState.done.name),
+        ],
+        readsFrom: {tracks, offline},
+      ).get();
+      if (rows.isNotEmpty) out[path] = offline.map(rows.first.data);
+    }
+    return out;
+  }
+
+  /// One of [paths] still has a copy, finished or coming (its own or a twin's).
+  Future<bool> anyKept(List<String> paths) async {
+    for (final path in {...paths}) {
+      final own = await offlineOf(path);
+      if (own != null && own.state != OfflineState.failed.name) return true;
+      if (await twinOffline(path) != null) return true;
+    }
+    return false;
+  }
+
+  /// The playlists kept on the phone (their `.m3u8`, written by the app).
+  Future<List<KeptPlaylistRow>> keptPlaylistRows() =>
+      select(keptPlaylists).get();
+
+  Stream<Set<(String, String)>> watchKeptPlaylists() =>
+      select(keptPlaylists)
+          .watch()
+          .map((rows) => {for (final r in rows) (r.accountId, r.playlistId)});
+
+  /// [fileName]: relative to `<root>/Playlists/`; empty while no file is written.
+  Future<void> setKeptPlaylist(
+    String accountId,
+    String playlistId,
+    String fileName,
+  ) => into(keptPlaylists).insertOnConflictUpdate(
+    KeptPlaylistsCompanion.insert(
+      accountId: accountId,
+      playlistId: playlistId,
+      fileName: fileName,
+    ),
+  );
+
+  /// Notée gardée (sans fichier encore) ; déjà notée : rien ne change (son fichier reste le sien).
+  Future<void> addKeptPlaylist(String accountId, String playlistId) =>
+      into(keptPlaylists).insert(
+        KeptPlaylistsCompanion.insert(
+          accountId: accountId,
+          playlistId: playlistId,
+          fileName: '',
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+
+  Future<void> dropKeptPlaylist(String accountId, String playlistId) =>
+      (delete(keptPlaylists)..where(
+            (k) =>
+                k.accountId.equals(accountId) & k.playlistId.equals(playlistId),
+          ))
+          .go();
+
+  /// The playlists of a removed account go with it (a kept `.m3u8` stays on the phone).
+  Future<void> deleteAccountPlaylists(String accountId) async {
+    await (delete(
+      playlistItems,
+    )..where((i) => i.accountId.equals(accountId))).go();
+    await (delete(playlists)..where((p) => p.accountId.equals(accountId))).go();
+  }
+
   /// The accounts' ids in the order of the accounts screen.
   Stream<List<String>> watchAccountIds() =>
       (select(accountRows)..orderBy([(a) => OrderingTerm.asc(a.position)]))

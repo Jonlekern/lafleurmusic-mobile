@@ -1636,6 +1636,128 @@ void main() {
       },
     );
   });
+
+  group('server playlists', () {
+    File m3u(Directory r, String name) => File('${r.path}/Playlists/$name');
+
+    Future<void> seedLists() async {
+      for (var i = 1; i <= 3; i++) {
+        await add(_t('$i', no: i));
+      }
+      await db.replacePlaylists('acc', [
+        // 1 twice, 9 absent from the account
+        (
+          id: 'p',
+          name: 'Soirée',
+          paths: [
+            'subsonic://acc/1',
+            'subsonic://acc/9',
+            'subsonic://acc/2',
+            'subsonic://acc/1',
+          ],
+        ),
+        (
+          id: 'q',
+          name: 'Running',
+          paths: ['subsonic://acc/2', 'subsonic://acc/3'],
+        ),
+      ]);
+    }
+
+    List<String> songs(File f) =>
+        f.readAsLinesSync().where((l) => !l.startsWith('#')).toList();
+
+    test('Garder: each song once, the absent one skipped; the .m3u8 follows the copies', () async {
+      await seedLists();
+      final d = make();
+      final r = await d.keepPlaylist('acc', 'p');
+      expect((r.ok, r.count), (true, 2));
+      await d.whenIdle();
+      expect(seen, hasLength(2));
+      final f = m3u(root, 'Soirée.m3u8');
+      expect(songs(f), [
+        '../Art/Alb/01 Song 1.mp3',
+        '../Art/Alb/02 Song 2.mp3',
+        '../Art/Alb/01 Song 1.mp3',
+      ]);
+      expect(
+        f.readAsStringSync(),
+        startsWith('#EXTM3U\n#EXTINF:1,Art - Song 1\n'),
+      );
+      expect(device.announced, contains(f.path));
+    });
+
+    test(
+      'a song removed by the user leaves the file; the last one removes it',
+      () async {
+        await seedLists();
+        final d = make();
+        await d.keepPlaylist('acc', 'p');
+        await d.whenIdle();
+        final f = m3u(root, 'Soirée.m3u8');
+        await d.forget(['subsonic://acc/1'], byUser: true);
+        expect(songs(f), ['../Art/Alb/02 Song 2.mp3']);
+        await d.forget(['subsonic://acc/2'], byUser: true);
+        expect(f.existsSync(), isFalse);
+        expect(await db.keptPlaylistRows(), isEmpty);
+      },
+    );
+
+    test('Retirer a playlist: its file and songs go, except the songs of '
+        'another kept playlist', () async {
+      await seedLists();
+      final d = make();
+      await d.keepPlaylist('acc', 'p');
+      await d.keepPlaylist('acc', 'q');
+      await d.whenIdle();
+      expect(await d.playlistSongsToForget('acc', 'p'), [
+        'subsonic://acc/1',
+        'subsonic://acc/9',
+      ]);
+      await d.forgetPlaylist('acc', 'p');
+      expect(m3u(root, 'Soirée.m3u8').existsSync(), isFalse);
+      expect(await db.offlineOf('subsonic://acc/1'), isNull);
+      expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+      expect(songs(m3u(root, 'Running.m3u8')), [
+        '../Art/Alb/02 Song 2.mp3',
+        '../Art/Alb/03 Song 3.mp3',
+      ]);
+      expect(
+        [for (final k in await db.keptPlaylistRows()) k.playlistId],
+        ['q'],
+      );
+    });
+
+    test('Garder again keeps the same file name', () async {
+      await seedLists();
+      final d = make();
+      await d.keepPlaylist('acc', 'p');
+      await d.whenIdle();
+      await d.keepPlaylist('acc', 'p');
+      await d.whenIdle();
+      expect(Directory('${root.path}/Playlists').listSync(), hasLength(1));
+    });
+
+    test('moving the folder: the .m3u8 moves with the copies', () async {
+      await seedLists();
+      final d = make();
+      await d.keepPlaylist('acc', 'q');
+      await d.whenIdle();
+      final from = root;
+      final to = Directory('${tmp.path}/sd');
+      final r = await d.moveRoot(
+        from: from,
+        to: to,
+        commit: () async => device.root = to,
+      );
+      expect(r.ok, isTrue);
+      expect(m3u(from, 'Running.m3u8').existsSync(), isFalse);
+      expect(songs(m3u(to, 'Running.m3u8')), [
+        '../Art/Alb/02 Song 2.mp3',
+        '../Art/Alb/03 Song 3.mp3',
+      ]);
+    });
+  });
 }
 
 extension on Track {

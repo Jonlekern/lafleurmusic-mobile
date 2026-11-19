@@ -269,10 +269,16 @@ class PhoneTrackRow extends StatelessWidget {
     required this.track,
     this.selected = false,
     this.playable = true,
+    this.sub,
+    this.menu = true,
     this.onTap,
   });
   final String no;
   final Track track;
+  // sous le titre à la place de l'artiste (playlist : « artiste · album »)
+  final String? sub;
+  // faux : ni glisser ni appui long (morceau absent de son compte)
+  final bool menu;
   final bool selected;
   final bool playable; // faux : grisée, « pas sur le téléphone »
   final VoidCallback? onTap;
@@ -332,7 +338,7 @@ class PhoneTrackRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  playable ? artist : s.notOnDevice(artist, onIphone),
+                  playable ? sub ?? artist : s.notOnDevice(artist, onIphone),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -347,14 +353,18 @@ class PhoneTrackRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            clock(Duration(milliseconds: t.durationMs)),
-            style: TextStyle(color: dim, fontSize: 13),
-          ),
+          // un morceau absent de son compte n'a pas de durée
+          if (menu) ...[
+            const SizedBox(width: 12),
+            Text(
+              clock(Duration(milliseconds: t.durationMs)),
+              style: TextStyle(color: dim, fontSize: 13),
+            ),
+          ],
         ],
       ),
     );
+    if (!menu) return Opacity(opacity: t.missing ? 0.35 : 1, child: row);
     return Opacity(
       opacity: t.missing ? 0.35 : 1,
       child: SwipeToPlayNext(

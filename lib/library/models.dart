@@ -67,6 +67,29 @@ class Album {
   final String? coverTrackPath;
 }
 
+/// Une playlist d'un serveur telle que l'Accueil la montre : jamais fusionnée entre comptes.
+class ServerPlaylist {
+  const ServerPlaylist({
+    required this.accountId,
+    required this.id,
+    required this.name,
+    required this.accountName,
+    required this.songCount,
+    required this.kept,
+    this.covers = const [],
+  });
+
+  final String accountId, id, name, accountName;
+  final int songCount;
+
+  /// Gardée (« Garder » la playlist) et chacun de ses morceaux présents a une copie finie
+  /// (la sienne ou celle d'un jumeau).
+  final bool kept;
+
+  /// Ses morceaux présents dans l'ordre, pour la mosaïque ([mosaicPaths]) : 4 albums au plus.
+  final List<Track> covers;
+}
+
 /// Clé de tri sans accents ni casse (« Été » entre « dub » et « Funk »).
 String sortKey(String s) {
   const from = 'àáâãäåçèéêëìíîïñòóôõöøùúûüýÿ';
