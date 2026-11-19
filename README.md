@@ -4,20 +4,24 @@ An iPod-style music player for Android and iPhone, in the LAFLEURSTUDIO style.
 It plays the music from your own server and keeps a copy of your favourites on the phone.
 The phone sibling of [LAFLEURMUSIC for desktop](https://github.com/Jonlekern/lafleurmusic-desktop).
 
-**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets) and plan 4 (Jellyfin) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
+**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin) and plan 5 (Plex) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
 
 What works now:
 
-- **Your server:** any Subsonic server, Navidrome included, or Jellyfin. Add an account (address, user,
+- **Your server:** any Subsonic server, Navidrome included, Jellyfin or Plex. Add an account (address, user,
   password), test it, and the library is copied to the phone: albums, artists, genres, covers, Top 100.
 - **Jellyfin:** sign-in with name and password (the app keeps the access token and signs in again by
   itself when the server drops it), music libraries, covers, playlists, streaming, downloads of the
   original file and listens sent back.
+- **Plex:** sign-in with a code typed on plex.tv/link (no password goes through the app), the server's
+  best address chosen again when the network changes, music libraries, covers, playlists, streaming,
+  downloads of the original file and listens sent back. Plex doesn't accept the date of a listen sent
+  later: a listen made offline counts as played when it is sent, not when it was heard.
 - **Streaming** straight from the server, with custom HTTP headers for servers behind a proxy
   (Cloudflare Access and the like), crossfade, equalizer, equal volume (ReplayGain from the server),
   lock-screen controls and play counts sent back to the server.
 - **Accounts:** add, edit, reorder and remove; the phone tells when a server is out of reach.
-- **Several accounts, one library:** show one account, all of them, or a choice, Subsonic and Jellyfin
+- **Several accounts, one library:** show one account, all of them, or a choice, Subsonic, Jellyfin and Plex
   mixed. The same album on two accounts is listed once and played from the best source (a copy on the phone, then the accounts in
   your order). A listen is counted on the account that played the song, and play counts are merged.
 - **Server playlists:** shown under the albums, read-only. Keeping one keeps its songs and writes an
@@ -33,16 +37,18 @@ What works now:
   engine; its screen is coming.
 - **Top 100 at home:** your most played songs are kept on the phone by themselves, only on Wi-Fi with
   your server answering.
-- **Listens made offline** are queued and sent to the server, with their original date, when it is back.
+- **Listens made offline** are queued and sent to the server, with their original date, when it is back
+  (Plex has no date: see above).
 - **Files placed by hand** in the LAFLEURMUSIC folder show up in the library.
 - **Builds** for iPhone and Android.
 
-What comes next: the "On my iPhone" screen, then Plex.
+What comes next: the "On my iPhone" screen.
 
 ## Supported servers
 
 - Servers that speak the Subsonic API: Navidrome, Gonic, Airsonic-Advanced, Subsonic and compatible servers.
 - Jellyfin 10.9 and 10.10 (checked in CI against a real Jellyfin 10.10).
+- Plex Media Server (checked against a fake plex.tv and a fake server only: no real Plex account in CI).
 
 ## Build from source
 
@@ -52,7 +58,7 @@ Flutter 3.47 or later. Xcode for iOS, Android Studio (or the Android SDK) for An
 flutter pub get
 flutter test                                                   # goldens: --tags golden, on macOS
 flutter test integration_test/offline_test.dart -d <phone>     # end to end against a fake server
-flutter test integration_test/accounts_test.dart -d <phone>    # fake Navidrome and Jellyfin, merged library
+flutter test integration_test/accounts_test.dart -d <phone>    # fake Navidrome, Jellyfin and Plex, merged library
 flutter build apk --debug                                      # Android
 flutter build ios --simulator --debug --no-codesign            # iOS simulator
 ```

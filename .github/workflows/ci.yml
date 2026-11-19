@@ -165,7 +165,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           # sound proof, then the end-to-end runs against a fake Subsonic server:
-          # first launch (plan 1), offline (plan 2), accounts (plans 3 and 4: Navidrome + Jellyfin)
+          # first launch (plan 1), offline (plan 2), accounts (plans 3 to 5: Navidrome + Jellyfin + Plex)
           script: |
             flutter test integration_test/sound_proof_test.dart
             flutter test integration_test/app_test.dart
