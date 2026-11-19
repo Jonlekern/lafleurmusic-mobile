@@ -8,6 +8,7 @@ import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/ui/classic/classic_menu.dart';
+import 'package:lafleurmusic/ui/classic/classic_now.dart';
 import 'package:lafleurmusic/ui/classic/classic_shell.dart';
 import 'package:lafleurmusic/ui/classic/click_wheel.dart';
 import 'package:lafleurmusic/ui/coverflow_screen.dart';
@@ -144,8 +145,13 @@ void main() {
         DemoLibrary.studio.map((t) => t.title),
       );
       expect(fx.player.lastIndex, 2);
-      // on reste sur la liste, comme le mode normal
+      // comme l'iPod : En cours s'ouvre ; MENU revient à la liste
+      await tester.pumpAndSettle();
+      expect(find.byType(ClassicNow), findsOneWidget);
+      await press(tester, 'menu');
+      await tester.pumpAndSettle();
       expect(find.text('STUDIO LAFLEUR'), findsOneWidget);
+      expect(selected(tester), 'Golden Hour');
 
       await press(tester, 'menu');
       expect(find.text('ALBUMS'), findsOneWidget);
@@ -282,15 +288,16 @@ void main() {
     },
   );
 
-  testWidgets('En cours, Réglages, Cover Flow : les écrans du mode normal', (
+  testWidgets('En cours (Classic), Réglages, Cover Flow', (
     tester,
   ) async {
     await pumpPhone(tester, home: const ClassicShell());
     await rotateTo(tester, 'En cours');
     await press(tester, 'select');
     await tester.pumpAndSettle();
-    expect(find.byType(NowScreen), findsOneWidget);
-    Navigator.of(tester.element(find.byType(NowScreen))).pop();
+    expect(find.byType(ClassicNow), findsOneWidget);
+    expect(find.byType(NowScreen), findsNothing);
+    Navigator.of(tester.element(find.byType(ClassicNow))).pop();
     await tester.pumpAndSettle();
 
     await rotateTo(tester, 'Réglages');

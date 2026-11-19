@@ -11,10 +11,11 @@ import '../../theme/colors.dart';
 import '../coverflow_screen.dart';
 import '../keep_actions.dart' show onIphone, say;
 import '../phone/accounts_screen.dart';
-import '../phone/now_screen.dart';
 import '../phone/on_device_screen.dart';
 import '../phone/phone_shell.dart';
 import '../tablet.dart';
+import 'classic_frame.dart';
+import 'classic_now.dart';
 import 'click_wheel.dart';
 
 // Maquette 6 A (maquettes/src/6-molette.html, .ipodscr)
@@ -23,12 +24,9 @@ const _titleColor = Color(0xFF999999);
 const _notOnPhone = Color(
   0xFF555555,
 ); // PhoneTrackRow, morceau pas sur le téléphone
-const _screenHeight = 300.0;
 const _rowHeight = 37.0; // padding 9 + une ligne de texte de 15 px
 const _titleHeight = 19.0; // une ligne de 11 px + 6 dessous
 const _screenPad = 8.0; // en haut et en bas de l'écran
-const _gap = 34.0; // entre l'écran et la molette
-const _top = 14.0; // sous la barre du haut
 
 /// Mode Classic (maquette 6 A) : l'écran façon iPod en haut (titre de la liste, ▶︎ et pile, lignes,
 /// la ligne choisie en rose), la molette en bas. Tourner déplace la ligne choisie, le rond du
@@ -174,7 +172,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
             ? null
             : () => pushPhone(context, const OnDeviceScreen()),
       ),
-      ((s) => s.classicNowPlaying, () => openNow(context)),
+      ((s) => s.classicNowPlaying, () => openClassicNow(context)),
       (
         (s) => s.classicSettings,
         () => pushPhone(context, const AccountsScreen()),
@@ -307,6 +305,8 @@ class _ClassicMenuState extends State<ClassicMenu> {
       return;
     }
     app.player.playTracks(list, i);
+    // comme l'iPod : le morceau choisi s'ouvre dans En cours ; MENU revient à la liste
+    openClassicNow(context);
   }
 
   void _openCoverflow() => openCoverflow(
@@ -389,55 +389,20 @@ class _ClassicMenuState extends State<ClassicMenu> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _back();
       },
-      child: Scaffold(
-        backgroundColor: LafleurColors.bg,
-        body: SafeArea(
-          child: Column(
-            children: [
-              const PhoneHeader(),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    // petit téléphone : tout se resserre au même rythme, rien ne déborde
-                    const ideal = _top + _screenHeight + _gap + ClickWheel.size;
-                    final k = math.min(1.0, c.maxHeight / (ideal + _top));
-                    final wheel = math.min(ClickWheel.size * k, c.maxWidth);
-                    return Column(
-                      children: [
-                        SizedBox(height: _top * k),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: SizedBox(
-                            height: _screenHeight * k,
-                            child: _Screen(
-                              strings: app.strings,
-                              level: level,
-                              scroll: _scroll,
-                              onTap: _tap,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: _gap * k),
-                        SizedBox.square(
-                          dimension: wheel,
-                          child: FittedBox(
-                            child: ClickWheel(
-                              onRotate: _rotate,
-                              onSelect: _select,
-                              onMenu: _back,
-                              onPrevious: player.previous,
-                              onNext: player.next,
-                              onPlayPause: player.toggle,
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
+      child: ClassicFrame(
+        screen: _Screen(
+          strings: app.strings,
+          level: level,
+          scroll: _scroll,
+          onTap: _tap,
+        ),
+        wheel: ClickWheel(
+          onRotate: _rotate,
+          onSelect: _select,
+          onMenu: _back,
+          onPrevious: player.previous,
+          onNext: player.next,
+          onPlayPause: player.toggle,
         ),
       ),
     );
