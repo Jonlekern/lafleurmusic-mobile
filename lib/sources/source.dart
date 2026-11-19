@@ -183,3 +183,47 @@ abstract interface class SongResolving {
 abstract interface class HttpSource {
   http.Client get httpClient;
 }
+
+/// A source that can change its server's playlists (plan 9). Positions are 0-based, in the
+/// server's order (a song may be there twice). Each call changes the server only: the caller
+/// reads the playlist again ([readPlaylist]) and stores what the server says. A server that
+/// won't let this account write throws a [PlaylistWriteRefused]; a network failure, a
+/// [SourceNetworkException]. A source that can never write does not implement this.
+abstract interface class PlaylistWriter {
+  /// A new empty playlist named [name]; returns its id on the server.
+  Future<String> createPlaylist(String name);
+
+  /// Adds [songIds] (this server's ids) at the end, in their order.
+  Future<void> addToPlaylist(String id, List<String> songIds);
+
+  /// Takes the rows at [positions] out; the others keep their order.
+  Future<void> removeFromPlaylist(String id, List<int> positions);
+
+  /// Moves the row at [from] so it ends at [to] (list-move semantics; out of range: a
+  /// [RangeError], nothing sent).
+  Future<void> movePlaylistItem(String id, int from, int to);
+
+  Future<void> renamePlaylist(String id, String name);
+  Future<void> deletePlaylist(String id);
+
+  /// The playlist as the server has it now (its songs never null: a failure throws).
+  Future<SourcePlaylist> readPlaylist(String id);
+}
+
+/// The server refused to change its playlists for this account (no rights, a server too
+/// old). Nothing was changed. Never carries a token or an address.
+class PlaylistWriteRefused implements Exception {
+  PlaylistWriteRefused(this.message);
+  final String message;
+  @override
+  String toString() => 'PlaylistWriteRefused: $message';
+}
+
+/// The list is too long for this server to take in one request, and it can't be sent in
+/// parts without risking a half-written playlist (Subsonic without form POST). Nothing sent.
+class PlaylistTooLong implements Exception {
+  PlaylistTooLong(this.count);
+  final int count;
+  @override
+  String toString() => 'PlaylistTooLong($count songs)';
+}

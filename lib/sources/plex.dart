@@ -21,7 +21,8 @@ class PlexSource
         HttpSource,
         TypedSource,
         AuthRenewable,
-        SongResolving {
+        SongResolving,
+        PlaylistWriter {
   PlexSource({
     required this.accountId,
     required this._server,
@@ -563,23 +564,165 @@ class PlexSource
 
   /// Null when this playlist won't read (the others still do). A revoked token still throws.
   Future<List<String>?> _playlistSongs(String id) async {
-    final ids = <String>[];
     try {
-      await for (final items in _pages(
-        'playlists/$id/items',
-        repeatCheck: false,
-      )) {
-        for (final m in items) {
-          if (m['ratingKey'] != null) ids.add('${m['ratingKey']}');
-        }
-      }
+      return [for (final (song, _) in await _entries(id)) song];
     } on PlexException catch (e) {
       if (e.tokenRefused) rethrow;
       return null;
     } on SourceNetworkException {
       return null;
     }
-    return ids;
+  }
+
+  /// The rows of playlist [id] in order: (song's ratingKey, the row's `playlistItemID`).
+  Future<List<(String, String?)>> _entries(String id) async {
+    final out = <(String, String?)>[];
+    await for (final items in _pages(
+      'playlists/$id/items',
+      repeatCheck: false,
+    )) {
+      for (final m in items) {
+        if (m['ratingKey'] == null) continue;
+        final item = m['playlistItemID'];
+        out.add(('${m['ratingKey']}', item == null ? null : '$item'));
+      }
+    }
+    return out;
+  }
+
+  // ---- writing playlists (plan 9) ----------------------------------------------------------
+
+  /// Playlists live on one server: songs are named by this server's library uri.
+  String _libraryUri([List<String> ratingKeys = const []]) {
+    final lib = 'server://${_server.machineId}/com.plexapp.plugins.library';
+    return ratingKeys.isEmpty
+        ? lib
+        : '$lib/library/metadata/${ratingKeys.join(',')}';
+  }
+
+  /// Rating keys per request (they travel in the address).
+  static const _keysBatch = 100;
+
+  /// A playlist change on the server in use. No address answering is a
+  /// [SourceNetworkException]; 401 « À reconnecter »; 403 a [PlaylistWriteRefused]; another
+  /// refusal a [PlexException] with its code.
+  Future<http.Response> _write(
+    String method,
+    String path, [
+    Map<String, String>? query,
+  ]) async {
+    try {
+      await prepare();
+    } on PlexException catch (e) {
+      if (e.tokenRefused) rethrow;
+      throw SourceNetworkException(TimeoutException(e.message));
+    }
+    final base = _base;
+    if (base == null) {
+      throw SourceNetworkException(TimeoutException('no address answers'));
+    }
+    final req = http.Request(method, plexUrl(base, path, query))
+      ..followRedirects = false
+      ..headers.addAll(headers);
+    final res = await _send(req);
+    final c = res.statusCode;
+    if (c == 401) throw _relink();
+    if (c == 403) throw PlaylistWriteRefused('Plex 403');
+    if (c < 200 || c >= 300) {
+      throw PlexException('playlist change refused', statusCode: c);
+    }
+    return res;
+  }
+
+  @override
+  Future<String> createPlaylist(String name) async {
+    final res = await _write('POST', 'playlists', {
+      'type': 'audio',
+      'title': name,
+      'smart': '0',
+      'uri': _libraryUri(),
+    });
+    try {
+      final d = jsonDecode(utf8.decode(res.bodyBytes, allowMalformed: true));
+      final mc = d is Map ? d['MediaContainer'] : null;
+      final list = mc is Map ? mc['Metadata'] : null;
+      if (list is List && list.isNotEmpty && list.first is Map) {
+        final key = (list.first as Map)['ratingKey'];
+        if (key != null) return '$key';
+      }
+    } on FormatException {
+      // not JSON
+    }
+    throw PlexException('no id for the new playlist');
+  }
+
+  @override
+  Future<void> addToPlaylist(String id, List<String> songIds) async {
+    for (var i = 0; i < songIds.length; i += _keysBatch) {
+      final end = i + _keysBatch < songIds.length
+          ? i + _keysBatch
+          : songIds.length;
+      await _write('PUT', 'playlists/$id/items', {
+        'uri': _libraryUri(songIds.sublist(i, end)),
+      });
+    }
+  }
+
+  /// The `playlistItemID` of each row asked; a row without one is a refusal (too old).
+  static List<String> _itemIds(
+    List<(String, String?)> rows,
+    Iterable<int> at,
+  ) => [
+    for (final p in at)
+      if (p >= 0 && p < rows.length)
+        rows[p].$2 ?? (throw PlaylistWriteRefused('Plex: no playlistItemID')),
+  ];
+
+  @override
+  Future<void> removeFromPlaylist(String id, List<int> positions) async {
+    final rows = await _entries(id);
+    for (final item in _itemIds(rows, positions.toSet())) {
+      await _write('DELETE', 'playlists/$id/items/$item');
+    }
+  }
+
+  /// `PUT …/items/{item}/move?after={the row that will come before it}`; to the top, no
+  /// `after`.
+  @override
+  Future<void> movePlaylistItem(String id, int from, int to) async {
+    final rows = await _entries(id);
+    RangeError.checkValidIndex(from, rows, 'from');
+    RangeError.checkValidIndex(to, rows, 'to');
+    if (from == to) return;
+    final ids = _itemIds(rows, List.generate(rows.length, (i) => i));
+    final item = ids.removeAt(from);
+    await _write('PUT', 'playlists/$id/items/$item/move', {
+      if (to > 0) 'after': ids[to - 1],
+    });
+  }
+
+  @override
+  Future<void> renamePlaylist(String id, String name) async {
+    await _write('PUT', 'playlists/$id', {'title': name});
+  }
+
+  @override
+  Future<void> deletePlaylist(String id) async {
+    await _write('DELETE', 'playlists/$id');
+  }
+
+  @override
+  Future<SourcePlaylist> readPlaylist(String id) async {
+    final d = await _get('playlists/$id');
+    final list = d['Metadata'];
+    final head = list is List && list.isNotEmpty && list.first is Map
+        ? list.first as Map
+        : const {};
+    return SourcePlaylist(
+      id: id,
+      name: _str(head['title']),
+      songIds: [for (final (song, _) in await _entries(id)) song],
+    );
   }
 
   /// A cover: the server resizes the picture [coverId] (its `thumb` path). The token goes in

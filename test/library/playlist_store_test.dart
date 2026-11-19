@@ -7,6 +7,13 @@ import 'package:lafleurmusic/library/library_view.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/library/playlist_store.dart';
 import 'package:lafleurmusic/settings.dart';
+import 'package:lafleurmusic/sources/jellyfin.dart';
+import 'package:lafleurmusic/sources/plex.dart';
+import 'package:lafleurmusic/sources/source.dart';
+import 'package:lafleurmusic/sources/subsonic.dart';
+
+import '../sources/fake_playlist_servers.dart';
+import '../sources/fake_secret_store.dart';
 
 Track _t(
   String path, {
@@ -239,4 +246,232 @@ void main() {
     // gone: the .m3u8 files drop it like a playlist the server no longer has
     expect(await db.playlistName(phonePlaylistAccount, '${ref.id}'), isNull);
   });
+
+  group('server playlists (task 2)', () {
+    late FakeNavidrome nav;
+    late SubsonicSource sub;
+    late PlaylistStore srv;
+    const acc = 'acc1';
+    String k(String id) => 'subsonic://$acc/$id';
+    final ref = PlaylistRef.server(acc, 'pl1');
+
+    setUp(() async {
+      nav = FakeNavidrome();
+      sub = SubsonicSource(
+        accountId: acc,
+        base: Uri.parse('https://music.example.com'),
+        user: 'johnny',
+        password: 'pw-secret',
+        client: nav.client(),
+        salt: () => 'abc',
+      );
+      srv = PlaylistStore(
+        db,
+        supportDir: () async => support,
+        sourceOf: (id) async =>
+            id == acc ? sub : throw StateError('no account $id'),
+      );
+      await db.upsertTracks([
+        for (final id in ['s1', 's2', 's3', 's4'])
+          _t(k(id), title: 'song $id', account: acc),
+      ]);
+      // what plan 3's sync stored
+      await db.replacePlaylists(acc, [
+        (id: 'pl1', name: 'Road', paths: [k('s1'), k('s2'), k('s3')]),
+      ]);
+    });
+
+    Future<List<String>> stored(String id) => db.playlistPaths(acc, id);
+
+    test(
+      'create on the server: stored as the sync would, after the others',
+      () async {
+        final r = await srv.create(' Soirée ', accountId: acc);
+        expect(r, PlaylistRef.server(acc, 'pl10'));
+        expect(nav.lists['pl10']!.name, 'Soirée');
+        final lists = await db.playlistsOf(acc);
+        expect(lists.map((l) => (l.id, l.name)), [
+          ('pl1', 'Road'),
+          ('pl10', 'Soirée'),
+        ]);
+        expect(await stored('pl10'), isEmpty);
+      },
+    );
+
+    test('add: sent to the server, then read back from it (the server has '
+        'the last word)', () async {
+      // someone else added s3 again on the server meanwhile
+      nav.lists['pl1'] = (name: 'Road', songs: ['s1', 's2', 's3', 's3']);
+      expect(await srv.add(ref, [k('s4')]), 1);
+      expect(nav.lists['pl1']!.songs, ['s1', 's2', 's3', 's3', 's4']);
+      expect(await stored('pl1'), [
+        k('s1'),
+        k('s2'),
+        k('s3'),
+        k('s3'),
+        k('s4'),
+      ]);
+    });
+
+    test('add: a song already there is skipped unless asked; the same song '
+        'on the phone is sent as this server\'s copy; a song the server does '
+        'not have is left out', () async {
+      await db.upsertTracks([
+        _t('/m/s4.flac', title: 'song s4'), // the twin of s4
+        _t('/m/other.flac', title: 'only here'),
+      ]);
+      expect(await srv.duplicatesIn(ref, [k('s2'), k('s4')]), [k('s2')]);
+      expect(await srv.add(ref, [k('s2'), '/m/s4.flac', '/m/other.flac']), 1);
+      expect(nav.lists['pl1']!.songs, ['s1', 's2', 's3', 's4']);
+      expect(await srv.add(ref, [k('s1')], allowDuplicates: true), 1);
+      expect(nav.lists['pl1']!.songs, ['s1', 's2', 's3', 's4', 's1']);
+      expect((await stored('pl1')).last, k('s1'));
+    });
+
+    test('remove, move, rename, delete: the server changes, the stored '
+        'playlist follows (and so does a kept .m3u8)', () async {
+      await srv.move(ref, 0, 2);
+      expect(await stored('pl1'), [k('s2'), k('s3'), k('s1')]);
+      await srv.remove(ref, [1, 9]);
+      expect(nav.lists['pl1']!.songs, ['s2', 's1']);
+      expect(await stored('pl1'), [k('s2'), k('s1')]);
+      await srv.rename(ref, 'Route');
+      expect(await db.playlistName(acc, 'pl1'), 'Route');
+      await expectLater(srv.move(ref, 0, 5), throwsRangeError);
+      await srv.delete(ref);
+      expect(nav.lists, isEmpty);
+      expect(await db.playlistName(acc, 'pl1'), isNull);
+      expect(await stored('pl1'), isEmpty);
+    });
+
+    test('review focus 2: the server unreachable during an add: a clear '
+        'error, nothing added here, and trying again works', () async {
+      nav.down = true;
+      await expectLater(
+        srv.add(ref, [k('s4')]),
+        throwsA(
+          isA<PlaylistWriteException>()
+              .having((e) => e.problem, 'problem', PlaylistProblem.unreachable)
+              .having((e) => e.accountId, 'account', acc),
+        ),
+      );
+      expect(await stored('pl1'), [k('s1'), k('s2'), k('s3')]);
+      expect(srv.readOnlyAccounts.value, isEmpty);
+      nav.down = false;
+      expect(await srv.add(ref, [k('s4')]), 1);
+      expect(await stored('pl1'), [k('s1'), k('s2'), k('s3'), k('s4')]);
+    });
+
+    test('review focus 4: quick reorders go one at a time; the final order '
+        'is the right one', () async {
+      nav.delay = const Duration(milliseconds: 5);
+      // each move reads the list then writes it whole: run together they'd lose moves
+      final moves = [
+        srv.move(ref, 0, 2), // s2 s3 s1
+        srv.move(ref, 2, 0), // s1 s2 s3
+        srv.move(ref, 1, 2), // s1 s3 s2
+        srv.move(ref, 0, 1), // s3 s1 s2
+      ];
+      await Future.wait(moves);
+      expect(nav.lists['pl1']!.songs, ['s3', 's1', 's2']);
+      expect(await stored('pl1'), [k('s3'), k('s1'), k('s2')]);
+      expect(nav.maxInFlight, 1);
+    });
+
+    test(
+      'a failed action does not block the next ones on that playlist',
+      () async {
+        nav.refuseNext = 1;
+        final failed = srv.move(ref, 0, 1);
+        final next = srv.move(ref, 0, 2);
+        await expectLater(failed, throwsA(isA<PlaylistWriteException>()));
+        await next;
+        expect(nav.lists['pl1']!.songs, ['s2', 's3', 's1']);
+        expect(await stored('pl1'), [k('s2'), k('s3'), k('s1')]);
+      },
+    );
+
+    test('refused (error 50): a clear error, nothing changed, and the account '
+        'is no longer offered to keep a new playlist', () async {
+      nav.readOnly = true;
+      expect(await srv.canWrite(acc), isTrue);
+      await expectLater(
+        srv.add(ref, [k('s4')]),
+        throwsA(
+          isA<PlaylistWriteException>().having(
+            (e) => e.problem,
+            'problem',
+            PlaylistProblem.refused,
+          ),
+        ),
+      );
+      expect(await stored('pl1'), [k('s1'), k('s2'), k('s3')]);
+      expect(srv.readOnlyAccounts.value, {acc});
+      expect(await srv.canWrite(acc), isFalse);
+      await expectLater(
+        srv.create('X', accountId: acc),
+        throwsA(isA<PlaylistWriteException>()),
+      );
+      expect((await db.playlistsOf(acc)).map((l) => l.id), ['pl1']);
+      // the rights come back: a write that works clears the mark
+      nav.readOnly = false;
+      await srv.rename(ref, 'Route');
+      expect(srv.readOnlyAccounts.value, isEmpty);
+    });
+
+    test('a source that cannot write: refused, never offered', () async {
+      final ro = PlaylistStore(db, sourceOf: (_) async => _ReadOnlySource());
+      expect(await ro.canWrite(acc), isFalse);
+      await expectLater(
+        ro.add(ref, [k('s4')]),
+        throwsA(
+          isA<PlaylistWriteException>().having(
+            (e) => e.problem,
+            'problem',
+            PlaylistProblem.refused,
+          ),
+        ),
+      );
+      expect(await ro.canWrite('unknown'), isFalse);
+      expect(await store.canWrite(acc), isFalse, reason: 'no sources at all');
+    });
+
+    test('Jellyfin: create and add store jellyfin:// keys', () async {
+      final jf = FakeJellyfin();
+      final src = JellyfinSource(
+        accountId: 'jf',
+        base: Uri.parse('http://jf.example:8096'),
+        user: 'max',
+        password: 'pw-secret',
+        client: jf.client(),
+        secrets: FakeSecretStore(),
+      );
+      final s = PlaylistStore(db, sourceOf: (_) async => src);
+      final r = await s.create('Jazz', accountId: 'jf');
+      await s.add(r, ['jellyfin://jf/a1', 'jellyfin://jf/a2']);
+      await s.move(r, 1, 0);
+      expect(jf.songs('pl10'), ['a2', 'a1']);
+      expect(await db.playlistPaths('jf', 'pl10'), [
+        'jellyfin://jf/a2',
+        'jellyfin://jf/a1',
+      ]);
+    });
+
+    test('Plex: create and add store plex:// keys', () async {
+      PlexSource.resetStateForTests();
+      final px = FakePlexPlaylists();
+      final s = PlaylistStore(db, sourceOf: (_) async => px.source());
+      final r = await s.create('Rock', accountId: 'acc1');
+      await s.add(r, ['plex://acc1/101', 'plex://acc1/102']);
+      await s.remove(r, [0]);
+      expect(px.songs('910'), ['102']);
+      expect(await db.playlistPaths('acc1', '910'), ['plex://acc1/102']);
+    });
+  });
+}
+
+/// A source of an account that can't write playlists (no [PlaylistWriter]).
+class _ReadOnlySource implements MusicSource {
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

@@ -33,7 +33,12 @@ class JellyfinException implements Exception {
 /// the [SecretStore] under the account id, and signs in again once when the server refuses
 /// the token (revoked, expired) with the password the account already holds.
 class JellyfinSource
-    implements MusicSource, HttpSource, TypedSource, AuthRenewable {
+    implements
+        MusicSource,
+        HttpSource,
+        TypedSource,
+        AuthRenewable,
+        PlaylistWriter {
   JellyfinSource({
     required this.accountId,
     required Uri base,
@@ -144,10 +149,17 @@ class JellyfinSource
     }
   }
 
-  http.Request _req(String method, Uri url, String? token) =>
-      http.Request(method, url)
-        ..followRedirects = false
-        ..headers.addAll(_headersWith(token));
+  /// [json]: a JSON body.
+  http.Request _req(String method, Uri url, String? token, {Object? json}) {
+    final r = http.Request(method, url)
+      ..followRedirects = false
+      ..headers.addAll(_headersWith(token));
+    if (json != null) {
+      r.headers['Content-Type'] = 'application/json; charset=utf-8';
+      r.body = jsonEncode(json);
+    }
+    return r;
+  }
 
   // ---- sign-in -------------------------------------------------------------------------
 
@@ -243,10 +255,18 @@ class JellyfinSource
   Future<http.Response> authedGet(String path, [Map<String, String>? query]) =>
       _authed(() => _url(path, query), 'GET');
 
-  Future<http.Response> _authed(Uri Function() url, String method) async {
+  /// [write]: a playlist change. A 401 there that a fresh token does not cure is the server
+  /// refusing this user the change (Jellyfin answers 401 to a delete it does not allow): a
+  /// [PlaylistWriteRefused], and the token, just proven good, is kept.
+  Future<http.Response> _authed(
+    Uri Function() url,
+    String method, {
+    Object? json,
+    bool write = false,
+  }) async {
     await _load();
     var token = _token ?? await _reSignIn(null);
-    var res = await _send(_req(method, url(), token));
+    var res = await _send(_req(method, url(), token, json: json));
     if (res.statusCode != 401) return res;
     try {
       token = await _reSignIn(token);
@@ -254,7 +274,10 @@ class JellyfinSource
       if (e.wrongPassword) await _forgetToken(token);
       rethrow;
     }
-    res = await _send(_req(method, url(), token));
+    res = await _send(_req(method, url(), token, json: json));
+    if (res.statusCode == 401 && write) {
+      throw PlaylistWriteRefused('Jellyfin 401 with a fresh token');
+    }
     if (res.statusCode == 401) {
       await _forgetToken(token);
       throw JellyfinException(
@@ -662,19 +685,150 @@ class JellyfinSource
 
   /// Null when this playlist won't read (the others still do).
   Future<List<String>?> _playlistSongs(String uid, String id) async {
-    final ids = <String>[];
     try {
-      await for (final items in _pages('Playlists/$id/Items', {
-        'UserId': uid,
-      }, repeatCheck: false)) {
-        for (final m in items) {
-          if (m['Id'] != null) ids.add('${m['Id']}');
-        }
-      }
+      return [for (final (song, _) in await _entries(uid, id)) song];
     } on JellyfinException {
       return null;
     }
-    return ids;
+  }
+
+  /// The rows of playlist [id] in order: (song id, the row's own `PlaylistItemId`).
+  Future<List<(String, String?)>> _entries(String uid, String id) async {
+    final out = <(String, String?)>[];
+    await for (final items in _pages('Playlists/$id/Items', {
+      'UserId': uid,
+    }, repeatCheck: false)) {
+      for (final m in items) {
+        if (m['Id'] == null) continue;
+        final e = m['PlaylistItemId'];
+        out.add(('${m['Id']}', e == null ? null : '$e'));
+      }
+    }
+    return out;
+  }
+
+  // ---- writing playlists (plan 9) ----------------------------------------------------------
+
+  /// A playlist change; a 403 is a [PlaylistWriteRefused], another refusal a
+  /// [JellyfinException] with its code.
+  Future<http.Response> _write(
+    String method,
+    String path, {
+    Map<String, String>? query,
+    Object? json,
+  }) async {
+    final res = await _authed(
+      () => _url(path, query),
+      method,
+      json: json,
+      write: true,
+    );
+    final c = res.statusCode;
+    if (c == 403) throw PlaylistWriteRefused('Jellyfin 403');
+    if (c < 200 || c >= 300) {
+      throw JellyfinException('playlist change refused', statusCode: c);
+    }
+    return res;
+  }
+
+  @override
+  Future<String> createPlaylist(String name) async {
+    final uid = await _uid();
+    final d = _decode(
+      await _write(
+        'POST',
+        'Playlists',
+        json: {
+          'Name': name,
+          'Ids': const <String>[],
+          'UserId': uid,
+          'MediaType': 'Audio',
+        },
+      ),
+    );
+    final id = d['Id'];
+    if (id == null || '$id'.isEmpty) {
+      throw JellyfinException('no id for the new playlist');
+    }
+    return '$id';
+  }
+
+  @override
+  Future<void> addToPlaylist(String id, List<String> songIds) async {
+    final uid = await _uid();
+    for (var i = 0; i < songIds.length; i += _idsBatch) {
+      final batch = songIds.sublist(i, min(i + _idsBatch, songIds.length));
+      await _write(
+        'POST',
+        'Playlists/$id/Items',
+        query: {'Ids': batch.join(','), 'UserId': uid},
+      );
+    }
+  }
+
+  /// The entry id of each row asked; a row without one (a server too old) is a refusal.
+  Future<List<String>> _entryIds(String id, Iterable<int> positions) async {
+    final rows = await _entries(await _uid(), id);
+    return [
+      for (final p in positions)
+        if (p >= 0 && p < rows.length)
+          rows[p].$2 ??
+              (throw PlaylistWriteRefused('Jellyfin: no PlaylistItemId')),
+    ];
+  }
+
+  @override
+  Future<void> removeFromPlaylist(String id, List<int> positions) async {
+    final entries = await _entryIds(id, positions.toSet().toList()..sort());
+    for (var i = 0; i < entries.length; i += _idsBatch) {
+      final batch = entries.sublist(i, min(i + _idsBatch, entries.length));
+      await _write(
+        'DELETE',
+        'Playlists/$id/Items',
+        query: {'EntryIds': batch.join(',')},
+      );
+    }
+  }
+
+  @override
+  Future<void> movePlaylistItem(String id, int from, int to) async {
+    final rows = await _entries(await _uid(), id);
+    RangeError.checkValidIndex(from, rows, 'from');
+    RangeError.checkValidIndex(to, rows, 'to');
+    if (from == to) return;
+    final entry = (await _entryIds(id, [from])).single;
+    await _write('POST', 'Playlists/$id/Items/$entry/Move/$to');
+  }
+
+  /// `POST /Playlists/{id}` (10.9+, the owner may); before 10.9 (404, 405) the item itself
+  /// is sent back with its new name.
+  @override
+  Future<void> renamePlaylist(String id, String name) async {
+    try {
+      await _write('POST', 'Playlists/$id', json: {'Name': name});
+      return;
+    } on JellyfinException catch (e) {
+      if (e.statusCode != 404 && e.statusCode != 405) rethrow;
+    }
+    final uid = await _uid();
+    final item = _decode(await authedGet('Users/$uid/Items/$id'));
+    await _write('POST', 'Items/$id', json: {...item, 'Name': name});
+  }
+
+  @override
+  Future<void> deletePlaylist(String id) async {
+    await _write('DELETE', 'Items/$id');
+  }
+
+  @override
+  Future<SourcePlaylist> readPlaylist(String id) async {
+    final uid = await _uid();
+    final item = _decode(await authedGet('Users/$uid/Items/$id'));
+    return SourcePlaylist(
+      id: id,
+      name: '${item['Name'] ?? ''}',
+      songIds: [for (final (song, _) in await _entries(uid, id)) song],
+    );
   }
 
   /// GET [url] (a full address, e.g. a cover's) with the token; signs in again on a 401.
