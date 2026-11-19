@@ -56,6 +56,13 @@ class PlexSource
   /// The network changed (home / away): plex.tv may be asked again at once.
   static void resetRefreshCooldowns() => _cooldownUntil.clear();
 
+  /// The account was removed: its cooldown and its running refresh are forgotten (the
+  /// refresh, still running, then writes nothing and leaves no cooldown behind).
+  static void forgetAccount(String accountId) {
+    _cooldownUntil.remove(accountId);
+    _refreshingNow.remove(accountId);
+  }
+
   /// The background read of the addresses from plex.tv running for this account, if any.
   Future<void>? get refreshing => _refreshingNow[accountId];
 
@@ -73,6 +80,7 @@ class PlexSource
 
   String? _token;
   bool _loaded = false;
+  bool _closed = false;
   Uri? _base;
 
   @override
@@ -126,18 +134,18 @@ class PlexSource
     final until = _cooldownUntil[accountId];
     if (until != null && _now().isBefore(until)) return;
     late final Future<void> f;
-    f = _refresh().whenComplete(() {
-      if (identical(_refreshingNow[accountId], f)) {
-        _refreshingNow.remove(accountId);
-      }
+    bool current() => identical(_refreshingNow[accountId], f);
+    f = _refresh(current).whenComplete(() {
+      if (current()) _refreshingNow.remove(accountId);
     });
     _refreshingNow[accountId] = f;
   }
 
-  Future<void> _refresh() async {
+  /// [current]: false once the account was removed ([forgetAccount]) meanwhile.
+  Future<void> _refresh(bool Function() current) async {
     var answers = false;
     try {
-      if (await _refreshConnections()) {
+      if (await _refreshConnections(current)) {
         final c = await bestConnection(
           _client,
           _server,
@@ -150,6 +158,7 @@ class PlexSource
     } on Object {
       answers = false;
     }
+    if (!current()) return;
     if (answers) {
       _cooldownUntil.remove(accountId);
     } else {
@@ -172,7 +181,7 @@ class PlexSource
   /// Reads this server's addresses from plex.tv (`/api/v2/resources`, with the plex.tv
   /// token, which goes to plex.tv only). True when the list changed (then saved). Any
   /// failure (no token kept, plex.tv down, server gone) is false: the account stays absent.
-  Future<bool> _refreshConnections() async {
+  Future<bool> _refreshConnections(bool Function() current) async {
     try {
       final accountToken = await secrets?.read(accountTokenKey(accountId));
       if (accountToken == null || accountToken.isEmpty) return false;
@@ -191,6 +200,9 @@ class PlexSource
           _sameConnections(fresh.connections, _server.connections)) {
         return false;
       }
+      if (_closed || !current()) {
+        return false; // the account is gone: write nothing
+      }
       _server = PlexServer(
         machineId: _server.machineId,
         name: fresh.name.isNotEmpty ? fresh.name : _server.name,
@@ -203,6 +215,14 @@ class PlexSource
         );
       } on Object {
         // kept in memory; the next refresh writes it again
+      }
+      if (!current()) {
+        // removed while writing: the secret must not outlive the account
+        try {
+          await secrets?.delete(serverKey(accountId));
+        } on Object {
+          // nothing more to do
+        }
       }
       return true;
     } on Object {
@@ -301,5 +321,8 @@ class PlexSource
       throw UnimplementedError('Plex listens: plan 5 task 3');
 
   @override
-  void close() => _client.close();
+  void close() {
+    _closed = true;
+    _client.close();
+  }
 }

@@ -548,6 +548,7 @@ class AccountService extends ChangeNotifier {
     _cancel[id]?.cancelled = true;
     final running = _syncing[id];
     if (running != null) await running.catchError((Object _) {});
+    PlexSource.forgetAccount(id); // a Plex address refresh still running writes nothing
     final d = device;
     await accounts.remove(id, root: d == null ? null : await _copyRootOf(d));
     resolver?.invalidate(id);

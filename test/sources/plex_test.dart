@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:drift/native.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/testing.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
@@ -43,6 +44,10 @@ PlexSource plexSource(
 }
 
 void main() {
+  // the cooldown and the running refreshes are static: no test leaks into the next
+  setUp(PlexSource.resetRefreshCooldowns);
+  tearDown(PlexSource.resetRefreshCooldowns);
+
   group('PlexSource.test', () {
     test('ok: the best address answers and the token is accepted', () async {
       final pms = FakePms();
@@ -222,6 +227,63 @@ void main() {
         expect(resourceReads(tv), 3);
       },
     );
+
+    test(
+      'account removed while the refresh runs: nothing is written back',
+      () async {
+        final tv = FakePlexTv();
+        tv.pms.down = {homeLocal};
+        final gate = Completer<void>();
+        final secrets = withAccountToken();
+        final client = MockClient((r) async {
+          if (r.url.path == '/api/v2/resources') await gate.future;
+          return tv.handle(r);
+        });
+        final s = PlexSource(
+          accountId: 'acc1',
+          server: stale,
+          clientId: 'client-abc',
+          client: client,
+          secrets: secrets..data[PlexSource.tokenKey('acc1')] = 't',
+        );
+        expect(await s.test(), TestResult.unreachable);
+        final running = s.refreshing!;
+        // the account is removed: its secrets go, the source is closed
+        PlexSource.forgetAccount('acc1');
+        s.close();
+        secrets.data.clear();
+        gate.complete();
+        await running;
+        expect(
+          secrets.data.keys,
+          isNot(contains(PlexSource.serverKey('acc1'))),
+        );
+        // and its cooldown entry was not put back
+        final again = plexSource(
+          tv.pms,
+          secrets: withAccountToken(),
+          server: stale,
+          tv: tv,
+        );
+        tv.pms.down = {homeLocal, homeRemote, homeRelay, oldRemote};
+        await again.test();
+        await again.refreshing;
+        expect(resourceReads(tv), 2); // no cooldown left by the removed account
+      },
+    );
+
+    test('forgetAccount clears the cooldown of that account only', () async {
+      final tv = FakePlexTv();
+      tv.pms.down = {homeLocal, homeRemote, homeRelay};
+      final s = plexSource(tv.pms, secrets: withAccountToken(), tv: tv);
+      await s.test();
+      await s.refreshing;
+      PlexSource.forgetAccount('acc1');
+      final again = plexSource(tv.pms, secrets: withAccountToken(), tv: tv);
+      await again.test();
+      await again.refreshing;
+      expect(resourceReads(tv), 2);
+    });
 
     test('the cooldown is per account', () async {
       final tv = FakePlexTv();
