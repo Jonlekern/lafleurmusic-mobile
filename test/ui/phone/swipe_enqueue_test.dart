@@ -59,6 +59,8 @@ void main() {
       // sans compte l'Accueil demande d'en ajouter un : on va droit à l'album qui joue
       home: local ? const PhoneShell(debugStart: 'album') : const PhoneShell(),
     );
+    if (!local) await tester.ensureVisible(find.text('Studio Lafleur'));
+    await tester.pump();
     if (!local) await tester.tap(find.text('Studio Lafleur'));
     await done(tester);
     return f;
@@ -308,6 +310,8 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     try {
       final f = await pumpPhone(tester);
+      await tester.ensureVisible(find.text('Studio Lafleur'));
+      await tester.pump();
       await tester.tap(find.text('Studio Lafleur'));
       await tester.pumpAndSettle();
       await settle(tester);

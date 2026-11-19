@@ -7,9 +7,11 @@ import 'package:lafleurmusic/ui/cover_image.dart';
 import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/ui/phone/album_screen.dart';
 import 'package:lafleurmusic/ui/phone/albums_screen.dart';
+import 'package:lafleurmusic/ui/phone/home_screen.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 
 import '../fonts.dart';
+import '../keep_fixture.dart';
 import '../phone_fixture.dart';
 
 void main() {
@@ -154,5 +156,45 @@ void main() {
       matching: find.byType(CoverImage),
     );
     expect(built.evaluate().length, inInclusiveRange(1, 40));
+  });
+
+  group('ligne « Albums » de l’Accueil', () {
+    // la ligne est entre Morceaux et Artistes, et ouvre l'écran Albums
+    Future<void> check(WidgetTester tester) async {
+      expect(find.text('Albums'), findsOneWidget);
+      final y = tester.getTopLeft(find.text('Albums')).dy;
+      expect(y, greaterThan(tester.getTopLeft(find.text('Morceaux')).dy));
+      expect(y, lessThan(tester.getTopLeft(find.text('Artistes')).dy));
+      await tester.tap(find.text('Albums'));
+      await tester.pumpAndSettle();
+      await settle(tester);
+      expect(find.byType(AlbumsScreen), findsOneWidget);
+    }
+
+    testWidgets('avec des comptes', (tester) async {
+      await pumpPhone(tester);
+      await check(tester);
+    });
+
+    testWidgets('sans compte (fichiers du téléphone seulement)', (
+      tester,
+    ) async {
+      await pumpKeep(
+        tester,
+        addAccount: false,
+        seed: (db) => db.upsertTracks(DemoLibrary.studio),
+        home: const HomeScreen(),
+      );
+      await settle(tester);
+      await check(tester);
+    });
+
+    testWidgets('le titre ALBUMS ouvre toujours l’écran', (tester) async {
+      await pumpPhone(tester);
+      await tester.tap(find.text('ALBUMS'));
+      await tester.pumpAndSettle();
+      await settle(tester);
+      expect(find.byType(AlbumsScreen), findsOneWidget);
+    });
   });
 }

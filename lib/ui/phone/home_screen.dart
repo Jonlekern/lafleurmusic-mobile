@@ -119,6 +119,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               PhoneItem(
+                label: s.albums,
+                onTap: () => open(const AlbumsScreen()),
+              ),
+              PhoneItem(
                 label: s.artists,
                 onTap: () => open(
                   NamesScreen(
@@ -155,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? null
                     : () => open(const OnDeviceScreen()),
               ),
-              // le titre ouvre l'écran Albums (tri, écoutés récemment) : aucune ligne de plus
+              // le titre ouvre aussi l'écran Albums (tri, écoutés récemment), comme la ligne Albums
               PhoneSection(
                 s.playlists,
                 onTap: () => open(const AlbumsScreen()),

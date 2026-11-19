@@ -30,6 +30,10 @@ void main() {
   }
 
   Future<void> open(WidgetTester tester) async {
+    await tester.ensureVisible(
+      find.text('Studio Lafleur'),
+    ); // sous le mini-lecteur sinon
+    await tester.pump();
     await tester.tap(find.text('Studio Lafleur'));
     await done(tester);
   }

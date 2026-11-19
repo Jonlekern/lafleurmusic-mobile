@@ -286,26 +286,28 @@ void main() {
       },
     );
 
-    phoneTest('chosen folder unavailable (English, phone)', TargetPlatform.android, (
-      tester,
-    ) async {
-      await pumpKeep(
-        tester,
-        home: const KeepScreen(preselect: {'Ports'}),
-        locale: const Locale('en'),
-        downloader: DemoDownloader(
-          result: const KeepResult.folderUnavailable(),
-        ),
-      );
-      await tester.tap(find.text('Keep on my phone · 260 MB'));
-      await done(tester);
-      expect(
-        find.text(
-          "The chosen folder isn't available. Reconnect it or pick another one in On my phone.",
-        ),
-        findsOneWidget,
-      );
-    });
+    phoneTest(
+      'chosen folder unavailable (English, phone)',
+      TargetPlatform.android,
+      (tester) async {
+        await pumpKeep(
+          tester,
+          home: const KeepScreen(preselect: {'Ports'}),
+          locale: const Locale('en'),
+          downloader: DemoDownloader(
+            result: const KeepResult.folderUnavailable(),
+          ),
+        );
+        await tester.tap(find.text('Keep on my phone · 260 MB'));
+        await done(tester);
+        expect(
+          find.text(
+            "The chosen folder isn't available. Reconnect it or pick another one in On my phone.",
+          ),
+          findsOneWidget,
+        );
+      },
+    );
 
     phoneTest('en anglais', TargetPlatform.android, (tester) async {
       await pumpKeep(
@@ -353,6 +355,8 @@ void main() {
   group('morceaux grisés', () {
     Future<KeepFixture> studio(WidgetTester tester) async {
       final f = await pumpKeep(tester);
+      await tester.ensureVisible(find.text('Studio Lafleur'));
+      await tester.pump();
       await tester.tap(find.text('Studio Lafleur'));
       await done(tester);
       expect(find.byType(AlbumScreen), findsOneWidget);
@@ -414,6 +418,8 @@ void main() {
       TargetPlatform.iOS,
       (tester) async {
         final f = await pumpKeep(tester);
+        await tester.ensureVisible(find.text('Studio Lafleur'));
+        await tester.pump();
         await tester.tap(find.text('Studio Lafleur'));
         await done(tester);
         await tester.tap(find.byTooltip('Garder sur mon iPhone'));

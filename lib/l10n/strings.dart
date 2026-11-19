@@ -42,6 +42,7 @@ class Strings {
     AlbumSort.recent => _t('Ajout récent', 'Recently added'),
     AlbumSort.mostPlayed => _t('Plus écouté', 'Most played'),
   };
+  String get albums => 'Albums';
   String get artists => _t('Artistes', 'Artists');
   String get genres => 'Genres';
   String get playlists => 'ALBUMS';
