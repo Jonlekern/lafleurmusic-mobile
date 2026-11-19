@@ -11,9 +11,9 @@ import '../offline/paths.dart';
 import '../library/sync.dart';
 import '../player/media_resolver.dart';
 import 'accounts.dart';
-import 'source.dart';
 import 'jellyfin.dart';
 import 'remote_key.dart';
+import 'source.dart';
 import 'subsonic.dart';
 
 /// What the account form holds, before it is saved. Never logged.

@@ -135,7 +135,9 @@ class Accounts {
         a.base.toString() != exists.base ||
         a.user != exists.user) {
       for (final k in _tokenKeys(a.id)) {
-        await _secrets.delete(k);
+        try {
+          await _secrets.delete(k);
+        } catch (_) {} // a leftover token is refused and replaced at the next sign-in
       }
     }
     if (password != null) await _secrets.write(_pwKey(a.id), password);

@@ -6,6 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lafleurmusic/app_version.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/sync.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
@@ -443,6 +444,75 @@ void main() {
     expect(secrets.data, isEmpty);
     await db.close();
   });
+
+  test('appVersion equals the version in pubspec.yaml', () {
+    final m = RegExp(
+      r'^version:\s*([0-9.]+)',
+      multiLine: true,
+    ).firstMatch(File('pubspec.yaml').readAsStringSync());
+    expect(appVersion, m![1]);
+    expect(JellyfinSource.clientVersion, appVersion);
+  });
+
+  test('a source closed during sign-in stores no token', () async {
+    final secrets = FakeSecretStore();
+    late JellyfinSource s;
+    s = source(
+      MockClient((r) async {
+        if (r.url.path.endsWith('Info/Public')) return json(_info);
+        s.close(); // the account is removed while the answer is on its way
+        return json(_auth);
+      }),
+      secrets: secrets,
+    );
+    expect(await s.test(), isNot(TestResult.ok));
+    expect(secrets.data, isEmpty);
+    expect(s.headers['Authorization'], isNot(contains('Token=')));
+  });
+
+  test(
+    'a changed password, address or user clears the Jellyfin token',
+    () async {
+      final secrets = FakeSecretStore();
+      final db = LibraryDb(NativeDatabase.memory());
+      final accounts = Accounts(db, secrets);
+      final a = await accounts.add(
+        type: AccountType.jellyfin,
+        name: 'JF',
+        base: base,
+        user: 'max',
+        password: 'pw',
+      );
+      void seed() {
+        secrets.data[JellyfinSource.tokenKey(a.id)] = 't';
+        secrets.data[JellyfinSource.userIdKey(a.id)] = 'u';
+      }
+
+      Account with_({Uri? b, String? user}) => Account(
+        id: a.id,
+        type: a.type,
+        name: a.name,
+        base: b ?? a.base,
+        user: user ?? a.user,
+        order: a.order,
+      );
+      bool kept() => secrets.data.containsKey(JellyfinSource.tokenKey(a.id));
+
+      seed();
+      await accounts.update(with_()); // nothing changed
+      expect(kept(), isTrue);
+      await accounts.update(with_(), password: 'new');
+      expect(kept(), isFalse);
+      seed();
+      await accounts.update(with_(b: Uri.parse('https://other.example')));
+      expect(kept(), isFalse);
+      seed();
+      await accounts.update(with_(user: 'other'));
+      expect(kept(), isFalse);
+      expect(secrets.data.containsKey(JellyfinSource.userIdKey(a.id)), isFalse);
+      await db.close();
+    },
+  );
 
   test('sync keys a Jellyfin account\'s tracks with jellyfin://', () async {
     final db = LibraryDb(NativeDatabase.memory());

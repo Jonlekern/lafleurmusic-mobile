@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
+import '../app_version.dart';
 import 'accounts.dart';
 import 'remote_key.dart';
 import 'secret_store.dart';
@@ -50,7 +51,7 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
            .substring(0, 32);
 
   /// Sent as `Version` in the Authorization header (the app's own version).
-  static const clientVersion = '0.3.0';
+  static const clientVersion = appVersion;
   static const _clientName = 'LAFLEURMUSIC';
 
   /// Where the access token and the user id are kept (the password stays with the account's
@@ -75,6 +76,7 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
 
   String? _token, _userId;
   bool _loaded = false;
+  bool _closed = false;
   Future<String>? _signingIn;
 
   @override
@@ -167,6 +169,7 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
     if (token == null || token.isEmpty || id == null) {
       throw JellyfinException('not a Jellyfin sign-in answer');
     }
+    if (_closed) throw JellyfinException('source closed');
     _token = token;
     _userId = id;
     _loaded = true;
@@ -178,7 +181,9 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
     return token;
   }
 
-  Future<void> _forgetToken() async {
+  Future<void> _forgetToken(String? failed) async {
+    // another request may already have signed in again: keep its token
+    if (_token != failed) return;
     _token = null;
     _userId = null;
     final s = secrets;
@@ -222,12 +227,12 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
     try {
       token = await _reSignIn(token);
     } on JellyfinException catch (e) {
-      if (e.wrongPassword) await _forgetToken();
+      if (e.wrongPassword) await _forgetToken(token);
       rethrow;
     }
     res = await _send(_req(method, url(), token));
     if (res.statusCode == 401) {
-      await _forgetToken();
+      await _forgetToken(token);
       throw JellyfinException(
         'wrong name or password',
         statusCode: 401,
@@ -345,5 +350,8 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
       throw UnimplementedError('Jellyfin listens: task 3');
 
   @override
-  void close() => _client.close();
+  void close() {
+    _closed = true;
+    _client.close();
+  }
 }

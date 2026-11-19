@@ -285,10 +285,6 @@ class Strings {
 
   String get serverType => _t('TYPE DE SERVEUR', 'SERVER TYPE');
   String get subsonicServers => 'Navidrome, Airsonic, Gonic, LMS, Ampache…';
-  String get jellyfinServers => _t(
-    'Ton nom et ton mot de passe Jellyfin.',
-    'Your Jellyfin name and password.',
-  );
   String get fieldName => _t('NOM', 'NAME');
   String get fieldAddress => _t('ADRESSE', 'ADDRESS');
   String get fieldUser => _t('UTILISATEUR', 'USER');
