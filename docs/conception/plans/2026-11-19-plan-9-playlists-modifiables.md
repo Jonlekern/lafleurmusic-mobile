@@ -65,6 +65,17 @@
 
 - [ ] Step 1: tests (recherche dans ta musique, retirer, déplacer, renommer, pochette, supprimer avec confirmation, garder / ne plus garder une playlist du téléphone → `.m3u8`). Échec, implémentation, verts. Commit `feat: edit, sort and delete a playlist`.
 
+### Task 4b: Utiliser l'appli sans serveur (demande de Johnny, 19.11.2026)
+
+**Files:** Modify `lib/ui/phone/phone_shell.dart` (`_Start`), `lib/ui/phone/account_form.dart` (premier lancement), `lib/ui/phone/home_screen.dart` (Accueil vide), `lib/settings.dart` (choix « sans serveur » gardé), `lib/l10n/strings.dart` · Test widget, goldens (écrans A, B)
+
+Maquette validée : `maquettes/16-sans-serveur.png` (oui de Johnny le 19.11.2026).
+- A : au premier lancement, sous « Tester / Enregistrer », un trait « OU » puis un bouton en contour rose « Juste la musique de mon iPhone » (Android : « … de mon téléphone ») et la ligne « Pas de serveur ? Pas de souci. Tu pourras ajouter un compte plus tard. » → Accueil tout de suite ; le choix est gardé (`settings.json`), l'écran du compte ne revient plus au lancement.
+- B : Accueil sans aucun morceau : « ♪ », « Pas encore de musique », « Mets tes fichiers dans l'app Fichiers › Sur mon iPhone › LAFLEURMUSIC. Ils apparaissent ici tout seuls. » (Android : le chemin du dossier choisi), boutons « Choisir un autre dossier » (le choix de dossier du plan 2) et « Ajouter un compte ».
+- C : dès qu'il y a un morceau, l'Accueil habituel, sans ligne « Comptes » tant qu'il n'y en a pas (on l'ajoute dans Réglages).
+
+- [ ] Step 1: tests (premier lancement → Accueil sans compte, relance sans écran de compte, Accueil vide → dossier / compte, fichiers posés → Accueil normal). Échec, implémentation, verts ; goldens A et B. Commit `feat: use the app with only the music on the phone`.
+
 ### Task 5: Bout en bout et documents
 
 **Files:** Modify `integration_test/accounts_test.dart` (ou nouveau), faux serveurs (écriture de playlists), `README.md`, `docs/conception/checklist.md`
