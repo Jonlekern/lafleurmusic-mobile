@@ -29,7 +29,7 @@ What works now:
   stays. Files placed by hand work the same way.
 - **Albums:** tap the ALBUMS title on Home for the Albums screen: the last albums you played, and a sort
   by name, artist, recently added or most played, which the app remembers. "Go to album" and "Go to artist"
-  are at the top of the Now Playing ⋯ menu.
+  are at the top of the Now Playing ⋯ menu (phone only).
 - **Offline:** keep songs or albums on the phone ("Keep on my iPhone / phone") as real
   files, filed as Artist/Album with tags and cover. They play from the copy when the server is out of
   reach; what isn't on the phone is greyed out. A download queue resumes after an interruption and
@@ -59,7 +59,7 @@ flutter pub get
 flutter test                                                   # goldens: --tags golden, on macOS
 flutter test integration_test/offline_test.dart -d <phone>     # end to end against a fake server
 flutter test integration_test/accounts_test.dart -d <phone>    # fake Navidrome and Jellyfin, merged library
-flutter test integration_test/queue_library_test.dart -d <phone>  # queue, Clear, Albums sort, no account
+flutter test integration_test/queue_library_test.dart -d <phone>  # queue, Clear, Albums sort (local files)
 flutter build apk --debug                                      # Android
 flutter build ios --simulator --debug --no-codesign            # iOS simulator
 ```

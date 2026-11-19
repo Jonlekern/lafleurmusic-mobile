@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../library/models.dart';
 import '../theme/colors.dart';
-import 'phone/now_screen.dart' show openNowOn;
+import 'phone/now_screen.dart' show openNowOn, showUpNext;
 
 OverlayEntry? _shown;
 
@@ -155,12 +155,26 @@ Future<void> enqueueWithToast(BuildContext context, List<Track> tracks) async {
   final player = AppScope.of(context).player;
   final nav = Navigator.of(context);
   final playable = tracks.where((t) => !t.missing).toList();
+  // file vide : le morceau démarre, Annuler ne ferait rien : pas de bulle
+  final wasEmpty = player.queue?.order.isEmpty ?? true;
   await player.enqueue(tracks);
-  if (playable.isEmpty || !context.mounted) return;
+  if (playable.isEmpty || wasEmpty || !context.mounted) return;
   showQueueToast(
     context,
     count: playable.length,
     onUndo: () => player.removeAdded(playable),
-    onShowQueue: () => openNowOn(nav),
+    onShowQueue: () {
+      // déjà sur En cours (route du dessus) : pas de 2e écran, on passe à À suivre
+      var onNow = false;
+      nav.popUntil((r) {
+        onNow = r.settings.name == 'now';
+        return true;
+      });
+      if (onNow) {
+        showUpNext.value++;
+      } else {
+        openNowOn(nav);
+      }
+    },
   );
 }

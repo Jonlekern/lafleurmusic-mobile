@@ -316,7 +316,7 @@ void main() {
         ..writeAsBytesSync([1]);
       const k = 'subsonic://acc/s1';
       await db.upsertTrack(const Track(
-        path: k, accountId: 'acc', remoteId: 's1', title: 'T', artist: 'A', album: 'B', durationMs: 1, hasCover: false, size: 1,
+        path: k, accountId: 'acc', remoteId: 's1', title: 'T', artist: 'A', album: 'B', durationMs: 1, hasCover: false, size: 1, addedAt: 777,
       ));
       await db.queueOffline([k], OfflineReason.user);
       await db.markOfflineDone(k, 'Art/a.mp3', 1);
@@ -324,6 +324,8 @@ void main() {
       await db.dropServerTracks([k], root: CopyRoot(before, d1.keyFor));
       final key = (await db.select(db.tracks).get()).single.path;
       expect(key, 'docs://LAFLEURMUSIC/Art/a.mp3');
+      // the album keeps its place in « Recently added »
+      expect((await db.select(db.tracks).get()).single.addedAt, 777);
       // update / restore: same files, another container path
       Directory('${tmp.path}/container1').renameSync('${tmp.path}/container2');
       native = (c) async => c.method == 'defaultRoot' ? '${tmp.path}/container2/Documents/LAFLEURMUSIC' : null;

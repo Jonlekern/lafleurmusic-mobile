@@ -585,7 +585,9 @@ class LibraryDb extends _$LibraryDb {
         durationMs: t.durationMs,
         hasCover: t.hasCover,
         mtime: Value(t.mtime),
-        addedAt: Value(t.addedAt > 0 ? t.addedAt : now),
+        addedAt: Value(
+          t.addedAt > 0 ? t.addedAt : (t.mtime > 0 ? t.mtime : now),
+        ),
         size: t.size,
         missing: Value(t.missing),
         searchKey: sortKey('${t.title}\n${t.artist}\n${t.album}'),
@@ -698,6 +700,7 @@ class LibraryDb extends _$LibraryDb {
                 size: file.existsSync()
                     ? file.lengthSync()
                     : (o.size > 0 ? o.size : t.size),
+                addedAt: t.addedAt,
               ),
             ]);
             await movePlays(path, key);
@@ -806,7 +809,8 @@ class LibraryDb extends _$LibraryDb {
   }
 
   List<(Track, int)> _topRows(List<QueryRow> rows) => [
-    for (final r in rows) (_fromRow(tracks.map(r.data)), r.read<int>('plays')),
+    for (final r in rows)
+      (_fromRow(tracks.map(r.data)), r.read<int>('plays')),
   ];
 
   /// Retire les lignes [trackPaths] (seulement celles de [reason] si donné), en une

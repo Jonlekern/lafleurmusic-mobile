@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/ui/phone/album_screen.dart';
+import 'package:lafleurmusic/ui/phone/mini_player.dart';
 import 'package:lafleurmusic/ui/phone/now_screen.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
+import 'package:lafleurmusic/ui/queue_toast.dart';
 
 import '../fonts.dart';
 import '../keep_fixture.dart';
@@ -173,6 +175,34 @@ void main() {
       expect(find.text('AJOUTÉS PAR TOI'), findsOneWidget);
       expect(find.text('Night Swim'), findsWidgets);
     });
+
+    phoneTest(
+      'Voir la file depuis En cours : pas de 2e écran, on passe à À suivre',
+      TargetPlatform.iOS,
+      (tester) async {
+        await open(tester);
+        await tester.tap(find.byType(MiniPlayer));
+        await tester.pumpAndSettle();
+        expect(find.byType(NowScreen), findsOneWidget);
+        await tester.tap(find.text('Égaliseur'));
+        await tester.pump();
+        expect(find.text('AJOUTÉS PAR TOI'), findsNothing);
+        // un ajout fait depuis En cours même : la bulle se pose
+        await enqueueWithToast(tester.element(find.byType(NowScreen)), [
+          DemoLibrary.nightcall,
+        ]);
+        await tester.pump();
+        expect(find.byKey(_bubble), findsOneWidget);
+        await tester.tap(find.text('Voir la file'));
+        await tester.pumpAndSettle();
+        expect(find.byType(NowScreen), findsOneWidget);
+        expect(find.text('AJOUTÉS PAR TOI'), findsOneWidget);
+        Navigator.of(tester.element(find.byType(NowScreen)))
+            .pop(); // un seul retour suffit
+        await tester.pumpAndSettle();
+        expect(find.byType(NowScreen), findsNothing);
+      },
+    );
 
     phoneTest(
       'un morceau grisé (pas sur le téléphone) : rien n’est ajouté, un petit message',

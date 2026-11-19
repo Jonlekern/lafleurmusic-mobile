@@ -631,6 +631,27 @@ void main() {
       },
     );
 
+    test('a new file is first stamped with its mtime, else now', () async {
+      await db.upsertTracks([
+        const Track(
+          path: '/m/f.mp3',
+          accountId: 'local',
+          remoteId: '',
+          title: 'F',
+          artist: 'Art',
+          album: 'F',
+          durationMs: 1000,
+          hasCover: false,
+          size: 1,
+          mtime: 123456,
+        ),
+      ]);
+      final rows = {
+        for (final r in await db.select(db.tracks).get()) r.path: r.addedAt,
+      };
+      expect(rows['/m/f.mp3'], 123456);
+    });
+
     test('added_at is set once: a re-sync or re-scan keeps it', () async {
       await db.upsertTracks([song('local', 'a', 'A', 'Art', added: 42)]);
       await db.upsertTracks([song('local', 'a', 'A2', 'Art', added: 9999)]);

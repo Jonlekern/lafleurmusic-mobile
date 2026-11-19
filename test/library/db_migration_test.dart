@@ -152,7 +152,7 @@ void main() {
     },
   );
 
-  test('a v1 database upgrades to v4 and keeps its data', () async {
+  test('a v1 database upgrades to v5 and keeps its data', () async {
     final raw = sqlite3.openInMemory();
     for (final sql in _v1) {
       raw.execute(sql);
@@ -193,7 +193,7 @@ void main() {
     await _expectV4(db);
   });
 
-  test('a v2 database upgrades to v4 and keeps its offline rows', () async {
+  test('a v2 database upgrades to v5 and keeps its offline rows', () async {
     final raw = sqlite3.openInMemory();
     for (final sql in [..._v1, ..._v2]) {
       raw.execute(sql);
@@ -217,7 +217,7 @@ void main() {
     await _expectV4(db);
   });
 
-  test('a v3 database (0.2.0) upgrades to v4 and keeps everything', () async {
+  test('a v3 database (0.2.0) upgrades to v5 and keeps everything', () async {
     final raw = sqlite3.openInMemory();
     for (final sql in [..._v1, ..._v2, ..._v3]) {
       raw.execute(sql);

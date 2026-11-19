@@ -29,6 +29,9 @@ Future<void> openNowOn(NavigatorState nav) => nav.push(
   ),
 );
 
+/// Demande à En cours (déjà ouvert) de passer sur À suivre (la bulle « Voir la file »).
+final showUpNext = ValueNotifier<int>(0);
+
 enum _Tab { upNext, equalizer, playback }
 
 /// En cours sur le téléphone = la colonne de droite du Mac (maquette 1, écran 3) : pochette, titre,
@@ -41,6 +44,20 @@ class NowScreen extends StatefulWidget {
 
 class _NowScreenState extends State<NowScreen> {
   _Tab _tab = _Tab.upNext;
+
+  void _goUpNext() => setState(() => _tab = _Tab.upNext);
+
+  @override
+  void initState() {
+    super.initState();
+    showUpNext.addListener(_goUpNext);
+  }
+
+  @override
+  void dispose() {
+    showUpNext.removeListener(_goUpNext);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

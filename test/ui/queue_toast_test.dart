@@ -8,6 +8,8 @@ import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/covers.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/models.dart';
+import 'package:lafleurmusic/player/queue.dart';
 import 'package:lafleurmusic/theme/lafleur_theme.dart';
 import 'package:lafleurmusic/ui/queue_toast.dart';
 
@@ -17,6 +19,8 @@ import 'fonts.dart';
 Future<List<String>> pumpToast(
   WidgetTester tester, {
   Locale locale = const Locale('fr'),
+  FakePlayer? player,
+  List<Track>? enqueue,
 }) async {
   desktopSize(tester);
   final db = LibraryDb(
@@ -33,7 +37,7 @@ Future<List<String>> pumpToast(
   await tester.pumpWidget(
     AppScope(
       db: db,
-      player: FakePlayer(),
+      player: player ?? FakePlayer(),
       covers: Covers(
         cacheDir: Directory.systemTemp.createTempSync('c'),
         embedded: (_) async => null,
@@ -44,12 +48,14 @@ Future<List<String>> pumpToast(
         home: Builder(
           builder: (ctx) => Scaffold(
             body: TextButton(
-              onPressed: () => showQueueToast(
-                ctx,
-                count: 2,
-                onUndo: () => calls.add('undo'),
-                onShowQueue: () => calls.add('queue'),
-              ),
+              onPressed: () => enqueue != null
+                  ? enqueueWithToast(ctx, enqueue)
+                  : showQueueToast(
+                      ctx,
+                      count: 2,
+                      onUndo: () => calls.add('undo'),
+                      onShowQueue: () => calls.add('queue'),
+                    ),
               child: const Text('go'),
             ),
           ),
@@ -130,5 +136,35 @@ void main() {
     expect(find.byKey(const Key('queueToast')), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 1100));
     expect(find.byKey(const Key('queueToast')), findsNothing);
+  });
+
+  const song = Track(
+    path: '/m/x.mp3',
+    accountId: 'local',
+    remoteId: '',
+    title: 'X',
+    artist: 'A',
+    album: 'B',
+    durationMs: 1000,
+    hasCover: false,
+    size: 1,
+  );
+
+  testWidgets('file vide : le morceau démarre, pas de bulle', (tester) async {
+    final p = FakePlayer();
+    await pumpToast(tester, player: p, enqueue: [song]);
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    expect(p.calls, contains('enqueue'));
+    expect(find.byKey(const Key('queueToast')), findsNothing);
+  });
+
+  testWidgets('file qui joue : la bulle', (tester) async {
+    final p = FakePlayer()..queue = PlayQueue<Track>([song], index: 0);
+    await pumpToast(tester, player: p, enqueue: [song]);
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    expect(find.byKey(const Key('queueToast')), findsOneWidget);
+    await tester.pumpAndSettle(const Duration(seconds: 5));
   });
 }
