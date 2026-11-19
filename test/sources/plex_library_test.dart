@@ -147,8 +147,8 @@ Future<List<SourceAlbum>> allAlbums(PlexSource s, {int pageSize = 500}) async =>
     [await for (final page in s.albums(pageSize: pageSize)) ...page];
 
 void main() {
-  setUp(PlexSource.resetRefreshCooldowns);
-  tearDown(PlexSource.resetRefreshCooldowns);
+  setUp(PlexSource.resetStateForTests);
+  tearDown(PlexSource.resetStateForTests);
 
   group('albums', () {
     test('every music library is read, an album in two counts once', () async {
@@ -278,12 +278,12 @@ void main() {
       },
     );
 
-    test('album artist from the listing wins over the track\'s', () async {
-      final lib = Library();
-      final s = lib.source();
-      await allAlbums(s);
-      expect((await s.albumSongs('13')).single.album, unknownAlbumName);
-      expect((await s.albumSongs('13')).single.disc, isNull);
+    test('loose album: unknown album name, no disc', () async {
+      final s = Library().source();
+      final song = (await s.albumSongs('13')).single;
+      expect(song.album, unknownAlbumName);
+      expect(song.disc, isNull);
+      expect(song.albumArtist, 'Solo');
     });
 
     test('no cover on the album: no cover id', () async {

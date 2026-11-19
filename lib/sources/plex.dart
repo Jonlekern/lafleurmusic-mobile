@@ -60,8 +60,22 @@ class PlexSource
   /// The account was removed: its cooldown and its running refresh are forgotten (the
   /// refresh, still running, then writes nothing and leaves no cooldown behind).
   static void forgetAccount(String accountId) {
+    _forgotten.add(accountId);
     _cooldownUntil.remove(accountId);
     _refreshingNow.remove(accountId);
+  }
+
+  /// Removed accounts: no source of theirs reads plex.tv or writes their secrets any more.
+  static final _forgotten = <String>{};
+
+  /// An account with this id exists (again): its sources may refresh.
+  static void accountAdded(String accountId) => _forgotten.remove(accountId);
+
+  /// Clears every static state (tests).
+  static void resetStateForTests() {
+    _cooldownUntil.clear();
+    _refreshingNow.clear();
+    _forgotten.clear();
   }
 
   /// The background read of the addresses from plex.tv running for this account, if any.
@@ -131,6 +145,7 @@ class PlexSource
   }
 
   void _startRefresh() {
+    if (_forgotten.contains(accountId) || _closed) return;
     if (_refreshingNow.containsKey(accountId)) return;
     final until = _cooldownUntil[accountId];
     if (until != null && _now().isBefore(until)) return;
@@ -159,7 +174,8 @@ class PlexSource
     } on Object {
       answers = false;
     }
-    if (!current()) return;
+    // cut by close() (the source is rebuilt) or the account removed: not a real "nobody answers"
+    if (!current() || _closed) return;
     if (answers) {
       _cooldownUntil.remove(accountId);
     } else {
@@ -201,7 +217,7 @@ class PlexSource
           _sameConnections(fresh.connections, _server.connections)) {
         return false;
       }
-      if (_closed || !current()) {
+      if (_closed || _forgotten.contains(accountId) || !current()) {
         return false; // the account is gone: write nothing
       }
       _server = PlexServer(
@@ -217,7 +233,7 @@ class PlexSource
       } on Object {
         // kept in memory; the next refresh writes it again
       }
-      if (!current()) {
+      if (_forgotten.contains(accountId) || !current()) {
         // removed while writing: the secret must not outlive the account
         try {
           await secrets?.delete(serverKey(accountId));
@@ -371,10 +387,6 @@ class PlexSource
     ];
   }
 
-  /// Album id → the album's artist, from [albums]: tracks of a compilation carry their own
-  /// artist, never the album's.
-  final _albumArtists = <String, String>{};
-
   @override
   Stream<List<SourceAlbum>> albums({int pageSize = 500}) async* {
     final seen = <String>{}; // an album in two libraries counts once
@@ -395,9 +407,6 @@ class PlexSource
                 songCount: _int(a['leafCount']) ?? 0,
               ),
         ];
-        for (final a in page) {
-          _albumArtists[a.id] = a.artist;
-        }
         if (page.isNotEmpty) yield page;
       }
     }
@@ -414,13 +423,13 @@ class PlexSource
     final songs = <SourceSong>[];
     await for (final items in _pages('library/metadata/$albumId/children')) {
       for (final m in items) {
-        if (m['ratingKey'] != null) songs.add(_song(m, albumId));
+        if (m['ratingKey'] != null) songs.add(_song(m));
       }
     }
     return songs;
   }
 
-  SourceSong _song(Map m, String albumId) {
+  SourceSong _song(Map m) {
     final media = m['Media'] is List && (m['Media'] as List).isNotEmpty
         ? (m['Media'] as List).first
         : null;
@@ -431,7 +440,8 @@ class PlexSource
         ? (media['Part'] as List).first
         : null;
     final p = part is Map ? part : const {};
-    final albumArtist = _albumArtists[albumId] ?? _str(m['grandparentTitle']);
+    // the artist of the album's artist node: the album's own artist, never the track's
+    final albumArtist = _str(m['grandparentTitle']);
     final original = _str(m['originalTitle']);
     final thumb = _str(m['parentThumb']).isNotEmpty
         ? _str(m['parentThumb'])
@@ -517,7 +527,7 @@ class PlexSource
   @override
   Uri coverUri(String coverId, int size) {
     final base = _base;
-    if (base == null) throw StateError('Plex source not prepared');
+    if (base == null) throw PlexException('source not prepared');
     return plexUrl(base, 'photo/:/transcode', {
       'url': coverId,
       'width': '$size',

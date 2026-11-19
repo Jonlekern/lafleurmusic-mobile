@@ -45,8 +45,8 @@ PlexSource plexSource(
 
 void main() {
   // the cooldown and the running refreshes are static: no test leaks into the next
-  setUp(PlexSource.resetRefreshCooldowns);
-  tearDown(PlexSource.resetRefreshCooldowns);
+  setUp(PlexSource.resetStateForTests);
+  tearDown(PlexSource.resetStateForTests);
 
   group('PlexSource.test', () {
     test('ok: the best address answers and the token is accepted', () async {
@@ -258,7 +258,8 @@ void main() {
           secrets.data.keys,
           isNot(contains(PlexSource.serverKey('acc1'))),
         );
-        // and its cooldown entry was not put back
+        // and its cooldown entry was not put back (same id used again)
+        PlexSource.accountAdded('acc1');
         final again = plexSource(
           tv.pms,
           secrets: withAccountToken(),
@@ -272,6 +273,58 @@ void main() {
       },
     );
 
+    test('after forgetAccount a live source starts no new refresh', () async {
+      final tv = FakePlexTv();
+      tv.pms.down = {homeLocal};
+      final secrets = withAccountToken();
+      final s = plexSource(tv.pms, secrets: secrets, server: stale, tv: tv);
+      PlexSource.forgetAccount('acc1');
+      expect(await s.test(), TestResult.unreachable);
+      await s.refreshing;
+      expect(resourceReads(tv), 0);
+      expect(secrets.data.keys, isNot(contains(PlexSource.serverKey('acc1'))));
+      // the same id added again (never happens with new ids, but must work)
+      PlexSource.accountAdded('acc1');
+      await s.test();
+      await s.refreshing;
+      expect(resourceReads(tv), 1);
+    });
+
+    test('a refresh cut by close() sets no cooldown', () async {
+      final tv = FakePlexTv();
+      tv.pms.down = {homeLocal};
+      final gate = Completer<void>();
+      final client = MockClient((r) async {
+        if (r.url.path == '/api/v2/resources') await gate.future;
+        return tv.handle(r);
+      });
+      final old = PlexSource(
+        accountId: 'acc1',
+        server: stale,
+        clientId: 'client-abc',
+        client: client,
+        secrets: withAccountToken()..data[PlexSource.tokenKey('acc1')] = 't',
+      );
+      await old.test();
+      final running = old.refreshing!;
+      old.close(); // the source is rebuilt
+      tv.pms.down = {homeLocal, homeRemote, homeRelay, oldRemote};
+      gate.complete();
+      await running;
+      final fresh = plexSource(
+        tv.pms,
+        secrets: withAccountToken(),
+        server: stale,
+        tv: tv,
+      );
+      await fresh.test();
+      await fresh.refreshing;
+      expect(
+        resourceReads(tv),
+        2,
+      ); // the cut one's read + the new source's (no cooldown)
+    });
+
     test('forgetAccount clears the cooldown of that account only', () async {
       final tv = FakePlexTv();
       tv.pms.down = {homeLocal, homeRemote, homeRelay};
@@ -279,6 +332,7 @@ void main() {
       await s.test();
       await s.refreshing;
       PlexSource.forgetAccount('acc1');
+      PlexSource.accountAdded('acc1');
       final again = plexSource(tv.pms, secrets: withAccountToken(), tv: tv);
       await again.test();
       await again.refreshing;
@@ -502,6 +556,45 @@ void main() {
       accounts = Accounts(db, secrets);
     });
     tearDown(() => db.close());
+
+    test(
+      'remove() forgets the account: no Plex refresh can write it back',
+      () async {
+        final tv = FakePlexTv();
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (id) => accounts.source(id, client: tv.pms.client()),
+          sync: (s) async => const SyncResult(
+            added: 0,
+            updated: 0,
+            removed: 0,
+            complete: true,
+          ),
+          wait: (_) => Completer<void>().future,
+        );
+        final a = await service.addPlex(
+          name: 'P',
+          server: home,
+          token: 'server-token-home',
+          base: Uri.parse('https://$homeLocal:32400'),
+        );
+        await service.remove(a.id);
+        tv.pms.down = {homeLocal, homeRemote, homeRelay};
+        final late = PlexSource(
+          accountId: a.id,
+          server: home,
+          clientId: 'c',
+          client: tv.client(),
+          secrets: FakeSecretStore()
+            ..data[PlexSource.tokenKey(a.id)] = 't'
+            ..data[PlexSource.accountTokenKey(a.id)] = 'user-token-1',
+        );
+        await late.test();
+        await late.refreshing;
+        expect(tv.log.where((r) => r.url.path == '/api/v2/resources'), isEmpty);
+      },
+    );
 
     test('Focus 5: a revoked token marks « à reconnecter »; a new code fixes it in place', () async {
       final pms = FakePms()..tokens = {'server-token-new'};
