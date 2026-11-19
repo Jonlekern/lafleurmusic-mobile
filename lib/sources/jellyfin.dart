@@ -319,23 +319,328 @@ class JellyfinSource implements MusicSource, HttpSource, TypedSource {
     }
   }
 
-  // ---- the rest comes with the library (tasks 2 and 3) -----------------------------------
+  // ---- library ---------------------------------------------------------------------------
+
+  /// Name given to songs the server holds outside any album (kept under their artist).
+  static const unknownAlbum = 'Album inconnu';
+  static const _loosePrefix = 'loose:';
+
+  /// Songs outside any album, by `loose:<artist>`; filled when [albums] reaches its end.
+  Map<String, List<SourceSong>>? _loose;
+
+  Future<String> _uid() async {
+    await _load();
+    var id = _userId;
+    if (id == null) {
+      await (_signingIn ??= _signIn().whenComplete(() => _signingIn = null));
+      id = _userId;
+    }
+    if (id == null) throw JellyfinException('no user id');
+    return id;
+  }
+
+  Map<String, dynamic> _decode(http.Response r) {
+    if (r.statusCode != 200) {
+      throw JellyfinException('request refused', statusCode: r.statusCode);
+    }
+    try {
+      final d = jsonDecode(utf8.decode(r.bodyBytes, allowMalformed: true));
+      if (d is Map<String, dynamic>) return d;
+    } on FormatException {
+      // not JSON
+    }
+    throw JellyfinException('not a Jellyfin answer');
+  }
+
+  /// The `Items` of [path], one page at a time. [repeatCheck]: a server ignoring the offset
+  /// sends the same items again, which fails the run (a playlist may list a song twice: off).
+  Stream<List<Map>> _pages(
+    String path,
+    Map<String, String> query, {
+    int pageSize = 500,
+    bool repeatCheck = true,
+  }) async* {
+    var start = 0;
+    final seen = <String>{};
+    while (true) {
+      final d = _decode(
+        await authedGet(path, {
+          ...query,
+          'StartIndex': '$start',
+          'Limit': '$pageSize',
+        }),
+      );
+      final raw = d['Items'];
+      final items = [if (raw is List) ...raw.whereType<Map>()];
+      if (items.isEmpty) return;
+      if (repeatCheck) {
+        final ids = [
+          for (final i in items)
+            if (i['Id'] != null) '${i['Id']}',
+        ];
+        if (ids.any(seen.contains)) {
+          throw JellyfinException('list repeats itself at offset $start');
+        }
+        seen.addAll(ids);
+      }
+      yield items;
+      start += items.length;
+      final total = d['TotalRecordCount'];
+      if (total is int) {
+        if (start >= total) return;
+      } else if (!repeatCheck) {
+        return; // no total: can't tell a repeat from a long list
+      }
+    }
+  }
+
+  /// The ids of the music views (`CollectionType` music). Several is fine, none is empty.
+  Future<List<String>> _musicViews(String uid) async {
+    final d = _decode(await authedGet('Users/$uid/Views'));
+    final items = d['Items'];
+    return [
+      for (final v in (items is List ? items : const []).whereType<Map>())
+        if (v['Id'] != null &&
+            '${v['CollectionType']}'.toLowerCase() == 'music')
+          '${v['Id']}',
+    ];
+  }
+
+  static const _albumFields = 'ChildCount,Genres';
+  static const _songFields = 'MediaSources,Genres';
 
   @override
-  Stream<List<SourceAlbum>> albums({int pageSize = 500}) =>
-      throw UnimplementedError('Jellyfin library: task 2');
+  Stream<List<SourceAlbum>> albums({int pageSize = 500}) async* {
+    _loose = null;
+    final uid = await _uid();
+    final views = await _musicViews(uid);
+    final seen = <String>{}; // an album in two views counts once
+    for (final view in views) {
+      await for (final items in _pages('Users/$uid/Items', {
+        'ParentId': view,
+        'IncludeItemTypes': 'MusicAlbum',
+        'Recursive': 'true',
+        'SortBy': 'SortName',
+        'Fields': _albumFields,
+      }, pageSize: pageSize)) {
+        final page = [
+          for (final a in items)
+            if (a['Id'] != null && seen.add('${a['Id']}'))
+              SourceAlbum(
+                id: '${a['Id']}',
+                name: '${a['Name'] ?? ''}',
+                artist: _albumArtist(a),
+                coverId: _hasPrimary(a) ? '${a['Id']}' : null,
+                songCount: _int(a['ChildCount']) ?? 0,
+              ),
+        ];
+        if (page.isNotEmpty) yield page;
+      }
+    }
+    // songs outside any album would never be listed by their album: one more album each artist
+    final loose = await _looseSongs(uid, views, pageSize);
+    _loose = loose;
+    if (loose.isNotEmpty) {
+      yield [
+        for (final e in loose.entries)
+          SourceAlbum(
+            id: e.key,
+            name: unknownAlbum,
+            artist: e.value.first.albumArtist,
+            coverId: e.value
+                .map((s) => s.coverId)
+                .firstWhere((c) => c != null, orElse: () => null),
+            songCount: e.value.length,
+          ),
+      ];
+    }
+  }
+
+  Future<Map<String, List<SourceSong>>> _looseSongs(
+    String uid,
+    List<String> views,
+    int pageSize,
+  ) async {
+    final out = <String, List<SourceSong>>{};
+    final seen = <String>{};
+    for (final view in views) {
+      await for (final items in _pages('Users/$uid/Items', {
+        'ParentId': view,
+        'IncludeItemTypes': 'Audio',
+        'Recursive': 'true',
+        'SortBy': 'SortName',
+        'Fields': _songFields,
+      }, pageSize: pageSize)) {
+        for (final m in items) {
+          final album = m['AlbumId'];
+          if (album != null && '$album'.isNotEmpty) continue;
+          if (m['Id'] == null || !seen.add('${m['Id']}')) continue;
+          final artist = _albumArtist(m, fallbackToArtists: true);
+          out
+              .putIfAbsent('$_loosePrefix$artist', () => [])
+              .add(_song(m, unknownAlbum, artist));
+        }
+      }
+    }
+    return out;
+  }
 
   @override
-  Future<List<SourceSong>> albumSongs(String albumId) =>
-      throw UnimplementedError('Jellyfin library: task 2');
+  Future<List<SourceSong>> albumSongs(String albumId) async {
+    if (albumId.startsWith(_loosePrefix)) {
+      final uid = await _uid();
+      final loose = _loose ??= await _looseSongs(
+        uid,
+        await _musicViews(uid),
+        500,
+      );
+      return loose[albumId] ?? const [];
+    }
+    final uid = await _uid();
+    final songs = <SourceSong>[];
+    await for (final items in _pages('Users/$uid/Items', {
+      'ParentId': albumId,
+      'IncludeItemTypes': 'Audio',
+      'SortBy': 'ParentIndexNumber,IndexNumber',
+      'Fields': _songFields,
+    })) {
+      for (final m in items) {
+        if (m['Id'] != null) songs.add(_song(m, '${m['Album'] ?? ''}', null));
+      }
+    }
+    return songs;
+  }
+
+  SourceSong _song(Map m, String album, String? albumArtist) {
+    final src =
+        m['MediaSources'] is List && (m['MediaSources'] as List).isNotEmpty
+        ? (m['MediaSources'] as List).first
+        : null;
+    final media = src is Map ? src : const {};
+    final artists = [
+      for (final a in (m['Artists'] is List ? m['Artists'] as List : const []))
+        if ('$a'.isNotEmpty) '$a',
+    ];
+    final genres = [
+      for (final g in (m['Genres'] is List ? m['Genres'] as List : const []))
+        if ('$g'.isNotEmpty) '$g',
+    ];
+    final ud = m['UserData'] is Map ? m['UserData'] as Map : const {};
+    final id = '${m['Id']}';
+    final ticks = _num(m['RunTimeTicks']);
+    return SourceSong(
+      id: id,
+      title: '${m['Name'] ?? ''}',
+      artist: artists.isNotEmpty
+          ? artists.join(', ')
+          : '${m['AlbumArtist'] ?? ''}',
+      album: album,
+      albumArtist: albumArtist ?? _albumArtist(m),
+      genre: genres.join(', '),
+      track: _int(m['IndexNumber']),
+      disc: _int(m['ParentIndexNumber']),
+      durationMs: ticks == null ? 0 : (ticks / 10000).round(), // 100 ns ticks
+      size: _int(media['Size']) ?? 0,
+      coverId: _hasPrimary(m)
+          ? id
+          : (m['AlbumId'] != null && m['AlbumPrimaryImageTag'] != null
+                ? '${m['AlbumId']}'
+                : null),
+      suffix: _suffix(media),
+      replayGainTrack: _num(m['NormalizationGain'])?.toDouble(), // dB
+      playCount: _int(ud['PlayCount']) ?? 0,
+    );
+  }
+
+  static String _albumArtist(Map m, {bool fallbackToArtists = false}) {
+    final aa = m['AlbumArtist'];
+    if (aa != null && '$aa'.isNotEmpty) return '$aa';
+    final list = m['AlbumArtists'];
+    if (list is List && list.isNotEmpty && list.first is Map) {
+      final n = (list.first as Map)['Name'];
+      if (n != null && '$n'.isNotEmpty) return '$n';
+    }
+    if (fallbackToArtists) {
+      final a = m['Artists'];
+      if (a is List && a.isNotEmpty && '${a.first}'.isNotEmpty) {
+        return '${a.first}';
+      }
+    }
+    return '';
+  }
+
+  static bool _hasPrimary(Map m) {
+    final t = m['ImageTags'];
+    return t is Map && t['Primary'] != null;
+  }
+
+  /// `Container` of the first media source; a list ("mov,mp4,m4a") falls back on the file's extension.
+  static String? _suffix(Map media) {
+    final c = media['Container'];
+    if (c is! String || c.isEmpty) return null;
+    if (!c.contains(',')) return c.toLowerCase();
+    final path = media['Path'];
+    if (path is String) {
+      final dot = path.lastIndexOf('.');
+      if (dot >= 0 &&
+          dot < path.length - 1 &&
+          !path.substring(dot).contains('/')) {
+        return path.substring(dot + 1).toLowerCase();
+      }
+    }
+    return c.split(',').first.toLowerCase();
+  }
+
+  static num? _num(Object? v) => v is num ? v : num.tryParse('${v ?? ''}');
+  static int? _int(Object? v) => _num(v)?.toInt();
 
   @override
-  Future<List<SourcePlaylist>> playlists() =>
-      throw UnimplementedError('Jellyfin library: task 2');
+  Future<List<SourcePlaylist>> playlists() async {
+    final uid = await _uid();
+    final heads = <(String, String)>[];
+    await for (final items in _pages('Users/$uid/Items', {
+      'IncludeItemTypes': 'Playlist',
+      'Recursive': 'true',
+    })) {
+      for (final p in items) {
+        if (p['Id'] != null) heads.add(('${p['Id']}', '${p['Name'] ?? ''}'));
+      }
+    }
+    return [
+      for (final (id, name) in heads)
+        SourcePlaylist(
+          id: id,
+          name: name,
+          songIds: await _playlistSongs(uid, id),
+        ),
+    ];
+  }
+
+  /// Null when this playlist won't read (the others still do).
+  Future<List<String>?> _playlistSongs(String uid, String id) async {
+    final ids = <String>[];
+    try {
+      await for (final items in _pages('Playlists/$id/Items', {
+        'UserId': uid,
+      }, repeatCheck: false)) {
+        for (final m in items) {
+          if (m['Id'] != null) ids.add('${m['Id']}');
+        }
+      }
+    } on JellyfinException {
+      return null;
+    }
+    return ids;
+  }
+
+  /// GET [url] (a full address, e.g. a cover's) with the token; signs in again on a 401.
+  Future<http.Response> authedGetUri(Uri url) => _authed(() => url, 'GET');
 
   @override
-  Uri coverUri(String coverId, int size) =>
-      throw UnimplementedError('Jellyfin covers: task 2');
+  Uri coverUri(String coverId, int size) => _url(
+    'Items/$coverId/Images/Primary',
+    {'maxWidth': '$size', 'quality': '90'},
+  );
 
   @override
   Uri streamUri(String songId) =>

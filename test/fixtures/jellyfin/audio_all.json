@@ -1,0 +1,8 @@
+{"Items":[
+ {"Name":"Opening","Id":"s1","Type":"Audio","Album":"First Light","AlbumId":"al1","Artists":["Nova"]},
+ {"Name":"Orphan","Id":"s9","Type":"Audio","Artists":["Solo"],"RunTimeTicks":600000000,
+  "ImageTags":{"Primary":"o"},"MediaSources":[{"Container":"mp3","Size":123}]},
+ {"Name":"Orphan 2","Id":"s10","Type":"Audio","Artists":["Solo"],"AlbumArtist":"Solo",
+  "MediaSources":[{"Container":"mp3","Size":5}]},
+ {"Name":"Nobody","Id":"s11","Type":"Audio","MediaSources":[{"Container":"ogg","Size":6}]}
+],"TotalRecordCount":4,"StartIndex":0}

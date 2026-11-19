@@ -1,0 +1,4 @@
+{"Items":[
+ {"Name":"First Light","Id":"al1","Type":"MusicAlbum","AlbumArtist":"Nova","ChildCount":2,"ImageTags":{"Primary":"t1"}},
+ {"Name":"Shared","Id":"al2","Type":"MusicAlbum","AlbumArtists":[{"Name":"Echo","Id":"x"}],"ChildCount":1,"ImageTags":{}}
+],"TotalRecordCount":2,"StartIndex":0}

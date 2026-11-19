@@ -1,0 +1,4 @@
+{"Items":[
+ {"Name":"Shared","Id":"al2","Type":"MusicAlbum","AlbumArtist":"Echo","ChildCount":1},
+ {"Name":"Live 99","Id":"al3","Type":"MusicAlbum","AlbumArtist":"Nova","ChildCount":1}
+],"TotalRecordCount":2,"StartIndex":0}

@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../library/db.dart';
 import '../library/models.dart';
 import '../offline/paths.dart' show fileOrPlaceholderExists;
+import '../sources/jellyfin.dart';
 import '../sources/remote_key.dart';
 import '../sources/source.dart';
 
@@ -198,9 +199,11 @@ Future<Uint8List?> remoteCover(
   final own = c == null;
   final cl = c ?? newServerClient();
   try {
-    final res = await cl
-        .get(s.coverUri(coverId, size), headers: s.headers)
-        .timeout(timeout);
+    final url = s.coverUri(coverId, size);
+    // Jellyfin: the token may not be loaded yet, and a revoked one is renewed
+    final res = s is JellyfinSource
+        ? await s.authedGetUri(url).timeout(timeout)
+        : await cl.get(url, headers: s.headers).timeout(timeout);
     final type = (res.headers['content-type'] ?? '').toLowerCase();
     // Subsonic answers "not found" with a 200 and a JSON/XML error (an SVG cover is image/svg+xml: kept)
     if (res.statusCode != 200 ||

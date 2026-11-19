@@ -1,0 +1,11 @@
+{"Items":[
+ {"Name":"Opening","Id":"s1","Type":"Audio","Album":"First Light","AlbumId":"al1","AlbumPrimaryImageTag":"t1",
+  "Artists":["Nova","Guest"],"AlbumArtist":"Nova","IndexNumber":1,"ParentIndexNumber":1,"RunTimeTicks":1805000000,
+  "NormalizationGain":-7.25,"Genres":["Pop","Indie"],"ImageTags":{},
+  "UserData":{"PlayCount":4,"IsFavorite":false},
+  "MediaSources":[{"Container":"flac","Size":31457280,"Path":"/m/a/1.flac"}]},
+ {"Name":"Closing","Id":"s2","Type":"Audio","Album":"First Light","AlbumId":"al1","AlbumPrimaryImageTag":"t1",
+  "Artists":["Nova"],"AlbumArtist":"Nova","IndexNumber":2,"ParentIndexNumber":1,"RunTimeTicks":2400000000,
+  "ImageTags":{"Primary":"own"},"UserData":{"PlayCount":0},
+  "MediaSources":[{"Container":"mov,mp4,m4a,3gp,3g2,mj2","Size":9000,"Path":"/m/a/2.m4a"}]}
+],"TotalRecordCount":2,"StartIndex":0}

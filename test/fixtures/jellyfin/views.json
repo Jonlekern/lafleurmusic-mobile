@@ -1,0 +1,5 @@
+{"Items":[
+ {"Name":"Films","Id":"v-films","CollectionType":"movies"},
+ {"Name":"Musique","Id":"v-music1","CollectionType":"music"},
+ {"Name":"Live","Id":"v-music2","CollectionType":"music"},
+ {"Name":"Playlists","Id":"v-pl","CollectionType":"playlists"}],"TotalRecordCount":4,"StartIndex":0}

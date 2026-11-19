@@ -1,0 +1,4 @@
+{"Items":[
+ {"Name":"Opening","Id":"s1","PlaylistItemId":"p-a"},
+ {"Name":"Closing","Id":"s2","PlaylistItemId":"p-b"},
+ {"Name":"Opening","Id":"s1","PlaylistItemId":"p-c"}],"TotalRecordCount":3,"StartIndex":0}
