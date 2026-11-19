@@ -12,6 +12,7 @@ import '../format.dart';
 import '../now_panel.dart';
 import '../playback_card.dart';
 import '../track_menu.dart';
+import 'add_to_playlist_sheet.dart';
 import 'album_screen.dart';
 import 'phone_shell.dart';
 
@@ -142,23 +143,67 @@ class _NowScreenState extends State<NowScreen> {
                 child: CoverImage(trackPath: t?.path, size: 300, radius: 8),
               ),
               const SizedBox(height: 18),
-              Text(
-                t?.title ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                t == null
-                    ? ''
-                    : '${t.artist.isEmpty ? s.unknownArtist : t.artist} · ${t.album}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Color(0xFF999999), fontSize: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          t?.title ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          t == null
+                              ? ''
+                              : '${t.artist.isEmpty ? s.unknownArtist : t.artist} · ${t.album}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF999999),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (t != null) ...[
+                    const SizedBox(width: 12),
+                    // « + » : le choix des playlists (maquette 15, écran A)
+                    Semantics(
+                      button: true,
+                      label: s.addToPlaylist,
+                      child: GestureDetector(
+                        key: const Key('nowPlus'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => showAddToPlaylist(context, [t]),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFDDDDDD),
+                              width: 2,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.add_rounded,
+                            size: 20,
+                            color: Color(0xFFDDDDDD),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 12),
               LayoutBuilder(

@@ -10,10 +10,20 @@ import '../offline/downloader.dart' show KeepOrigin;
 import 'keep_actions.dart';
 import 'queue_toast.dart';
 import 'tablet.dart';
+import 'phone/add_to_playlist_sheet.dart';
 import 'phone/keep_screen.dart';
 import 'phone/phone_shell.dart' show pushPhone;
 
-enum _Action { playNext, enqueue, keep, remove, select, goAlbum, goArtist }
+enum _Action {
+  playNext,
+  enqueue,
+  toPlaylist,
+  keep,
+  remove,
+  select,
+  goAlbum,
+  goArtist,
+}
 
 PopupMenuItem<_Action> _item(_Action a, String label) => PopupMenuItem(
   value: a,
@@ -47,6 +57,7 @@ Future<void> showTrackMenu(BuildContext context, Offset at, Track track) async {
     case _Action.keep ||
         _Action.remove ||
         _Action.select ||
+        _Action.toPlaylist ||
         _Action.goAlbum ||
         _Action.goArtist:
       break; // seulement dans la feuille du téléphone
@@ -236,6 +247,7 @@ Future<void> showTrackSheet(
               hl: onGoAlbum == null && onGoArtist == null,
             ),
             option(ctx, _Action.enqueue, s.addToQueue),
+            option(ctx, _Action.toPlaylist, s.addToPlaylist),
             if (canKeep) ...[
               const Divider(
                 color: Color(0xFF3A3A3A),
@@ -277,6 +289,8 @@ Future<void> showTrackSheet(
       } else {
         await app.player.enqueue(list);
       }
+    case _Action.toPlaylist:
+      if (context.mounted) await showAddToPlaylist(context, list);
     case _Action.keep:
       if (onKeep != null) {
         await onKeep();

@@ -23,6 +23,7 @@ import 'offline/local_folder.dart';
 import 'offline/top_keeper.dart';
 import 'player/equalizer.dart';
 import 'player/loudness.dart';
+import 'library/playlist_store.dart';
 import 'player/media_resolver.dart';
 import 'player/player.dart';
 import 'settings.dart';
@@ -219,6 +220,7 @@ Future<LafleurApp> buildLafleurApp({
     loudness: loudness,
     covers: covers,
     resolver: resolver,
+    playlists: PlaylistStore(db, sourceOf: resolver.source),
     accounts: accounts,
     accountService: accountService,
     localFolder: localFolder,
@@ -252,6 +254,7 @@ class LafleurApp extends StatefulWidget {
     required this.saveSettings,
     required this.loudness,
     required this.resolver,
+    required this.playlists,
     required this.accounts,
     required this.accountService,
     required this.localFolder,
@@ -263,6 +266,10 @@ class LafleurApp extends StatefulWidget {
   });
   final LoudnessService loudness;
   final MediaResolver resolver;
+
+  /// Phone playlists and server playlist writes: the resolver's sources (not the account
+  /// service's wrapper, which can't write playlists).
+  final PlaylistStore playlists;
   // le même pour le lecteur (MediaResolver) et les écrans
   final Accounts accounts;
   final AccountService accountService;
@@ -340,6 +347,7 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
     settings: widget.settings,
     saveSettings: widget.saveSettings,
     loudness: widget.loudness,
+    playlists: widget.playlists,
     accounts: widget.accounts,
     accountService: widget.accountService,
     downloader: widget.downloader,

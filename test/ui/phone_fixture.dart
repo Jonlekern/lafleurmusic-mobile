@@ -8,6 +8,7 @@ import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/playlist_store.dart';
 import 'package:lafleurmusic/offline/downloader.dart' show Downloader;
 import 'package:lafleurmusic/player/equalizer.dart';
 import 'package:lafleurmusic/player/player.dart';
@@ -66,6 +67,9 @@ Future<PhoneFixture> pumpPhone(
   Widget home = const PhoneShell(),
   ValueNotifier<bool>? classicMode,
   Downloader? downloader,
+  bool withAccounts = true,
+  PlaylistStore Function(LibraryDb db)? playlists,
+  Future<void> Function(LibraryDb db, Accounts accounts)? seed,
 }) async {
   phoneSize(tester);
   final dir = Directory.systemTemp.createTempSync('phone');
@@ -85,10 +89,13 @@ Future<PhoneFixture> pumpPhone(
   final accounts = Accounts(db, FakeSecretStore());
   await tester.runAsync(() async {
     await db.upsertTracks(DemoLibrary.tracks);
-    for (final (type, name) in [
-      (AccountType.subsonic, 'Navidrome'),
-      (AccountType.jellyfin, 'Jellyfin'),
-    ]) {
+    for (final (type, name)
+        in withAccounts
+            ? [
+                (AccountType.subsonic, 'Navidrome'),
+                (AccountType.jellyfin, 'Jellyfin'),
+              ]
+            : const <(AccountType, String)>[]) {
       await accounts.add(
         type: type,
         name: name,
@@ -97,6 +104,7 @@ Future<PhoneFixture> pumpPhone(
         password: 'demo',
       );
     }
+    await seed?.call(db, accounts);
   });
   final player = FakePlayer()
     ..queue = (PlayQueue(DemoLibrary.studio, index: 1)
@@ -118,6 +126,7 @@ Future<PhoneFixture> pumpPhone(
       settings: AppSettings(),
       saveSettings: () {},
       accounts: accounts,
+      playlists: playlists?.call(db),
       downloader: downloader,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

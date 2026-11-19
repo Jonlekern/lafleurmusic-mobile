@@ -30,9 +30,35 @@ void showQueueToast(
   required VoidCallback onShowQueue,
 }) {
   if (count <= 0) return;
+  final s = AppScope.of(context).strings;
+  showBubble(
+    context,
+    key: const Key('queueToast'),
+    text: s.queueAdded,
+    actions: [(s.queueUndo, onUndo), (s.queueView, onShowQueue)],
+  );
+}
+
+/// « Ajouté à N playlists » (maquette 15, écran B) : la même bulle, sans bouton.
+void showPlaylistToast(BuildContext context, int playlists) {
+  if (playlists <= 0) return;
+  showBubble(
+    context,
+    key: const Key('playlistToast'),
+    text: AppScope.of(context).strings.addedToPlaylists(playlists),
+  );
+}
+
+/// La bulle du bas : [text] et des boutons roses [actions] ; elle part seule après 4 s, ou au
+/// toucher d'un bouton (qui fait alors son action).
+void showBubble(
+  BuildContext context, {
+  required Key key,
+  required String text,
+  List<(String, VoidCallback)> actions = const [],
+}) {
   final overlay = Overlay.of(context);
   final app = AppScope.of(context);
-  final s = app.strings;
   _hide();
   late final OverlayEntry entry;
   void done(VoidCallback act) {
@@ -56,7 +82,7 @@ void showQueueToast(
           child: Material(
             type: MaterialType.transparency,
             child: Container(
-              key: const Key('queueToast'),
+              key: key,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: const Color(0xFF2A2A2A),
@@ -74,7 +100,7 @@ void showQueueToast(
                 children: [
                   Expanded(
                     child: Text(
-                      s.queueAdded,
+                      text,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -84,9 +110,10 @@ void showQueueToast(
                       ),
                     ),
                   ),
-                  _Action(s.queueUndo, () => done(onUndo)),
-                  const SizedBox(width: 12),
-                  _Action(s.queueView, () => done(onShowQueue)),
+                  for (final (label, act) in actions) ...[
+                    _Action(label, () => done(act)),
+                    if (act != actions.last.$2) const SizedBox(width: 12),
+                  ],
                 ],
               ),
             ),

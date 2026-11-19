@@ -1,9 +1,25 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
+import 'package:lafleurmusic/library/playlist_store.dart' show PlaylistProblem;
 import 'package:lafleurmusic/sources/source.dart';
 
 void main() {
+  test('playlist write errors: a French and an English text for each kind', () {
+    final fr = Strings.of(const Locale('fr'));
+    final en = Strings.of(const Locale('en'));
+    for (final p in PlaylistProblem.values) {
+      expect(fr.playlistProblem(p), isNotEmpty);
+      expect(en.playlistProblem(p), isNotEmpty);
+      expect(fr.playlistProblem(p), isNot(en.playlistProblem(p)));
+    }
+    expect(
+      fr.playlistProblem(PlaylistProblem.refused),
+      'Ce serveur ne te laisse pas modifier cette playlist.',
+    );
+    expect(fr.onMyDevice(true), 'Sur mon iPhone');
+    expect(fr.onMyDevice(false), 'Sur mon téléphone');
+  });
   test('français si la langue commence par fr', () {
     expect(Strings.of(const Locale('fr')).whereIsMusic, 'Où est ta musique ?');
     expect(Strings.of(const Locale('fr', 'CH')).nSongs(9), '9 morceaux');

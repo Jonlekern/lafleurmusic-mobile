@@ -5,6 +5,7 @@ import 'library/covers.dart';
 import 'library/db.dart';
 import 'library/library_view.dart';
 import 'library/models.dart';
+import 'library/playlist_store.dart';
 import 'offline/device.dart';
 import 'offline/downloader.dart';
 import 'offline/home_state.dart';
@@ -30,6 +31,7 @@ class AppScope extends InheritedWidget {
     this.settings,
     this.saveSettings,
     this.loudness,
+    this.playlists,
     this.accounts,
     this.accountService,
     this.downloader,
@@ -51,6 +53,13 @@ class AppScope extends InheritedWidget {
   final AppSettings? settings; // réglages (enregistrés par saveSettings)
   final VoidCallback? saveSettings;
   final LoudnessService? loudness; // Volume égal
+  /// Phone playlists and server playlist writes; without it (tests, Mac) a store with no
+  /// server: phone playlists only.
+  final PlaylistStore? playlists;
+  PlaylistStore get playlistStore =>
+      playlists ?? (_fallback[db] ??= PlaylistStore(db));
+  static final _fallback = Expando<PlaylistStore>();
+
   final Accounts?
   accounts; // comptes de serveur (puces de l'Accueil du téléphone)
   /// Tester, enregistrer, synchroniser les comptes ; « Hors ligne ».

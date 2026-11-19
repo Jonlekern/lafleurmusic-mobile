@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../library/playlist_store.dart' show PlaylistProblem;
 import '../settings.dart' show AlbumSort;
 import '../sources/account_service.dart';
 import '../sources/accounts.dart';
@@ -651,6 +652,62 @@ class Strings {
     'Si tu as coché « Ne plus me demander », rallume-le ici.',
     'If you ticked “Don’t ask me again”, turn it back on here.',
   );
+
+  // plan 9 : ajouter à une playlist (maquette 15, écrans A, B, C)
+  String get addToPlaylist => _t('Ajouter à une playlist', 'Add to a playlist');
+  String get newPlaylistButton => _t('Nouvelle playlist', 'New playlist');
+  String get searchPlaylist => _t('Chercher une playlist', 'Search playlists');
+  String get okButton => 'OK';
+  String get createButton => _t('Créer', 'Create');
+  String get newTag => _t('nouvelle', 'new');
+  String addedToPlaylists(int n) => _t(
+    'Ajouté à $n ${n == 1 ? 'playlist' : 'playlists'}',
+    'Added to $n ${n == 1 ? 'playlist' : 'playlists'}',
+  );
+  String get nameYourPlaylist =>
+      _t('Donne un nom à ta playlist', 'Name your playlist');
+  String get whereToKeep => _t('Où la ranger :', 'Where to keep it:');
+  String onMyDevice(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t('Sur ${d.frMy}', 'On my ${d.enName}');
+  }
+
+  String alreadyInTitle(String name) =>
+      _t('Déjà dans « $name »', 'Already in “$name”');
+  String alreadyInOne(String title) =>
+      _t('« $title » y est déjà.', '“$title” is already there.');
+  String alreadyInMany(int dup, int total) => _t(
+    '$dup morceaux sur $total sont déjà dedans',
+    '$dup of $total songs are already in it',
+  );
+  String get ignore => _t('Ignorer', 'Skip');
+  String get addAnyway => _t('Ajouter quand même', 'Add anyway');
+  String playlistProblem(PlaylistProblem p) => switch (p) {
+    PlaylistProblem.refused => _t(
+      'Ce serveur ne te laisse pas modifier cette playlist.',
+      'This server does not let you change this playlist.',
+    ),
+    PlaylistProblem.unreachable => _t(
+      'Le serveur ne répond pas. Réessaie plus tard.',
+      'The server is not answering. Try again later.',
+    ),
+    PlaylistProblem.relink => _t(
+      'Ce compte doit être reconnecté.',
+      'This account needs to be reconnected.',
+    ),
+    PlaylistProblem.tooLong => _t(
+      'Trop de morceaux pour ce serveur.',
+      'Too many songs for this server.',
+    ),
+    PlaylistProblem.changed => _t(
+      'La playlist a changé, réessaie.',
+      'The playlist changed, try again.',
+    ),
+    PlaylistProblem.failed => _t(
+      "Ça n'a pas marché. Réessaie.",
+      "That didn't work. Try again.",
+    ),
+  };
 
   // plan 6 : Mode Classic, zones de la molette (VoiceOver / TalkBack)
   String get wheelMenu => 'MENU';
