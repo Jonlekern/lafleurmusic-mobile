@@ -137,9 +137,11 @@ class Strings {
     'Glisse pour défiler · touche pour jouer',
     'Swipe to browse · tap to play',
   );
-  String keptOnDevice(bool iphone) => iphone
-      ? _t('sur l’iPhone', 'on the iPhone')
-      : _t('sur le téléphone', 'on the phone');
+  String keptOnDevice(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t('sur ${d.frThe.replaceAll("'", '’')}', 'on ${d.enThe}');
+  }
+
   String playlistN(int n) => _t('Album · $n morceaux', 'Album · $n songs');
   String get scanning => _t('Je range ta musique…', 'Sorting your music…');
 
@@ -216,6 +218,7 @@ class Strings {
   String seconds(int n) => '$n s';
   // plan 1 (téléphone) : écrans debout (maquette 1)
   String get home => _t('Accueil', 'Home');
+  String get back => _t('Retour', 'Back'); // tablette : pas d'Accueil
   String get albumsBack => 'Albums';
 
   /// Accueil, sous les albums (maquette 7, écran 10).
@@ -238,14 +241,12 @@ class Strings {
   String notOnAccount(String account) =>
       _t('absent de $account', 'not on $account');
   String get allAccounts => _t('Tout', 'All');
-  // [tablet] : « iPad » sur iOS, « tablette » sur Android (plan 3, tablettes)
-  String onDevice(bool iphone, {bool tablet = false}) => tablet
-      ? (iphone
-            ? _t('Sur mon iPad', 'On my iPad')
-            : _t('Sur ma tablette', 'On my tablet'))
-      : iphone
-      ? _t('Sur mon iPhone', 'On my iPhone')
-      : _t('Sur mon téléphone', 'On my phone');
+  // Tout nom d'appareil passe par [_Dev] : iPhone, iPad (iOS), téléphone, tablette (Android)
+  String onDevice(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t('Sur ${d.frMy}', 'On my ${d.enName}');
+  }
+
   String get upNextTab => _t('À suivre', 'Up next');
   String get swipePlayNext => '← $playNextAction';
   String unreadableSkipped(String title) =>
@@ -274,10 +275,14 @@ class Strings {
   String get oneAccount => _t('Un compte', 'One account');
   String get customDisplay => _t('Perso', 'Custom');
   String get soon => _t('bientôt', 'soon');
-  String sameAlbumNote(bool iphone) => _t(
-    "Un album présent sur deux comptes n'apparaît qu'une fois : il joue depuis ${iphone ? "l'iPhone" : 'le téléphone'}, sinon depuis le premier compte de la liste.",
-    'An album on two accounts shows only once: it plays from ${iphone ? 'the iPhone' : 'the phone'}, otherwise from the first account in the list.',
-  );
+  String sameAlbumNote(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t(
+      "Un album présent sur deux comptes n'apparaît qu'une fois : il joue depuis ${d.frThe}, sinon depuis le premier compte de la liste.",
+      'An album on two accounts shows only once: it plays from ${d.enThe}, otherwise from the first account in the list.',
+    );
+  }
+
   String get serverType => _t('TYPE DE SERVEUR', 'SERVER TYPE');
   String get subsonicServers => 'Navidrome, Airsonic, Gonic, LMS, Ampache…';
   String get fieldName => _t('NOM', 'NAME');
@@ -357,72 +362,79 @@ class Strings {
 
   // plan 2 : garder hors ligne (maquettes 1 et 2, écrans 2, 4 et 8)
   String get select => _t('Sélectionner…', 'Select…');
-  String keepOnDevice(bool iphone, {bool tablet = false}) => tablet
-      ? (iphone
-            ? _t('Garder sur mon iPad', 'Keep on my iPad')
-            : _t('Garder sur ma tablette', 'Keep on my tablet'))
-      : iphone
-      ? _t('Garder sur mon iPhone', 'Keep on my iPhone')
-      : _t('Garder sur mon téléphone', 'Keep on my phone');
-  String removeFromDevice(bool iphone, {bool tablet = false}) => tablet
-      ? (iphone
-            ? _t('Retirer de l’iPad', 'Remove from iPad')
-            : _t('Retirer de la tablette', 'Remove from tablet'))
-      : iphone
-      ? _t('Retirer du téléphone', 'Remove from iPhone')
-      : _t('Retirer du téléphone', 'Remove from phone');
+  String keepOnDevice(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t('Garder sur ${d.frMy}', 'Keep on my ${d.enName}');
+  }
+
+  // (téléphone : « du téléphone » même sur iPhone, comme depuis le plan 2)
+  String removeFromDevice(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t(
+      tablet ? 'Retirer ${d.frFrom}' : 'Retirer du téléphone',
+      'Remove from ${d.enName}',
+    );
+  }
+
   String albumsSelected(int n) => _t(
     'ALBUMS · $n ${n > 1 ? 'SÉLECTIONNÉS' : 'SÉLECTIONNÉ'}',
     'ALBUMS · $n SELECTED',
   );
   String get alreadyKept => _t('déjà gardé', 'already kept');
-  String spaceOnDevice(bool iphone) => iphone
-      ? _t("PLACE SUR L'IPHONE", 'SPACE ON THE IPHONE')
-      : _t('PLACE SUR LE TÉLÉPHONE', 'SPACE ON THE PHONE');
+  String spaceOnDevice(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t(
+      'PLACE SUR ${d.frThe}'.toUpperCase(),
+      'SPACE ON ${d.enThe}'.toUpperCase(),
+    );
+  }
+
   String usedOf(String used, String limit) =>
       _t('$used utilisés sur $limit', '$used used of $limit');
-  String filesHint(bool iphone) => iphone
+  String filesHint(bool iphone, {bool tablet = false}) => iphone
       ? _t(
-          "Les fichiers vont dans Fichiers → Sur mon iPhone → LAFLEURMUSIC. Pour les mettre sur ton NAS, copie-les avec l'appli Fichiers.",
-          'The files go in Files → On My iPhone → LAFLEURMUSIC. To put them on your NAS, copy them with the Files app.',
+          "Les fichiers vont dans Fichiers → ${onDevice(iphone, tablet: tablet)} → LAFLEURMUSIC. Pour les mettre sur ton NAS, copie-les avec l'appli Fichiers.",
+          'The files go in Files → ${onDevice(iphone, tablet: tablet).replaceFirst('my', 'My')} → LAFLEURMUSIC. To put them on your NAS, copy them with the Files app.',
         )
       : _t(
           'Les fichiers vont dans Musique/LAFLEURMUSIC. Pour les mettre sur ton NAS, copie-les avec une appli de fichiers.',
           'The files go in Music/LAFLEURMUSIC. To put them on your NAS, copy them with a file app.',
         );
-  String keepButton(bool iphone, String? size) =>
-      size == null ? keepOnDevice(iphone) : '${keepOnDevice(iphone)} · $size';
+  String keepButton(bool iphone, String? size, {bool tablet = false}) {
+    final keep = keepOnDevice(iphone, tablet: tablet);
+    return size == null ? keep : '$keep · $size';
+  }
+
   String notEnoughSpace(String size) => _t(
     'Pas assez de place : il faut encore $size.',
     'Not enough space: $size more needed.',
   );
-  String alreadyOnDevice(bool iphone) => iphone
-      ? _t(
-          "Déjà sur l'iPhone. Appui long sur un morceau pour le retirer.",
-          'Already on the iPhone. Long-press a song to remove it.',
-        )
-      : _t(
-          'Déjà sur le téléphone. Appui long sur un morceau pour le retirer.',
-          'Already on the phone. Long-press a song to remove it.',
-        );
+  String alreadyOnDevice(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t(
+      'Déjà sur ${d.frThe}. Appui long sur un morceau pour le retirer.',
+      'Already on ${d.enThe}. Long-press a song to remove it.',
+    );
+  }
+
   String get keepFailed =>
       _t('Impossible de garder ces morceaux.', 'Could not keep these songs.');
   String get storageDenied => _t(
     "L'appli n'a pas le droit d'écrire dans Musique. Autorise-la dans les réglages du téléphone.",
     "The app isn't allowed to write to Music. Allow it in the phone settings.",
   );
-  String notOnDevice(String artist, bool iphone) => iphone
-      ? _t("$artist · pas sur l'iPhone", '$artist · not on the iPhone')
-      : _t('$artist · pas sur le téléphone', '$artist · not on the phone');
-  String nothingOffline(bool iphone) => iphone
-      ? _t(
-          "Pas sur l'iPhone : rien à jouer hors ligne.",
-          'Not on the iPhone: nothing to play offline.',
-        )
-      : _t(
-          'Pas sur le téléphone : rien à jouer hors ligne.',
-          'Not on the phone: nothing to play offline.',
-        );
+  String notOnDevice(String artist, bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t('$artist · pas sur ${d.frThe}', '$artist · not on ${d.enThe}');
+  }
+
+  String nothingOffline(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t(
+      'Pas sur ${d.frThe} : rien à jouer hors ligne.',
+      'Not on ${d.enThe}: nothing to play offline.',
+    );
+  }
 
   // plan 2 : écran « Sur mon iPhone » (maquette 4)
   String inProgress(int waiting) => waiting > 0
@@ -454,10 +466,14 @@ class Strings {
     );
   }
 
-  String removeHint(bool iphone) => _t(
-    'Glisse un album vers la gauche, ou appuie longtemps, pour le retirer du téléphone. Il reste sur le serveur.',
-    'Swipe an album left, or long-press, to remove it from the phone. It stays on the server.',
-  );
+  String removeHint(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t(
+      'Glisse un album vers la gauche, ou appuie longtemps, pour le retirer ${tablet ? d.frFrom : 'du téléphone'}. Il reste sur le serveur.',
+      'Swipe an album left, or long-press, to remove it from ${tablet ? d.enThe : 'the phone'}. It stays on the server.',
+    );
+  }
+
   String get limitSection => _t('LIMITE', 'LIMIT');
   String get allTheFreeSpace =>
       _t('toute la place libre', 'all the free space');
@@ -466,8 +482,11 @@ class Strings {
     'The Top 100 keeps itself at home, on Wi-Fi, as long as there is room. What you keep yourself is never removed on its own.',
   );
   String get folderSection => _t('DOSSIER', 'FOLDER');
-  String defaultFolder(bool iphone) => iphone
-      ? _t('Sur mon iPhone › LAFLEURMUSIC', 'On My iPhone › LAFLEURMUSIC')
+  String defaultFolder(bool iphone, {bool tablet = false}) => iphone
+      ? _t(
+          '${onDevice(iphone, tablet: tablet)} › LAFLEURMUSIC',
+          '${onDevice(iphone, tablet: tablet).replaceFirst('my', 'My')} › LAFLEURMUSIC',
+        )
       : _t('Musique › LAFLEURMUSIC', 'Music › LAFLEURMUSIC');
   String get chooseTheFolder => _t('Choisir le dossier…', 'Choose the folder…');
   String get moving => _t('Déplacement…', 'Moving…');
@@ -480,9 +499,9 @@ class Strings {
           'Une carte SD marche aussi. En changeant de dossier, les morceaux gardés y sont déplacés.',
           'An SD card works too. When you change folder, the kept songs are moved there.',
         );
-  String folderUnavailable(bool iphone) => _t(
-    "Le dossier choisi n'est pas disponible. Branche-le ou choisis-en un autre dans ${onDevice(iphone)}.",
-    "The chosen folder isn't available. Reconnect it or pick another one in ${onDevice(iphone)}.",
+  String folderUnavailable(bool iphone, {bool tablet = false}) => _t(
+    "Le dossier choisi n'est pas disponible. Branche-le ou choisis-en un autre dans ${onDevice(iphone, tablet: tablet)}.",
+    "The chosen folder isn't available. Reconnect it or pick another one in ${onDevice(iphone, tablet: tablet)}.",
   );
   String get oldFolderMissing =>
       _t("L'ancien dossier est introuvable", "The old folder can't be found");
@@ -507,15 +526,14 @@ class Strings {
   );
 
   // confirmation avant « Retirer du téléphone » (maquette 10)
-  String removeConfirmTitle(bool iphone, {bool tablet = false}) => tablet
-      ? _t(
-          iphone ? 'Retirer de l’iPad ?' : 'Retirer de la tablette ?',
-          iphone ? 'Remove from the iPad?' : 'Remove from the tablet?',
-        )
-      : _t(
-          'Retirer du téléphone ?',
-          iphone ? 'Remove from the iPhone?' : 'Remove from the phone?',
-        );
+  String removeConfirmTitle(bool iphone, {bool tablet = false}) {
+    final d = _Dev(iphone, tablet);
+    return _t(
+      tablet ? 'Retirer ${d.frFrom} ?' : 'Retirer du téléphone ?',
+      'Remove from ${d.enThe}?',
+    );
+  }
+
   String removeConfirmBody(
     String name,
     int n,
@@ -523,15 +541,10 @@ class Strings {
     bool iphone, {
     bool tablet = false,
   }) {
-    final frDevice = tablet
-        ? (iphone ? 'iPad' : 'tablette')
-        : (iphone ? 'iPhone' : 'téléphone');
-    final enDevice = tablet
-        ? (iphone ? 'iPad' : 'tablet')
-        : (iphone ? 'iPhone' : 'phone');
+    final d = _Dev(iphone, tablet);
     return _t(
-      '« $name » ($n ${n == 1 ? 'morceau' : 'morceaux'}, $size) sera effacé de ton $frDevice. Il reste sur ton serveur : tu pourras le garder à nouveau.',
-      '“$name” ($n ${n == 1 ? 'song' : 'songs'}, $size) will be erased from your $enDevice. It stays on your server: you can keep it again.',
+      '« $name » ($n ${n == 1 ? 'morceau' : 'morceaux'}, $size) sera effacé de ${d.frYour}. Il reste sur ton serveur : tu pourras le garder à nouveau.',
+      '“$name” ($n ${n == 1 ? 'song' : 'songs'}, $size) will be erased from your ${d.enName}. It stays on your server: you can keep it again.',
     );
   }
 
@@ -553,4 +566,23 @@ class Strings {
     final text = g == g.roundToDouble() ? '${g.round()}' : g.toStringAsFixed(1);
     return '${fr ? text.replaceAll('.', ',') : text} ${_t('Go', 'GB')}';
   }
+}
+
+/// Le nom de l'appareil, au seul endroit où on le décide : iPhone / iPad sur iOS, téléphone / tablette sur
+/// Android, avec ses articles (« l'iPad », « la tablette », « du téléphone »…).
+class _Dev {
+  const _Dev(this.ios, this.tablet);
+  final bool ios, tablet;
+
+  bool get _fem => tablet && !ios; // la tablette
+  String get frName =>
+      tablet ? (ios ? 'iPad' : 'tablette') : (ios ? 'iPhone' : 'téléphone');
+  String get enName =>
+      tablet ? (ios ? 'iPad' : 'tablet') : (ios ? 'iPhone' : 'phone');
+  String get frThe => ios ? "l'$frName" : '${_fem ? 'la' : 'le'} $frName';
+  String get enThe => 'the $enName';
+  String get frMy => '${_fem ? 'ma' : 'mon'} $frName';
+  String get frYour => '${_fem ? 'ta' : 'ton'} $frName';
+  String get frFrom =>
+      ios ? 'de l’$frName' : (_fem ? 'de la $frName' : 'du $frName');
 }

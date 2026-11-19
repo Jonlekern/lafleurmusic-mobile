@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -12,15 +11,13 @@ bool isMobilePlatform(TargetPlatform p) =>
 bool isTablet(Size size, TargetPlatform platform) =>
     isMobilePlatform(platform) && size.shortestSide >= 600;
 
-/// L'écran de cet appareil est celui d'une tablette (pour les textes : « iPad », « tablette »).
-bool get onTablet {
-  final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-  if (view == null) return false;
-  return isTablet(
-    view.physicalSize / view.devicePixelRatio,
-    defaultTargetPlatform,
-  );
-}
+bool _tabletMode = false;
+
+/// L'appli est en disposition tablette (pour les textes : « iPad », « tablette »). Posé par [AdaptiveHome]
+/// d'après la taille de la fenêtre (MediaQuery), la même qui choisit la disposition : en vue partagée,
+/// une fenêtre étroite redevient un téléphone.
+bool get onTablet => _tabletMode;
+void setTabletMode(bool v) => _tabletMode = v;
 
 /// Orientations du téléphone : debout et couché des deux côtés (le Cover Flow est l'écran couché).
 const mobileOrientations = [
@@ -34,8 +31,9 @@ const uprightOnly = [DeviceOrientation.portraitUp];
 List<DeviceOrientation> orientationsFor(Size size) =>
     size.shortestSide >= 600 ? DeviceOrientation.values : mobileOrientations;
 
-/// [orientationsFor] l'écran de cet appareil.
-List<DeviceOrientation> get deviceOrientations {
+/// Orientations au lancement, avant le premier écran : d'après la fenêtre de l'appareil. Ensuite
+/// [AdaptiveHome] suit la fenêtre (MediaQuery).
+List<DeviceOrientation> get launchOrientations {
   final view = WidgetsBinding.instance.platformDispatcher.implicitView;
   if (view == null) return mobileOrientations;
   return orientationsFor(view.physicalSize / view.devicePixelRatio);

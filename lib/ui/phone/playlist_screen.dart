@@ -91,7 +91,7 @@ class PlaylistScreen extends StatelessWidget {
             present.fold<int>(0, (m, t) => m + t.durationMs) ~/ 60000;
         return PhoneScaffold(
           header: PhoneHeader(
-            back: s.home,
+            back: onTablet ? s.back : s.home,
             trailing: HeaderButton(
               icon: Icons.more_horiz_rounded,
               onTap: present.isEmpty
@@ -186,7 +186,10 @@ class PlaylistScreen extends StatelessWidget {
 void _play(BuildContext context, List<Track> list, {bool shuffle = false}) {
   final app = AppScope.of(context);
   if (!list.any(app.playableNow)) {
-    say(ScaffoldMessenger.of(context), app.strings.nothingOffline(onIphone));
+    say(
+      ScaffoldMessenger.of(context),
+      app.strings.nothingOffline(onIphone, tablet: onTablet),
+    );
     return;
   }
   app.player.playTracks(list, 0, shuffle: shuffle);
@@ -223,7 +226,7 @@ class _KeepPlaylistPill extends StatelessWidget {
             onPressed: () => kept
                 ? say(
                     ScaffoldMessenger.of(context),
-                    app.strings.alreadyOnDevice(onIphone),
+                    app.strings.alreadyOnDevice(onIphone, tablet: onTablet),
                   )
                 : keepPlaylist(context, playlist),
           );
@@ -297,7 +300,7 @@ class _Rows extends StatelessWidget {
                             ? () => app.player.playTracks(present, at)
                             : () => say(
                                 ScaffoldMessenger.of(context),
-                                s.nothingOffline(onIphone),
+                                s.nothingOffline(onIphone, tablet: onTablet),
                               ),
                       );
                     }(),

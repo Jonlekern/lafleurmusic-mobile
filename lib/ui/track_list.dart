@@ -9,6 +9,7 @@ import 'cover_image.dart';
 import 'cover_mosaic.dart';
 import 'track_menu.dart';
 import 'format.dart';
+import 'tablet.dart';
 
 /// En-tête de playlist + liste des morceaux (maquette 2). Un clic = jouer à partir de ce morceau.
 class TrackList extends StatelessWidget {
@@ -218,14 +219,15 @@ class _Row extends StatelessWidget {
     );
     Widget cell(String text, TextStyle style) =>
         Text(text, overflow: TextOverflow.ellipsis, style: style);
-    // liste étroite (iPad debout) : la colonne artiste rétrécit pour laisser sa place au titre
+    // tablette, liste étroite (iPad debout) : la colonne artiste rétrécit pour laisser sa place au titre
+    // (sur le Mac : toujours 260)
     return LayoutBuilder(
       builder: (context, box) => _line(
         context,
         fg,
         st,
         cell,
-        artistWidth: (box.maxWidth * 0.35).clamp(0.0, 260.0),
+        artistWidth: onTablet ? (box.maxWidth * 0.35).clamp(0.0, 260.0) : 260,
       ),
     );
   }

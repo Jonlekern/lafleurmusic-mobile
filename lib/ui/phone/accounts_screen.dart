@@ -7,6 +7,7 @@ import '../../app_scope.dart';
 import '../../settings.dart';
 import '../../sources/account_service.dart';
 import '../../sources/accounts.dart';
+import '../tablet.dart';
 import '../../theme/colors.dart';
 import 'account_form.dart';
 import 'display_choice.dart';
@@ -80,7 +81,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     return PhoneScaffold(
       mini: false,
       // pas encore d'écran Réglages : ⚙︎ ouvre directement les comptes
-      header: PhoneHeader(back: s.home),
+      header: PhoneHeader(back: onTablet ? s.back : s.home),
       body: ListenableBuilder(
         listenable: service ?? const _NoListenable(),
         builder: (context, _) => CustomScrollView(
@@ -175,6 +176,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                   Text(
                     s.sameAlbumNote(
                       defaultTargetPlatform == TargetPlatform.iOS,
+                      tablet: onTablet,
                     ),
                     style: phoneHint,
                   ),

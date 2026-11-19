@@ -38,28 +38,39 @@ class AdaptiveHome extends StatefulWidget {
 }
 
 class _AdaptiveHomeState extends State<AdaptiveHome> {
-  bool _free = false;
+  bool? _tablet;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // tablette : les quatre orientations (main les demande déjà ; ici au cas où l'écran n'avait pas
-    // encore sa taille au lancement)
-    final tablet = isTablet(MediaQuery.sizeOf(context), defaultTargetPlatform);
-    if (tablet && !_free) {
-      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
-    }
-    _free = tablet;
+  void dispose() {
+    setTabletMode(false);
+    super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) =>
-      AdaptiveHome.isPhone(MediaQuery.sizeOf(context))
-      ? PhoneShell(
-          debugStart: widget.debugStart,
-          debugScreens: widget.debugScreens,
-        )
-      : const LibraryScreen();
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final tablet = isTablet(size, defaultTargetPlatform);
+    // une seule source (la fenêtre) pour la disposition, les textes et les orientations ; en vue partagée,
+    // une fenêtre étroite redevient un téléphone et ses orientations reviennent
+    setTabletMode(tablet);
+    if (tablet != _tablet) {
+      final first = _tablet == null;
+      _tablet = tablet;
+      if (tablet || !first) {
+        if (isMobilePlatform(defaultTargetPlatform)) {
+          SystemChrome.setPreferredOrientations(
+            tablet ? DeviceOrientation.values : mobileOrientations,
+          );
+        }
+      }
+    }
+    return AdaptiveHome.isPhone(size)
+        ? PhoneShell(
+            debugStart: widget.debugStart,
+            debugScreens: widget.debugScreens,
+          )
+        : const LibraryScreen();
+  }
 }
 
 /// Téléphone debout (maquette 1) : les colonnes du Mac empilées. Accueil → Album / Morceaux / Artistes /
@@ -103,7 +114,7 @@ class _PhoneShellState extends State<PhoneShell> {
     if (_mobile && now != _lockedUpright) {
       _lockedUpright = now;
       SystemChrome.setPreferredOrientations(
-        now ? uprightOnly : deviceOrientations,
+        now ? uprightOnly : mobileOrientations,
       );
     }
     // (appelé pendant que le navigateur se construit : on redessine après)
@@ -170,7 +181,7 @@ class _PhoneShellState extends State<PhoneShell> {
     _skipped?.cancel();
     _albumsSub?.cancel();
     if (_mobile && _lockedUpright) {
-      SystemChrome.setPreferredOrientations(deviceOrientations);
+      SystemChrome.setPreferredOrientations(mobileOrientations);
     }
     super.dispose();
   }

@@ -523,7 +523,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     }
     return PhoneScaffold(
       mini: false,
-      header: PhoneHeader(back: s.home),
+      header: PhoneHeader(back: onTablet ? s.back : s.home),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
         children: [
@@ -540,9 +540,9 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
             for (final f in d.failed) _failedRow(f, s),
           ],
           if (d.kept.isNotEmpty || d.failed.isNotEmpty)
-            _hint(s.removeHint(onIphone), top: 18),
+            _hint(s.removeHint(onIphone, tablet: onTablet), top: 18),
           const SizedBox(height: 10),
-          PhoneSection(s.spaceOnDevice(onIphone)),
+          PhoneSection(s.spaceOnDevice(onIphone, tablet: onTablet)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
@@ -922,7 +922,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           children: [
             Expanded(
               child: Text(
-                _folder ?? s.defaultFolder(onIphone),
+                _folder ?? s.defaultFolder(onIphone, tablet: onTablet),
                 key: const Key('folder'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

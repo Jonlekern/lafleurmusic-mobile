@@ -179,7 +179,10 @@ class AlbumScreen extends StatelessWidget {
 void _play(BuildContext context, List<Track> list, {bool shuffle = false}) {
   final app = AppScope.of(context);
   if (!list.any(app.playableNow)) {
-    say(ScaffoldMessenger.of(context), app.strings.nothingOffline(onIphone));
+    say(
+      ScaffoldMessenger.of(context),
+      app.strings.nothingOffline(onIphone, tablet: onTablet),
+    );
     return;
   }
   app.player.playTracks(list, 0, shuffle: shuffle);
@@ -209,7 +212,7 @@ class _KeepPill extends StatelessWidget {
           onPressed: () => kept
               ? say(
                   ScaffoldMessenger.of(context),
-                  app.strings.alreadyOnDevice(onIphone),
+                  app.strings.alreadyOnDevice(onIphone, tablet: onTablet),
                 )
               : keepTracks(
                   context,
@@ -257,7 +260,10 @@ class PhoneTrackRows extends StatelessWidget {
                         ? () => app.player.playTracks(tracks, i)
                         : () => say(
                             ScaffoldMessenger.of(context),
-                            app.strings.nothingOffline(onIphone),
+                            app.strings.nothingOffline(
+                              onIphone,
+                              tablet: onTablet,
+                            ),
                           ),
                   ),
               ],
@@ -349,7 +355,9 @@ class PhoneTrackRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  playable ? sub ?? artist : s.notOnDevice(artist, onIphone),
+                  playable
+                      ? sub ?? artist
+                      : s.notOnDevice(artist, onIphone, tablet: onTablet),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/ui/coverflow_screen.dart';
 import 'package:lafleurmusic/ui/library_screen.dart';
@@ -281,5 +283,168 @@ void main() {
       await done(tester);
       expect(find.text('Garder sur mon iPad'), findsOneWidget);
     });
+  });
+
+  group('iPad, tablette : un seul nom d\'appareil partout', () {
+    final fr = Strings.of(const Locale('fr'));
+    final en = Strings.of(const Locale('en'));
+    String? stray(String text, List<String> banned) =>
+        banned.where(text.contains).firstOrNull;
+
+    test('iPad : aucun « iPhone » ni « téléphone »', () {
+      final all = <String>[
+        for (final s in [fr, en]) ...[
+          s.onDevice(true, tablet: true),
+          s.keepOnDevice(true, tablet: true),
+          s.removeFromDevice(true, tablet: true),
+          s.keptOnDevice(true, tablet: true),
+          s.spaceOnDevice(true, tablet: true),
+          s.filesHint(true, tablet: true),
+          s.keepButton(true, '1 Mo', tablet: true),
+          s.alreadyOnDevice(true, tablet: true),
+          s.notOnDevice('A', true, tablet: true),
+          s.nothingOffline(true, tablet: true),
+          s.removeHint(true, tablet: true),
+          s.defaultFolder(true, tablet: true),
+          s.folderUnavailable(true, tablet: true),
+          s.removeConfirmTitle(true, tablet: true),
+          s.removeConfirmBody('X', 2, '1 Mo', true, tablet: true),
+          s.sameAlbumNote(true, tablet: true),
+        ],
+      ];
+      for (final t in all) {
+        expect(stray(t, ['iPhone', 'téléphone', 'phone']), isNull, reason: t);
+      }
+      expect(fr.spaceOnDevice(true, tablet: true), "PLACE SUR L'IPAD");
+      expect(
+        fr.alreadyOnDevice(true, tablet: true),
+        startsWith("Déjà sur l'iPad."),
+      );
+      expect(
+        fr.removeConfirmBody('X', 2, '1 Mo', true, tablet: true),
+        contains('de ton iPad'),
+      );
+      expect(en.defaultFolder(true, tablet: true), 'On My iPad › LAFLEURMUSIC');
+    });
+
+    test('tablette Android : « tablette » partout, au féminin', () {
+      expect(fr.onDevice(false, tablet: true), 'Sur ma tablette');
+      expect(fr.keepOnDevice(false, tablet: true), 'Garder sur ma tablette');
+      expect(
+        fr.removeFromDevice(false, tablet: true),
+        'Retirer de la tablette',
+      );
+      expect(fr.spaceOnDevice(false, tablet: true), 'PLACE SUR LA TABLETTE');
+      expect(
+        fr.notOnDevice('A', false, tablet: true),
+        'A · pas sur la tablette',
+      );
+      expect(
+        fr.sameAlbumNote(false, tablet: true),
+        contains('depuis la tablette'),
+      );
+      expect(
+        fr.removeConfirmBody('X', 1, '1 Mo', false, tablet: true),
+        contains('de ta tablette'),
+      );
+      expect(
+        en.nothingOffline(false, tablet: true),
+        'Not on the tablet: nothing to play offline.',
+      );
+      expect(
+        fr.removeHint(false, tablet: true),
+        contains('retirer de la tablette'),
+      );
+    });
+
+    test('téléphone : les textes d\'avant ne bougent pas', () {
+      expect(fr.spaceOnDevice(true), "PLACE SUR L'IPHONE");
+      expect(fr.spaceOnDevice(false), 'PLACE SUR LE TÉLÉPHONE');
+      expect(
+        fr.alreadyOnDevice(true),
+        "Déjà sur l'iPhone. Appui long sur un morceau pour le retirer.",
+      );
+      expect(en.keptOnDevice(false), 'on the phone');
+      expect(fr.keptOnDevice(true), 'sur l’iPhone');
+      expect(fr.removeFromDevice(true), 'Retirer du téléphone');
+      expect(fr.removeHint(true), contains('retirer du téléphone'));
+      expect(en.filesHint(true), contains('On My iPhone'));
+    });
+
+    tabletTest('écran Sur mon iPad : iPad, retour « Retour »', (tester) async {
+      await pumpTablet(tester, 1024, 768);
+      await tester.tap(find.text('Sur mon iPad'));
+      await done(tester);
+      expect(find.text("PLACE SUR L'IPAD"), findsOneWidget);
+      expect(find.text('Retour'), findsOneWidget);
+      expect(find.text('Accueil'), findsNothing);
+      expect(find.textContaining('iPhone'), findsNothing);
+    });
+
+    tabletTest('écran Sur ma tablette (Android)', (tester) async {
+      await pumpTablet(tester, 1024, 768, platform: TargetPlatform.android);
+      await tester.tap(find.text('Sur ma tablette'));
+      await done(tester);
+      expect(find.text('PLACE SUR LA TABLETTE'), findsOneWidget);
+      expect(find.text('Retour'), findsOneWidget);
+    });
+
+    tabletTest('Comptes et une playlist : retour « Retour »', (tester) async {
+      await pumpTablet(tester, 1024, 768);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Sidebar),
+          matching: find.text('Comptes'),
+        ),
+      );
+      await done(tester);
+      expect(find.text('Retour'), findsOneWidget);
+    });
+
+    tabletTest('l\'écran d\'une playlist dit iPad', (tester) async {
+      await pumpTablet(tester, 1024, 768);
+      final soiree = find.descendant(
+        of: find.byType(Sidebar),
+        matching: find.text('Soirée'),
+      );
+      await tester.ensureVisible(soiree);
+      await tester.pump();
+      await tester.tap(soiree);
+      await done(tester);
+      expect(find.text('Retour'), findsOneWidget);
+      expect(find.textContaining('iPhone'), findsNothing);
+      expect(find.textContaining('· pas sur l\'iPad'), findsWidgets);
+    });
+
+    tabletTest(
+      'une fenêtre qui rétrécit redevient un téléphone (textes, orientations)',
+      (tester) async {
+        final calls = <List<Object?>>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'SystemChrome.setPreferredOrientations') {
+              calls.add(call.arguments as List<Object?>);
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        await pumpTablet(tester, 1024, 768);
+        expect(onTablet, isTrue);
+        expect(calls.last, hasLength(4));
+        tester.view.physicalSize = const Size(390, 844);
+        await tester.pump();
+        await done(tester);
+        expect(onTablet, isFalse);
+        expect(find.byType(PhoneShell), findsOneWidget);
+        expect(calls.last, hasLength(3));
+      },
+    );
   });
 }

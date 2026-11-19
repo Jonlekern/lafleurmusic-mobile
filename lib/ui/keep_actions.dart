@@ -85,7 +85,9 @@ Future<bool> keepWith(
 
 /// Pourquoi [Downloader.keep] a refusé : place, dossier indisponible, ou erreur.
 String refusal(Strings s, KeepResult r) {
-  if (r.folderUnavailable) return s.folderUnavailable(onIphone);
+  if (r.folderUnavailable) {
+    return s.folderUnavailable(onIphone, tablet: onTablet);
+  }
   if (r.neededBytes > 0) return s.notEnoughSpace(s.size(r.neededBytes));
   return s.keepFailed;
 }

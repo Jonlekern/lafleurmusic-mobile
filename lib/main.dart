@@ -39,7 +39,7 @@ Future<void> main() async {
   // téléphone : debout, ou couché des deux côtés (Cover Flow) ; En cours le remet debout le temps qu'on y est.
   // Tablette : les quatre orientations
   if (isMobilePlatform(defaultTargetPlatform)) {
-    await SystemChrome.setPreferredOrientations(deviceOrientations);
+    await SystemChrome.setPreferredOrientations(launchOrientations);
   }
   // --dart-define=LAFLEUR_DEMO=true : bibliothèque inventée des maquettes, sans serveur ni son (debug seulement)
   if (kDebugMode && const bool.fromEnvironment('LAFLEUR_DEMO')) {

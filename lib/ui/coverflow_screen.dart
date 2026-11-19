@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
+import 'tablet.dart';
 import '../l10n/strings.dart';
 import '../library/merge.dart';
 import '../library/models.dart';
@@ -348,7 +349,10 @@ class _CoverflowScreenState extends State<CoverflowScreen>
                               color: LafleurColors.pink,
                             ),
                           ),
-                          TextSpan(text: ' ${s.keptOnDevice(onIphone)}'),
+                          TextSpan(
+                            text:
+                                ' ${s.keptOnDevice(onIphone, tablet: onTablet)}',
+                          ),
                         ],
                       ],
                     ),

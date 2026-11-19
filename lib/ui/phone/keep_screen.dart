@@ -11,6 +11,7 @@ import '../../offline/downloader.dart' show KeepOrigin, unknownTrackSize;
 import '../../settings.dart';
 import '../../theme/colors.dart';
 import '../cover_image.dart';
+import '../tablet.dart';
 import '../keep_actions.dart';
 import 'home_screen.dart' show PhoneSection;
 import 'phone_shell.dart';
@@ -154,7 +155,7 @@ class _KeepScreenState extends State<KeepScreen> {
                 PhoneSection(s.albumsSelected(chosen.length)),
                 for (final e in entries) _row(e, s),
                 const SizedBox(height: 10),
-                PhoneSection(s.spaceOnDevice(onIphone)),
+                PhoneSection(s.spaceOnDevice(onIphone, tablet: onTablet)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Text.rich(
@@ -189,7 +190,7 @@ class _KeepScreenState extends State<KeepScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
                   child: Text(
-                    s.filesHint(onIphone),
+                    s.filesHint(onIphone, tablet: onTablet),
                     style: const TextStyle(
                       color: LafleurColors.sub,
                       fontSize: 12,
@@ -203,7 +204,11 @@ class _KeepScreenState extends State<KeepScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: _KeepButton(
-              label: s.keepButton(onIphone, need > 0 ? s.size(need) : null),
+              label: s.keepButton(
+                onIphone,
+                need > 0 ? s.size(need) : null,
+                tablet: onTablet,
+              ),
               onTap: chosen.isEmpty || _busy ? null : () => _keep(chosen),
             ),
           ),
