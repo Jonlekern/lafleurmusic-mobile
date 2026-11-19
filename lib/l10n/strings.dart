@@ -580,6 +580,9 @@ class Strings {
     '◆ Tourne pour avancer dans le morceau',
     '◆ Turn to move through the song',
   );
+  String get classicTrackPosition =>
+      _t('Position dans le morceau', 'Position in the song');
+  String get classicVolume => 'Volume';
   String get normalMode => _t('Mode normal', 'Normal mode');
   String get classicMode => _t('Mode Classic', 'Classic mode');
   String get classicModeNote => _t(

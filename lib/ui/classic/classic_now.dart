@@ -34,7 +34,8 @@ Future<void> openClassicNow(BuildContext context) => pushPhone(
 class ClassicNow extends StatefulWidget {
   const ClassicNow({super.key});
 
-  /// Un cran de volume, sur 0–100 (le volume du lecteur) : 20 crans du silence au maximum.
+  /// Un cran de volume, sur 0–100 : la molette règle le volume de l'appli (le lecteur), pas
+  /// celui du téléphone. 20 crans du silence au maximum.
   static const volumeStep = 5.0;
   static const maxVolume = 100.0;
 
@@ -43,6 +44,12 @@ class ClassicNow extends StatefulWidget {
 
   /// Sans toucher la molette pendant ce temps : retour au volume.
   static const scrubIdle = Duration(seconds: 3);
+
+  /// Le seek part quand la molette s'arrête ce temps-là (un seul seek pour un tour rapide).
+  static const seekDelay = Duration(milliseconds: 120);
+
+  /// Le lecteur est arrivé au losange à ce temps près : le cran suivant part de la lecture.
+  static const reached = Duration(seconds: 1);
 
   @override
   State<ClassicNow> createState() => _ClassicNowState();
@@ -57,6 +64,7 @@ class _ClassicNowState extends State<ClassicNow> {
   bool _scrub = false;
   Duration? _target; // où la molette a envoyé le morceau (le losange y reste)
   Timer? _idle;
+  Timer? _seekTimer; // le seek vers [_target], en attente
 
   @override
   void didChangeDependencies() {
@@ -73,6 +81,13 @@ class _ClassicNowState extends State<ClassicNow> {
       setState(() {
         // un autre morceau : le losange repart de sa position
         if (st.track?.path != _st.track?.path) _target = null;
+        // le lecteur est arrivé au losange : la suite part de la lecture, le temps la suit
+        final t = _target;
+        if (t != null &&
+            _seekTimer == null &&
+            (st.position - t).abs() <= ClassicNow.reached) {
+          _target = null;
+        }
         _st = st;
       });
     });
@@ -85,6 +100,7 @@ class _ClassicNowState extends State<ClassicNow> {
   @override
   void dispose() {
     _idle?.cancel();
+    _seekTimer?.cancel();
     _stateSub?.cancel();
     _queueSub?.cancel();
     super.dispose();
@@ -112,7 +128,16 @@ class _ClassicNowState extends State<ClassicNow> {
     if (next > total) next = total;
     if (next == from) return;
     setState(() => _target = next);
-    _player!.seek(next);
+    _seekTimer?.cancel();
+    _seekTimer = Timer(ClassicNow.seekDelay, _sendSeek);
+  }
+
+  /// Envoie le seek en attente, tout de suite.
+  void _sendSeek() {
+    _seekTimer?.cancel();
+    _seekTimer = null;
+    final t = _target;
+    if (t != null) _player?.seek(t);
   }
 
   /// Le rond du milieu : volume ↔ avancer dans le morceau (rien à avancer sans morceau).
@@ -131,6 +156,7 @@ class _ClassicNowState extends State<ClassicNow> {
   void _toVolume() {
     _idle?.cancel();
     _idle = null;
+    if (_seekTimer != null) _sendSeek(); // le dernier cran n'est pas perdu
     if (!mounted) return;
     setState(() {
       _scrub = false;
@@ -269,11 +295,18 @@ class _Card extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 26),
-          _Bar(
-            fraction: f,
-            color: LafleurColors.pink,
-            diamond: scrub,
-            fillKey: const Key('classic-now-progress'),
+          // lecteur d'écran : où on en est, dit pendant qu'on tourne
+          Semantics(
+            key: const Key('classic-now-progress-bar'),
+            container: true,
+            label: s.classicTrackPosition,
+            value: '${clock(position)} / ${clock(total)}',
+            child: _Bar(
+              fraction: f,
+              color: LafleurColors.pink,
+              diamond: scrub,
+              fillKey: const Key('classic-now-progress'),
+            ),
           ),
           const SizedBox(height: 6),
           Row(
@@ -302,10 +335,16 @@ class _Card extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _Bar(
-                    fraction: volume,
-                    color: _volume,
-                    fillKey: const Key('classic-now-volume'),
+                  child: Semantics(
+                    key: const Key('classic-now-volume-bar'),
+                    container: true,
+                    label: s.classicVolume,
+                    value: '${(volume * 100).round()} %',
+                    child: _Bar(
+                      fraction: volume,
+                      color: _volume,
+                      fillKey: const Key('classic-now-volume'),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),

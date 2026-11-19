@@ -40,9 +40,28 @@ class AdaptiveHome extends StatefulWidget {
 
 class _AdaptiveHomeState extends State<AdaptiveHome> {
   bool? _tablet;
+  ValueNotifier<bool>? _classic;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final classic = AppScope.of(context).classicMode;
+    if (identical(classic, _classic)) return;
+    _classic?.removeListener(_modeChanged);
+    _classic = classic?..addListener(_modeChanged);
+  }
+
+  /// Retour au mode normal : il n'a pas de volume, celui de l'appli revient à fond
+  /// (la molette du Mode Classic a pu le baisser).
+  void _modeChanged() {
+    if (_classic?.value ?? true) return;
+    final player = AppScope.of(context).player;
+    if (player.volume != 100) player.setVolume(100);
+  }
 
   @override
   void dispose() {
+    _classic?.removeListener(_modeChanged);
     setTabletMode(false);
     super.dispose();
   }

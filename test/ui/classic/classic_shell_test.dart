@@ -459,7 +459,9 @@ void main() {
     mode.value = false;
     await settle(tester);
     expect(find.byType(HomeScreen), findsOneWidget);
-    expect(fx.player.calls, isEmpty);
+    // rien pour la lecture ; seul le volume revient à fond en mode normal
+    expect(fx.player.calls, ['volume']);
+    expect(fx.player.volume, 100);
   });
 
   testWidgets(

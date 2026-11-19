@@ -18,6 +18,7 @@ import '../phone_fixture.dart';
 import 'classic_shell_test.dart' show press, rotate, rotateTo, selected;
 
 const _scrubCaption = '◆ Tourne pour avancer dans le morceau';
+const _debounce = Duration(milliseconds: 120);
 
 /// Le Mode Classic, En cours ouvert depuis le menu.
 Future<PhoneFixture> openClassic(WidgetTester tester) async {
@@ -88,13 +89,17 @@ void main() {
       expect(find.text(_scrubCaption), findsOneWidget);
       expect(find.byKey(const Key('classic-now-volume')), findsNothing);
       await rotate(tester, 2);
-      expect(fx.player.lastSeek, const Duration(seconds: 103));
       expect(find.text('1:43'), findsOneWidget); // le losange et le temps suivent
+      await tester.pump(_debounce);
+      expect(fx.player.lastSeek, const Duration(seconds: 103));
       await rotate(tester, -1);
+      await tester.pump(_debounce);
       expect(fx.player.lastSeek, const Duration(seconds: 98));
       await rotate(tester, -100);
+      await tester.pump(_debounce);
       expect(fx.player.lastSeek, Duration.zero);
       await rotate(tester, 200);
+      await tester.pump(_debounce);
       expect(fx.player.lastSeek, const Duration(seconds: 245));
       expect(fx.player.volume, 75); // le volume n'a pas bougé
       expect(fx.player.calls, isNot(contains('volume')));
@@ -301,6 +306,123 @@ void main() {
     });
   });
 
+  group('avancer dans le morceau, suite de la revue', () {
+    testWidgets('10 crans rapides : un seul seek, vers la position finale', (
+      tester,
+    ) async {
+      final fx = await openClassic(tester);
+      await press(tester, 'select');
+      for (var i = 0; i < 10; i++) {
+        await rotate(tester, 1);
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(fx.player.calls, isNot(contains('seek')));
+      expect(find.text('2:23'), findsOneWidget); // l'écran suit tout de suite
+      await tester.pump(_debounce);
+      expect(fx.player.calls.where((c) => c == 'seek').length, 1);
+      expect(fx.player.lastSeek, const Duration(seconds: 143));
+    });
+
+    testWidgets('pendant la lecture, le cran suivant part de la position jouée', (
+      tester,
+    ) async {
+      final fx = await openClassic(tester);
+      await press(tester, 'select');
+      await rotate(tester, 2);
+      await tester.pump(_debounce);
+      expect(fx.player.lastSeek, const Duration(seconds: 103));
+      // le lecteur est arrivé au losange, puis la musique avance
+      Future<void> playAt(int ms) async {
+        fx.player.show(
+          PlayerState(
+            track: fx.player.current.track,
+            position: Duration(milliseconds: ms),
+            duration: const Duration(seconds: 245),
+            playing: true,
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+      }
+
+      await playAt(103400);
+      await playAt(110000);
+      expect(find.text('1:50'), findsOneWidget); // le temps suit la lecture
+      await rotate(tester, 1);
+      await tester.pump(_debounce);
+      expect(fx.player.lastSeek, const Duration(seconds: 115));
+    });
+
+    testWidgets('un seek en attente part quand on revient au volume', (
+      tester,
+    ) async {
+      final fx = await openClassic(tester);
+      await press(tester, 'select');
+      await rotate(tester, 3);
+      await press(tester, 'select'); // avant les 120 ms
+      expect(scrubbing(tester), isFalse);
+      expect(fx.player.lastSeek, const Duration(seconds: 108));
+      await tester.pump(_debounce);
+      expect(fx.player.calls.where((c) => c == 'seek').length, 1);
+    });
+
+    testWidgets('écran fermé avec un seek en attente : annulé, rien ne casse', (
+      tester,
+    ) async {
+      final fx = await openClassic(tester);
+      await press(tester, 'select');
+      await rotate(tester, 1);
+      await tester.pumpWidget(const SizedBox()); // ClassicNow défait
+      await tester.pump(_debounce * 2);
+      expect(fx.player.calls, isNot(contains('seek')));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets('lecteur d\'écran : la progression et le volume se disent', (
+    tester,
+  ) async {
+    final h = tester.ensureSemantics();
+    await openClassic(tester);
+    expect(
+      tester.getSemantics(find.byKey(const Key('classic-now-progress-bar'))),
+      isSemantics(label: 'Position dans le morceau', value: '1:33 / 4:05'),
+    );
+    expect(
+      tester.getSemantics(find.byKey(const Key('classic-now-volume-bar'))),
+      isSemantics(label: 'Volume', value: '75 %'),
+    );
+    await rotate(tester, 1);
+    expect(
+      tester.getSemantics(find.byKey(const Key('classic-now-volume-bar'))),
+      isSemantics(label: 'Volume', value: '80 %'),
+    );
+    h.dispose();
+  });
+
+  testWidgets('retour au mode normal : le volume revient à fond', (
+    tester,
+  ) async {
+    final mode = ValueNotifier(true);
+    final fx = await pumpPhone(
+      tester,
+      home: const AdaptiveHome(),
+      classicMode: mode,
+    );
+    await rotateTo(tester, 'En cours');
+    await press(tester, 'select');
+    await tester.pumpAndSettle();
+    await rotate(tester, -8);
+    expect(fx.player.volume, 35);
+    mode.value = false;
+    await settle(tester);
+    expect(fx.player.volume, 100);
+    // en Mode Classic, le volume reste celui choisi
+    mode.value = true;
+    await settle(tester);
+    expect(fx.player.calls.where((c) => c == 'volume').length, 9);
+  });
+
   // point 4 de la revue
   testWidgets(
     'Classic → normal → Classic pendant la lecture : la musique continue, la même file',
@@ -352,8 +474,10 @@ void main() {
       expect(mode.value, isFalse);
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.byType(ClassicMenu), findsNothing);
-      // le lecteur n'a rien reçu : toujours en lecture, même file, même endroit
-      expect(fx.player.calls, calls);
+      // le lecteur n'a reçu que le volume remis à fond (le mode normal n'en a pas) :
+      // toujours en lecture, même file, même endroit
+      expect(fx.player.calls, [...calls, 'volume']);
+      expect(fx.player.volume, 100);
       expect(identical(fx.player.queue, queue), isTrue);
       expect(queue.order, order);
       expect(queue.position, pos);
@@ -373,7 +497,7 @@ void main() {
       await choose('Mode Classic');
       expect(mode.value, isTrue);
       expect(find.byType(ClassicMenu), findsOneWidget);
-      expect(fx.player.calls, calls);
+      expect(fx.player.calls, [...calls, 'volume']);
       expect(identical(fx.player.queue, queue), isTrue);
       expect(queue.order, order);
       expect(queue.position, pos);
