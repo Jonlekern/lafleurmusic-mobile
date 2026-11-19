@@ -206,6 +206,10 @@ Future<Uint8List?> remoteCover(
   final own = c == null && s is! JellyfinSource;
   final cl = c ?? (own ? newServerClient() : null);
   try {
+    // Plex: the address and the token are chosen by prepare()
+    if (s is! JellyfinSource && s is AuthRenewable) {
+      await (s as AuthRenewable).prepare().timeout(timeout);
+    }
     final url = s.coverUri(coverId, size);
     // Jellyfin: the token may not be loaded yet, and a revoked one is renewed
     final res = s is JellyfinSource

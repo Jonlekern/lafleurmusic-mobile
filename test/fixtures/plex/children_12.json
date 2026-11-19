@@ -1,0 +1,67 @@
+{
+ "MediaContainer": {
+  "size": 2,
+  "totalSize": 2,
+  "offset": 0,
+  "Metadata": [
+   {
+    "ratingKey": "121",
+    "type": "track",
+    "title": "Un",
+    "grandparentTitle": "Various Artists",
+    "parentTitle": "Compilation é",
+    "index": 1,
+    "parentIndex": 1,
+    "duration": 100000,
+    "Media": [
+     {
+      "id": 1210,
+      "duration": 100000,
+      "container": "m4a",
+      "audioCodec": "m4a",
+      "Part": [
+       {
+        "id": 1210,
+        "key": "/library/parts/1210/1700000000/file.m4a",
+        "duration": 100000,
+        "file": "/media/x",
+        "size": 1000,
+        "container": "m4a"
+       }
+      ]
+     }
+    ],
+    "originalTitle": "A"
+   },
+   {
+    "ratingKey": "122",
+    "type": "track",
+    "title": "Deux",
+    "grandparentTitle": "Various Artists",
+    "parentTitle": "Compilation é",
+    "index": 2,
+    "parentIndex": 2,
+    "duration": 120000,
+    "Media": [
+     {
+      "id": 1220,
+      "duration": 120000,
+      "container": "m4a,mp4",
+      "audioCodec": "m4a,mp4",
+      "Part": [
+       {
+        "id": 1220,
+        "key": "/library/parts/1220/1700000000/file.m4a,mp4",
+        "duration": 120000,
+        "file": "/media/x",
+        "size": 2000,
+        "container": "m4a,mp4"
+       }
+      ]
+     }
+    ],
+    "originalTitle": "B"
+   }
+  ]
+ }
+}

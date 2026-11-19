@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../library/models.dart' show unknownAlbumName;
 import 'accounts.dart';
 import 'plex_link.dart';
 import 'remote_key.dart';
@@ -292,21 +293,237 @@ class PlexSource
 
   // ---- library, playback (tasks 2 and 3) ----------------------------------------------------
 
-  @override
-  Stream<List<SourceAlbum>> albums({int pageSize = 500}) =>
-      throw UnimplementedError('Plex library: plan 5 task 2');
+  /// GET [path] on the server in use, JSON back. A 401 is « À reconnecter »; another
+  /// refusal is a [PlexException] with its code. [start]/[size]: one page.
+  Future<Map> _get(
+    String path, {
+    Map<String, String>? query,
+    int? start,
+    int? size,
+  }) async {
+    await prepare();
+    final base = _base;
+    if (base == null) throw PlexException('no address of the server answers');
+    final req = http.Request('GET', plexUrl(base, path, query))
+      ..followRedirects = false
+      ..headers.addAll(headers);
+    if (start != null) req.headers['X-Plex-Container-Start'] = '$start';
+    if (size != null) req.headers['X-Plex-Container-Size'] = '$size';
+    final res = await _send(req);
+    if (res.statusCode == 401) throw _relink();
+    if (res.statusCode != 200) {
+      throw PlexException('request refused', statusCode: res.statusCode);
+    }
+    try {
+      final d = jsonDecode(utf8.decode(res.bodyBytes, allowMalformed: true));
+      final mc = d is Map ? d['MediaContainer'] : null;
+      if (mc is Map) return mc;
+    } on FormatException {
+      // not JSON
+    }
+    throw PlexException('not a Plex answer');
+  }
+
+  /// The `Metadata` of [path], one page at a time. [repeatCheck]: a server ignoring the
+  /// offset sends the same items again, which fails the run (a playlist may list a song
+  /// twice: off).
+  Stream<List<Map>> _pages(
+    String path, {
+    Map<String, String>? query,
+    int pageSize = 500,
+    bool repeatCheck = true,
+  }) async* {
+    var start = 0;
+    final seen = <String>{};
+    while (true) {
+      final d = await _get(path, query: query, start: start, size: pageSize);
+      final raw = d['Metadata'];
+      final items = [if (raw is List) ...raw.whereType<Map>()];
+      if (items.isEmpty) return;
+      if (repeatCheck) {
+        final ids = [
+          for (final i in items)
+            if (i['ratingKey'] != null) '${i['ratingKey']}',
+        ];
+        if (ids.any(seen.contains)) {
+          throw PlexException('list repeats itself at offset $start');
+        }
+        seen.addAll(ids);
+      }
+      yield items;
+      start += items.length;
+      final total = _int(d['totalSize']);
+      if (total != null) {
+        if (start >= total) return;
+      } else if (!repeatCheck || items.length < pageSize) {
+        return; // no total: a short page is the end (a repeat can't be told from a long list)
+      }
+    }
+  }
+
+  /// The ids of the music libraries (`type` artist). Several is fine, none is empty.
+  Future<List<String>> _musicSections() async {
+    final d = await _get('library/sections');
+    final dirs = d['Directory'];
+    return [
+      for (final s in (dirs is List ? dirs : const []).whereType<Map>())
+        if (s['type'] == 'artist' && s['key'] != null) '${s['key']}',
+    ];
+  }
+
+  /// Album id → the album's artist, from [albums]: tracks of a compilation carry their own
+  /// artist, never the album's.
+  final _albumArtists = <String, String>{};
 
   @override
-  Future<List<SourceSong>> albumSongs(String albumId) =>
-      throw UnimplementedError('Plex library: plan 5 task 2');
+  Stream<List<SourceAlbum>> albums({int pageSize = 500}) async* {
+    final seen = <String>{}; // an album in two libraries counts once
+    for (final section in await _musicSections()) {
+      await for (final items in _pages(
+        'library/sections/$section/all',
+        query: {'type': '9'},
+        pageSize: pageSize,
+      )) {
+        final page = [
+          for (final a in items)
+            if (a['ratingKey'] != null && seen.add('${a['ratingKey']}'))
+              SourceAlbum(
+                id: '${a['ratingKey']}',
+                name: _albumName(a['title']),
+                artist: _str(a['parentTitle']),
+                coverId: _str(a['thumb']).isEmpty ? null : _str(a['thumb']),
+                songCount: _int(a['leafCount']) ?? 0,
+              ),
+        ];
+        for (final a in page) {
+          _albumArtists[a.id] = a.artist;
+        }
+        if (page.isNotEmpty) yield page;
+      }
+    }
+  }
+
+  /// Plex names the album of tracks without one `[Unknown Album]`; an empty title is the same.
+  static String _albumName(Object? title) {
+    final t = _str(title);
+    return t.isEmpty || t == '[Unknown Album]' ? unknownAlbumName : t;
+  }
 
   @override
-  Future<List<SourcePlaylist>> playlists() =>
-      throw UnimplementedError('Plex playlists: plan 5 task 2');
+  Future<List<SourceSong>> albumSongs(String albumId) async {
+    final songs = <SourceSong>[];
+    await for (final items in _pages('library/metadata/$albumId/children')) {
+      for (final m in items) {
+        if (m['ratingKey'] != null) songs.add(_song(m, albumId));
+      }
+    }
+    return songs;
+  }
+
+  SourceSong _song(Map m, String albumId) {
+    final media = m['Media'] is List && (m['Media'] as List).isNotEmpty
+        ? (m['Media'] as List).first
+        : null;
+    final part =
+        media is Map &&
+            media['Part'] is List &&
+            (media['Part'] as List).isNotEmpty
+        ? (media['Part'] as List).first
+        : null;
+    final p = part is Map ? part : const {};
+    final albumArtist = _albumArtists[albumId] ?? _str(m['grandparentTitle']);
+    final original = _str(m['originalTitle']);
+    final thumb = _str(m['parentThumb']).isNotEmpty
+        ? _str(m['parentThumb'])
+        : _str(m['thumb']);
+    final genres = m['Genre'] is List
+        ? [
+            for (final g in (m['Genre'] as List).whereType<Map>())
+              if (_str(g['tag']).isNotEmpty) _str(g['tag']),
+          ]
+        : const <String>[];
+    return SourceSong(
+      id: '${m['ratingKey']}',
+      title: _str(m['title']),
+      artist: original.isNotEmpty ? original : _str(m['grandparentTitle']),
+      album: _albumName(m['parentTitle']),
+      albumArtist: albumArtist,
+      genre: genres.join(', '),
+      track: _int(m['index']),
+      disc: _int(m['parentIndex']),
+      durationMs: _int(m['duration']) ?? 0, // already in ms
+      size: _int(p['size']) ?? 0,
+      coverId: thumb.isEmpty ? null : thumb,
+      suffix: _suffix(
+        p['container'] ?? (media is Map ? media['container'] : null),
+      ),
+      playCount: _int(m['viewCount']) ?? 0,
+    );
+  }
+
+  /// `container` of the first part; a list ("m4a,mp4") keeps the first name.
+  static String? _suffix(Object? c) {
+    if (c is! String || c.isEmpty) return null;
+    return c.split(',').first.trim().toLowerCase();
+  }
+
+  static String _str(Object? v) => v == null ? '' : '$v';
+  static int? _int(Object? v) =>
+      v is num ? v.toInt() : int.tryParse('${v ?? ''}');
 
   @override
-  Uri coverUri(String coverId, int size) =>
-      throw UnimplementedError('Plex covers: plan 5 task 2');
+  Future<List<SourcePlaylist>> playlists() async {
+    final heads = <(String, String)>[];
+    await for (final items in _pages(
+      'playlists',
+      query: {'playlistType': 'audio'},
+    )) {
+      for (final p in items) {
+        if (p['ratingKey'] != null) {
+          heads.add(('${p['ratingKey']}', _str(p['title'])));
+        }
+      }
+    }
+    return [
+      for (final (id, name) in heads)
+        SourcePlaylist(id: id, name: name, songIds: await _playlistSongs(id)),
+    ];
+  }
+
+  /// Null when this playlist won't read (the others still do). A revoked token still throws.
+  Future<List<String>?> _playlistSongs(String id) async {
+    final ids = <String>[];
+    try {
+      await for (final items in _pages(
+        'playlists/$id/items',
+        repeatCheck: false,
+      )) {
+        for (final m in items) {
+          if (m['ratingKey'] != null) ids.add('${m['ratingKey']}');
+        }
+      }
+    } on PlexException catch (e) {
+      if (e.tokenRefused) rethrow;
+      return null;
+    } on SourceNetworkException {
+      return null;
+    }
+    return ids;
+  }
+
+  /// A cover: the server resizes the picture [coverId] (its `thumb` path). The token goes in
+  /// [headers] only, never in this address (it would end up in cache keys and logs); callers
+  /// wait for [prepare] first (the address is chosen there).
+  @override
+  Uri coverUri(String coverId, int size) {
+    final base = _base;
+    if (base == null) throw StateError('Plex source not prepared');
+    return plexUrl(base, 'photo/:/transcode', {
+      'url': coverId,
+      'width': '$size',
+      'height': '$size',
+    });
+  }
 
   @override
   Uri streamUri(String songId) =>

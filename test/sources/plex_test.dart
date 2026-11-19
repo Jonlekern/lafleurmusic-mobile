@@ -376,10 +376,8 @@ void main() {
       },
     );
 
-    test('library and playback come in the next tasks', () {
+    test('playback comes in the next task', () {
       final s = plexSource(FakePms());
-      expect(() => s.albums(), throwsUnimplementedError);
-      expect(() => s.albumSongs('1'), throwsUnimplementedError);
       expect(() => s.streamUri('1'), throwsUnimplementedError);
       expect(s.accountType, AccountType.plex);
     });
