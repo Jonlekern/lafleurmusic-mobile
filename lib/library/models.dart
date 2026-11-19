@@ -22,6 +22,7 @@ class Track {
     required this.durationMs,
     required this.hasCover,
     this.mtime = 0,
+    this.addedAt = 0,
     required this.size,
     this.missing = false,
     this.albumGroup,
@@ -44,6 +45,9 @@ class Track {
   final int durationMs;
   final bool hasCover;
   final int mtime;
+
+  /// When the library first stored it (ms); 0 = not yet stored (the db then stamps it).
+  final int addedAt;
   final int size;
   final bool missing;
 
@@ -60,6 +64,7 @@ class Album {
     required this.trackCount,
     required this.durationMs,
     this.coverTrackPath,
+    this.artist = '',
   });
 
   /// Son identité, la même sur tous les comptes (`albumMergeKey`) : ce qu'on demande pour ses morceaux.
@@ -68,6 +73,9 @@ class Album {
   final int trackCount;
   final int durationMs;
   final String? coverTrackPath;
+
+  /// L'artiste de l'album (artiste de l'album, sinon celui du morceau) : tri « Artiste ».
+  final String artist;
 }
 
 /// Une playlist d'un serveur telle que l'Accueil la montre : jamais fusionnée entre comptes.

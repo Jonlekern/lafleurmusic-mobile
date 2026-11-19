@@ -101,7 +101,12 @@ class LibraryView {
     return _last ?? await _visible.stream.first;
   }
 
-  Stream<List<Album>> albums() => _follow((a) => db.watchAlbums(accounts: a));
+  Stream<List<Album>> albums({AlbumSort sort = AlbumSort.name}) =>
+      _follow((a) => db.watchAlbums(accounts: a, sort: sort));
+
+  /// The albums last played (at most [limit], the newest first), one per merged album.
+  Stream<List<Album>> recentAlbums({int limit = 10}) =>
+      _follow((a) => db.watchRecentAlbums(limit, accounts: a));
 
   /// The songs of album [key] ([Album.key]).
   Stream<List<Track>> albumTracks(String key) =>

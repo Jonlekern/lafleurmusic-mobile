@@ -222,6 +222,18 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _addedAtMeta = const VerificationMeta(
+    'addedAt',
+  );
+  @override
+  late final GeneratedColumn<int> addedAt = GeneratedColumn<int>(
+    'added_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _missingMeta = const VerificationMeta(
     'missing',
   );
@@ -309,6 +321,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     hasCover,
     mtime,
     size,
+    addedAt,
     missing,
     toRepair,
     searchKey,
@@ -463,6 +476,12 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     } else if (isInserting) {
       context.missing(_sizeMeta);
     }
+    if (data.containsKey('added_at')) {
+      context.handle(
+        _addedAtMeta,
+        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
+      );
+    }
     if (data.containsKey('missing')) {
       context.handle(
         _missingMeta,
@@ -587,6 +606,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}size'],
       )!,
+      addedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}added_at'],
+      )!,
       missing: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}missing'],
@@ -637,6 +660,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final bool hasCover;
   final int mtime;
   final int size;
+  final int addedAt;
   final bool missing;
   final bool toRepair;
   final String searchKey;
@@ -663,6 +687,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.hasCover,
     required this.mtime,
     required this.size,
+    required this.addedAt,
     required this.missing,
     required this.toRepair,
     required this.searchKey,
@@ -702,6 +727,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     map['has_cover'] = Variable<bool>(hasCover);
     map['mtime'] = Variable<int>(mtime);
     map['size'] = Variable<int>(size);
+    map['added_at'] = Variable<int>(addedAt);
     map['missing'] = Variable<bool>(missing);
     map['to_repair'] = Variable<bool>(toRepair);
     map['search_key'] = Variable<String>(searchKey);
@@ -740,6 +766,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       hasCover: Value(hasCover),
       mtime: Value(mtime),
       size: Value(size),
+      addedAt: Value(addedAt),
       missing: Value(missing),
       toRepair: Value(toRepair),
       searchKey: Value(searchKey),
@@ -774,6 +801,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       hasCover: serializer.fromJson<bool>(json['hasCover']),
       mtime: serializer.fromJson<int>(json['mtime']),
       size: serializer.fromJson<int>(json['size']),
+      addedAt: serializer.fromJson<int>(json['addedAt']),
       missing: serializer.fromJson<bool>(json['missing']),
       toRepair: serializer.fromJson<bool>(json['toRepair']),
       searchKey: serializer.fromJson<String>(json['searchKey']),
@@ -805,6 +833,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'hasCover': serializer.toJson<bool>(hasCover),
       'mtime': serializer.toJson<int>(mtime),
       'size': serializer.toJson<int>(size),
+      'addedAt': serializer.toJson<int>(addedAt),
       'missing': serializer.toJson<bool>(missing),
       'toRepair': serializer.toJson<bool>(toRepair),
       'searchKey': serializer.toJson<String>(searchKey),
@@ -834,6 +863,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     bool? hasCover,
     int? mtime,
     int? size,
+    int? addedAt,
     bool? missing,
     bool? toRepair,
     String? searchKey,
@@ -860,6 +890,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     hasCover: hasCover ?? this.hasCover,
     mtime: mtime ?? this.mtime,
     size: size ?? this.size,
+    addedAt: addedAt ?? this.addedAt,
     missing: missing ?? this.missing,
     toRepair: toRepair ?? this.toRepair,
     searchKey: searchKey ?? this.searchKey,
@@ -894,6 +925,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       hasCover: data.hasCover.present ? data.hasCover.value : this.hasCover,
       mtime: data.mtime.present ? data.mtime.value : this.mtime,
       size: data.size.present ? data.size.value : this.size,
+      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
       missing: data.missing.present ? data.missing.value : this.missing,
       toRepair: data.toRepair.present ? data.toRepair.value : this.toRepair,
       searchKey: data.searchKey.present ? data.searchKey.value : this.searchKey,
@@ -927,6 +959,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('hasCover: $hasCover, ')
           ..write('mtime: $mtime, ')
           ..write('size: $size, ')
+          ..write('addedAt: $addedAt, ')
           ..write('missing: $missing, ')
           ..write('toRepair: $toRepair, ')
           ..write('searchKey: $searchKey, ')
@@ -958,6 +991,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     hasCover,
     mtime,
     size,
+    addedAt,
     missing,
     toRepair,
     searchKey,
@@ -988,6 +1022,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.hasCover == this.hasCover &&
           other.mtime == this.mtime &&
           other.size == this.size &&
+          other.addedAt == this.addedAt &&
           other.missing == this.missing &&
           other.toRepair == this.toRepair &&
           other.searchKey == this.searchKey &&
@@ -1016,6 +1051,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<bool> hasCover;
   final Value<int> mtime;
   final Value<int> size;
+  final Value<int> addedAt;
   final Value<bool> missing;
   final Value<bool> toRepair;
   final Value<String> searchKey;
@@ -1042,6 +1078,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.hasCover = const Value.absent(),
     this.mtime = const Value.absent(),
     this.size = const Value.absent(),
+    this.addedAt = const Value.absent(),
     this.missing = const Value.absent(),
     this.toRepair = const Value.absent(),
     this.searchKey = const Value.absent(),
@@ -1069,6 +1106,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     required bool hasCover,
     this.mtime = const Value.absent(),
     required int size,
+    this.addedAt = const Value.absent(),
     this.missing = const Value.absent(),
     this.toRepair = const Value.absent(),
     required String searchKey,
@@ -1104,6 +1142,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<bool>? hasCover,
     Expression<int>? mtime,
     Expression<int>? size,
+    Expression<int>? addedAt,
     Expression<bool>? missing,
     Expression<bool>? toRepair,
     Expression<String>? searchKey,
@@ -1131,6 +1170,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (hasCover != null) 'has_cover': hasCover,
       if (mtime != null) 'mtime': mtime,
       if (size != null) 'size': size,
+      if (addedAt != null) 'added_at': addedAt,
       if (missing != null) 'missing': missing,
       if (toRepair != null) 'to_repair': toRepair,
       if (searchKey != null) 'search_key': searchKey,
@@ -1160,6 +1200,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<bool>? hasCover,
     Value<int>? mtime,
     Value<int>? size,
+    Value<int>? addedAt,
     Value<bool>? missing,
     Value<bool>? toRepair,
     Value<String>? searchKey,
@@ -1187,6 +1228,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       hasCover: hasCover ?? this.hasCover,
       mtime: mtime ?? this.mtime,
       size: size ?? this.size,
+      addedAt: addedAt ?? this.addedAt,
       missing: missing ?? this.missing,
       toRepair: toRepair ?? this.toRepair,
       searchKey: searchKey ?? this.searchKey,
@@ -1258,6 +1300,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (size.present) {
       map['size'] = Variable<int>(size.value);
     }
+    if (addedAt.present) {
+      map['added_at'] = Variable<int>(addedAt.value);
+    }
     if (missing.present) {
       map['missing'] = Variable<bool>(missing.value);
     }
@@ -1299,6 +1344,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('hasCover: $hasCover, ')
           ..write('mtime: $mtime, ')
           ..write('size: $size, ')
+          ..write('addedAt: $addedAt, ')
           ..write('missing: $missing, ')
           ..write('toRepair: $toRepair, ')
           ..write('searchKey: $searchKey, ')
@@ -4371,6 +4417,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   required bool hasCover,
   Value<int> mtime,
   required int size,
+  Value<int> addedAt,
   Value<bool> missing,
   Value<bool> toRepair,
   required String searchKey,
@@ -4398,6 +4445,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<bool> hasCover,
   Value<int> mtime,
   Value<int> size,
+  Value<int> addedAt,
   Value<bool> missing,
   Value<bool> toRepair,
   Value<String> searchKey,
@@ -4510,6 +4558,11 @@ class $$TracksTableFilterComposer extends Composer<_$LibraryDb, $TracksTable> {
 
   ColumnFilters<int> get size => $composableBuilder(
     column: $table.size,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get addedAt => $composableBuilder(
+    column: $table.addedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4648,6 +4701,11 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get missing => $composableBuilder(
     column: $table.missing,
     builder: (column) => ColumnOrderings(column),
@@ -4749,6 +4807,9 @@ class $$TracksTableAnnotationComposer
   GeneratedColumn<int> get size =>
       $composableBuilder(column: $table.size, builder: (column) => column);
 
+  GeneratedColumn<int> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => column);
+
   GeneratedColumn<bool> get missing =>
       $composableBuilder(column: $table.missing, builder: (column) => column);
 
@@ -4815,6 +4876,7 @@ class $$TracksTableTableManager
                 Value<bool> hasCover = const Value.absent(),
                 Value<int> mtime = const Value.absent(),
                 Value<int> size = const Value.absent(),
+                Value<int> addedAt = const Value.absent(),
                 Value<bool> missing = const Value.absent(),
                 Value<bool> toRepair = const Value.absent(),
                 Value<String> searchKey = const Value.absent(),
@@ -4841,6 +4903,7 @@ class $$TracksTableTableManager
                 hasCover: hasCover,
                 mtime: mtime,
                 size: size,
+                addedAt: addedAt,
                 missing: missing,
                 toRepair: toRepair,
                 searchKey: searchKey,
@@ -4869,6 +4932,7 @@ class $$TracksTableTableManager
                 required bool hasCover,
                 Value<int> mtime = const Value.absent(),
                 required int size,
+                Value<int> addedAt = const Value.absent(),
                 Value<bool> missing = const Value.absent(),
                 Value<bool> toRepair = const Value.absent(),
                 required String searchKey,
@@ -4895,6 +4959,7 @@ class $$TracksTableTableManager
                 hasCover: hasCover,
                 mtime: mtime,
                 size: size,
+                addedAt: addedAt,
                 missing: missing,
                 toRepair: toRepair,
                 searchKey: searchKey,

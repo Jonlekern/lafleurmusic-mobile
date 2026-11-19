@@ -9,6 +9,9 @@ import 'player/equalizer.dart';
 /// Quels comptes la bibliothèque montre : un seul, tous (fusionnés), ou un choix.
 enum DisplayMode { one, all, custom }
 
+/// Tri de la liste des albums (réglage gardé).
+enum AlbumSort { name, artist, recent, mostPlayed }
+
 /// Réglages de l'appli (dossier de support / settings.json).
 class AppSettings {
   AppSettings({
@@ -29,6 +32,7 @@ class AppSettings {
     this.displayMode = DisplayMode.all,
     this.oneAccount,
     this.confirmRemove = true,
+    this.albumSort = AlbumSort.name,
     List<String>? customAccounts,
   }) : customAccounts = customAccounts ?? [],
        equalizer = equalizer ?? Equalizer.named('flat');
@@ -55,6 +59,7 @@ class AppSettings {
   DisplayMode displayMode; // plusieurs comptes : un, tous ou un choix
   String? oneAccount; // le compte montré quand displayMode = one
   List<String> customAccounts; // les comptes montrés quand displayMode = custom
+  AlbumSort albumSort; // tri de la liste des albums
   bool confirmRemove; // « Retirer du téléphone » demande d'abord confirmation
 
   static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
@@ -107,6 +112,10 @@ class AppSettings {
               ? j['oneAccount']! as String
               : null,
           confirmRemove: j['confirmRemove'] != false,
+          albumSort: AlbumSort.values.firstWhere(
+            (m) => m.name == j['albumSort'],
+            orElse: () => AlbumSort.name,
+          ),
           customAccounts: j['customAccounts'] is List
               ? [
                   for (final a in j['customAccounts']! as List)
@@ -151,6 +160,7 @@ class AppSettings {
         'oneAccount': oneAccount,
         'customAccounts': customAccounts,
         'confirmRemove': confirmRemove,
+        'albumSort': albumSort.name,
       }),
     );
     await tmp.rename(f.path);

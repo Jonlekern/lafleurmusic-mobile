@@ -18,6 +18,7 @@ import 'album_screen.dart';
 import 'display_choice.dart';
 import 'names_screen.dart';
 import 'on_device_screen.dart';
+import 'albums_screen.dart';
 import 'phone_shell.dart';
 import 'playlist_screen.dart';
 
@@ -154,7 +155,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? null
                     : () => open(const OnDeviceScreen()),
               ),
-              PhoneSection(s.playlists),
+              // le titre ouvre l'écran Albums (tri, écoutés récemment) : aucune ligne de plus
+              PhoneSection(
+                s.playlists,
+                onTap: () => open(const AlbumsScreen()),
+              ),
               StreamBuilder<List<Album>>(
                 stream: app.library.albums(),
                 builder: (context, albums) => StreamBuilder<Set<String>>(
@@ -338,7 +343,7 @@ class _AccountChipsState extends State<_AccountChips> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _Chip(
+              PhoneChip(
                 mode == DisplayMode.custom
                     ? app.strings.customDisplay
                     : app.strings.allAccounts,
@@ -348,7 +353,7 @@ class _AccountChipsState extends State<_AccountChips> {
                 onTap: () => _chooseGroup(list),
               ),
               for (final a in list)
-                _Chip(
+                PhoneChip(
                   a.name,
                   key: ValueKey('chip-${a.id}'),
                   on: mode == DisplayMode.one && shown.contains(a.id),
@@ -373,8 +378,8 @@ class _Never implements Listenable {
   void removeListener(VoidCallback listener) {}
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip(
+class PhoneChip extends StatelessWidget {
+  const PhoneChip(
     this.label, {
     super.key,
     this.on = false,
@@ -421,19 +426,24 @@ class _Chip extends StatelessWidget {
 
 /// Titre de section (BIBLIOTHÈQUE, ALBUMS).
 class PhoneSection extends StatelessWidget {
-  const PhoneSection(this.text, {super.key});
+  const PhoneSection(this.text, {super.key, this.onTap});
   final String text;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
-    child: Text(
-      text,
-      style: const TextStyle(
-        color: Color(0xFF999999),
-        fontSize: 11,
-        letterSpacing: 1,
-        fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF999999),
+          fontSize: 11,
+          letterSpacing: 1,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     ),
   );

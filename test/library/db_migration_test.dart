@@ -98,6 +98,60 @@ Future<void> _expectV4(LibraryDb db) async {
 }
 
 void main() {
+  test(
+    'a v4 database upgrades to v5: added_at backfilled, nothing lost',
+    () async {
+      final dir = Directory.systemTemp.createTempSync('mig5');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final file = File('${dir.path}/lib.db');
+      // a fresh database, then taken back to what 0.4.0 wrote (no added_at, version 4)
+      final first = LibraryDb(NativeDatabase(file));
+      await first.customSelect('SELECT 1').get();
+      await first.close();
+      final raw = sqlite3.open(file.path);
+      raw.execute('ALTER TABLE tracks DROP COLUMN added_at');
+      raw.execute(
+        "INSERT INTO accounts VALUES ('acc', 'subsonic', 'Home', 'http://h', 'u', 0)",
+      );
+      raw.execute(
+        "INSERT INTO tracks (path, account_id, remote_id, title, artist, album, album_key, duration_ms, has_cover, mtime, size, search_key, merge_key, album_merge_key) "
+        "VALUES ('subsonic://acc/1', 'acc', '1', 'T', 'a', 'A', 'a', 1000, 1, 0, 5, 'k', 'm1', 'g1')",
+      );
+      raw.execute(
+        "INSERT INTO tracks (path, title, artist, album, album_key, duration_ms, has_cover, mtime, size, search_key, merge_key, album_merge_key) "
+        "VALUES ('/m/1.flac', 'L', 'a', 'A', 'a', 1000, 0, 123456, 5, 'k', 'm2', 'g1')",
+      );
+      raw.execute(
+        "INSERT INTO play_counts VALUES ('subsonic://acc/1', 2, 3, 99)",
+      );
+      raw.execute(
+        "INSERT INTO offline VALUES ('subsonic://acc/1', 'A/a.mp3', 5, 1, 'user', 'done', 0)",
+      );
+      raw.execute(
+        "INSERT INTO playlists (account_id, remote_id, name, position) VALUES ('acc', 'pl1', 'Road', 0)",
+      );
+      raw.execute('PRAGMA user_version = 4');
+      raw.close();
+
+      final before = DateTime.now().millisecondsSinceEpoch;
+      final db = LibraryDb(NativeDatabase(file));
+      addTearDown(db.close);
+      final rows = {
+        for (final r in await db.select(db.tracks).get()) r.path: r.addedAt,
+      };
+      expect(rows['/m/1.flac'], 123456); // the file date when known
+      expect(
+        rows['subsonic://acc/1'],
+        greaterThanOrEqualTo(before),
+      ); // else the upgrade
+      final plays = (await db.select(db.playCounts).get()).single;
+      expect((plays.count, plays.imported, plays.lastPlayed), (2, 3, 99));
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+      expect((await db.select(db.playlists).getSingle()).name, 'Road');
+      expect(await db.select(db.accountRows).get(), hasLength(1));
+    },
+  );
+
   test('a v1 database upgrades to v4 and keeps its data', () async {
     final raw = sqlite3.openInMemory();
     for (final sql in _v1) {

@@ -176,4 +176,16 @@ void main() {
       expect((await AppSettings.load(bad)).crossfadeSeconds, 10);
     },
   );
+
+  test(
+    'album sort: Nom by default, saved and read back, junk falls back',
+    () async {
+      final f = File('${dir.path}/settings.json');
+      expect(AppSettings().albumSort, AlbumSort.name);
+      await (AppSettings()..albumSort = AlbumSort.mostPlayed).save(f);
+      expect((await AppSettings.load(f)).albumSort, AlbumSort.mostPlayed);
+      await f.writeAsString('{"albumSort": "nope"}');
+      expect((await AppSettings.load(f)).albumSort, AlbumSort.name);
+    },
+  );
 }

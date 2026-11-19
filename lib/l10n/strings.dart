@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../settings.dart' show AlbumSort;
 import '../sources/account_service.dart';
 import '../sources/accounts.dart';
 import '../sources/source.dart';
@@ -34,6 +35,13 @@ class Strings {
   String get library => _t('BIBLIOTHÈQUE', 'LIBRARY');
   String get coverFlow => 'Cover Flow';
   String get songs => _t('Morceaux', 'Songs');
+  String get recentlyPlayed => _t('ÉCOUTÉS RÉCEMMENT', 'RECENTLY PLAYED');
+  String albumSort(AlbumSort s) => switch (s) {
+    AlbumSort.name => _t('Nom', 'Name'),
+    AlbumSort.artist => _t('Artiste', 'Artist'),
+    AlbumSort.recent => _t('Ajout récent', 'Recently added'),
+    AlbumSort.mostPlayed => _t('Plus écouté', 'Most played'),
+  };
   String get artists => _t('Artistes', 'Artists');
   String get genres => 'Genres';
   String get playlists => 'ALBUMS';
@@ -190,7 +198,8 @@ class Strings {
   String get addedByYou => _t('AJOUTÉS PAR TOI', 'ADDED BY YOU');
   String get nextInAlbum => _t("SUITE DE L'ALBUM", 'NEXT IN ALBUM');
   String get clearQueue => _t('Vider', 'Clear');
-  String get clearAddedTitle => _t('Vider tes ajouts ?', 'Clear your additions?');
+  String get clearAddedTitle =>
+      _t('Vider tes ajouts ?', 'Clear your additions?');
   String clearAddedBody(int n) => n == 1
       ? _t(
           "Le morceau que tu as ajouté part de la file. La suite de l'album reste.",

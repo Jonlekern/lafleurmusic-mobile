@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../offline/paths.dart';
 import '../sources/remote_key.dart';
+import '../settings.dart' show AlbumSort;
 import 'merge.dart';
 import 'models.dart';
 
@@ -34,6 +35,8 @@ class Tracks extends Table {
   BoolColumn get hasCover => boolean()();
   IntColumn get mtime => integer().withDefault(const Constant(0))();
   IntColumn get size => integer()();
+  // quand la ligne a été enregistrée la première fois (ms) ; jamais réécrite ensuite
+  IntColumn get addedAt => integer().withDefault(const Constant(0))();
   BoolColumn get missing => boolean().withDefault(const Constant(false))();
   BoolColumn get toRepair => boolean().withDefault(const Constant(false))();
   TextColumn get searchKey => text()();
@@ -183,8 +186,9 @@ class LibraryDb extends _$LibraryDb {
 
   // v2 : copies hors ligne et écoutes en attente. v3 : morceaux retirés du Top 100 par l'utilisateur.
   // v4 : clé de fusion, écoutes importées, playlists des serveurs.
+  // v5 : date d'ajout de chaque morceau (tri « Ajout récent »).
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -197,6 +201,15 @@ class LibraryDb extends _$LibraryDb {
         await m.createTable(pendingScrobbles);
       }
       if (from < 3) await m.createTable(autoKeepBlocks);
+      // avant la v4 : son code lit toutes les colonnes de `tracks`, `added_at` comprise
+      if (from < 5) {
+        await m.addColumn(tracks, tracks.addedAt);
+        // date de modification du fichier si on la connaît, sinon le moment de la mise à jour
+        await customStatement(
+          'UPDATE tracks SET added_at = CASE WHEN mtime > 0 THEN mtime ELSE ? END',
+          [DateTime.now().millisecondsSinceEpoch],
+        );
+      }
       if (from < 4) {
         await m.addColumn(tracks, tracks.mergeKey);
         await m.createIndex(tracksMergeKey);
@@ -475,6 +488,7 @@ class LibraryDb extends _$LibraryDb {
     durationMs: r.durationMs,
     hasCover: r.hasCover,
     mtime: r.mtime,
+    addedAt: r.addedAt,
     size: r.size,
     missing: r.missing,
     albumGroup: r.albumMergeKey,
@@ -548,6 +562,7 @@ class LibraryDb extends _$LibraryDb {
   }
 
   Future<void> _upsert(List<Track> list) => batch((b) {
+    final now = DateTime.now().millisecondsSinceEpoch;
     for (final t in list) {
       final row = TracksCompanion.insert(
         path: t.path,
@@ -570,6 +585,7 @@ class LibraryDb extends _$LibraryDb {
         durationMs: t.durationMs,
         hasCover: t.hasCover,
         mtime: Value(t.mtime),
+        addedAt: Value(t.addedAt > 0 ? t.addedAt : now),
         size: t.size,
         missing: Value(t.missing),
         searchKey: sortKey('${t.title}\n${t.artist}\n${t.album}'),
@@ -579,7 +595,11 @@ class LibraryDb extends _$LibraryDb {
         tracks,
         row,
         onConflict: DoUpdate(
-          (_) => row.copyWith(path: const Value.absent()),
+          // la date d'ajout reste celle de la première fois
+          (_) => row.copyWith(
+            path: const Value.absent(),
+            addedAt: const Value.absent(),
+          ),
           target: [tracks.path],
         ),
       );
@@ -786,8 +806,7 @@ class LibraryDb extends _$LibraryDb {
   }
 
   List<(Track, int)> _topRows(List<QueryRow> rows) => [
-    for (final r in rows)
-      (_fromRow(tracks.map(r.data)), r.read<int>('plays')),
+    for (final r in rows) (_fromRow(tracks.map(r.data)), r.read<int>('plays')),
   ];
 
   /// Retire les lignes [trackPaths] (seulement celles de [reason] si donné), en une
@@ -1022,25 +1041,70 @@ class LibraryDb extends _$LibraryDb {
   static const _byDisc =
       'COALESCE(NULLIF(disc, 0), 1), track_no IS NULL, track_no, title';
 
-  /// The albums shown (one per [albumMergeKey], whatever the account): name, songs, length.
-  Stream<List<Album>> watchAlbums({Set<String>? accounts}) =>
-      _shown(
-        accounts,
-        'SELECT album_merge_key AS k, MIN(album) AS name, MIN(album_key) AS sk, '
-        'COUNT(*) AS c, SUM(duration_ms) AS d, MIN(path) AS cover FROM reps '
-        'GROUP BY album_merge_key ORDER BY sk, name, k',
-      ).watch().map(
-        (rows) => [
-          for (final r in rows)
-            Album(
-              key: r.read<String>('k'),
-              name: r.read<String>('name'),
-              trackCount: r.read<int>('c'),
-              durationMs: r.read<int?>('d') ?? 0,
-              coverTrackPath: r.read<String?>('cover'),
-            ),
-        ],
-      );
+  Album _albumRow(QueryRow r) => Album(
+    key: r.read<String>('k'),
+    name: r.read<String>('name'),
+    trackCount: r.read<int>('c'),
+    durationMs: r.read<int?>('d') ?? 0,
+    coverTrackPath: r.read<String?>('cover'),
+    artist: r.read<String>('artist'),
+  );
+
+  static const _albumCols =
+      'album_merge_key AS k, MIN(album) AS name, MIN(album_key) AS sk, '
+      'COUNT(*) AS c, SUM(duration_ms) AS d, MIN(path) AS cover, '
+      "MIN(CASE WHEN album_artist <> '' THEN album_artist ELSE artist END) AS artist";
+
+  /// The albums shown (one per [albumMergeKey], whatever the account): name, songs, length,
+  /// in the order of [sort]. « Plus écouté » is one query: the merged listens of the songs
+  /// ([_mergedPlays]) added up per album. « Ajout récent »: the oldest `added_at` of an album's
+  /// rows, the newest first (an album already known on one account stays old on another).
+  Stream<List<Album>> watchAlbums({
+    Set<String>? accounts,
+    AlbumSort sort = AlbumSort.name,
+  }) {
+    if (sort == AlbumSort.mostPlayed) {
+      final (reps, v) = _reps(accounts);
+      return customSelect(
+        '$reps, base AS (SELECT path FROM reps), $_mergedPlays'
+        'SELECT $_albumCols, COALESCE(SUM(m.imp + m.cnt), 0) AS plays FROM reps '
+        'LEFT JOIN m ON m.rp = reps.path GROUP BY album_merge_key '
+        'ORDER BY plays DESC, sk, name, k',
+        variables: v,
+        readsFrom: {tracks, offline, accountRows, playCounts},
+      ).watch().map((rows) => [for (final r in rows) _albumRow(r)]);
+    }
+    final order = switch (sort) {
+      AlbumSort.recent => 'MIN(added_at) DESC, sk, name, k',
+      _ => 'sk, name, k',
+    };
+    return _shown(
+      accounts,
+      'SELECT $_albumCols FROM reps GROUP BY album_merge_key ORDER BY $order',
+    ).watch().map((rows) {
+      final list = [for (final r in rows) _albumRow(r)];
+      if (sort == AlbumSort.artist) {
+        // stable: within one artist the name order of the query stays
+        final keys = {for (final a in list) a.key: sortKey(a.artist)};
+        list.sort((a, b) => keys[a.key]!.compareTo(keys[b.key]!));
+      }
+      return list;
+    });
+  }
+
+  /// The [limit] albums last played, the newest first, one per [albumMergeKey]: the same
+  /// album played on two accounts is one. One query ([_mergedPlays] gives each song's
+  /// last listen, twins included); the listens of hidden accounts count for the song.
+  Stream<List<Album>> watchRecentAlbums(int limit, {Set<String>? accounts}) {
+    final (reps, v) = _reps(accounts);
+    return customSelect(
+      '$reps, base AS (SELECT path FROM reps), $_mergedPlays'
+      'SELECT $_albumCols, MAX(m.lp) AS lp FROM reps JOIN m ON m.rp = reps.path '
+      'GROUP BY album_merge_key ORDER BY lp DESC, sk, name, k LIMIT $limit',
+      variables: v,
+      readsFrom: {tracks, offline, accountRows, playCounts},
+    ).watch().map((rows) => [for (final r in rows) _albumRow(r)]);
+  }
 
   /// Albums ([Album.key]) whose every server track shown has a finished copy, its own or a
   /// twin's on any account, shown or not (⬇ rose de l'Accueil).
