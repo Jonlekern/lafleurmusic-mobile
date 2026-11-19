@@ -522,6 +522,7 @@ class AccountService extends ChangeNotifier {
       accountToken: accountToken,
       plexUser: plexUser,
     );
+    PlexSource.resetRefreshCooldown(id);
     resolver?.invalidate(id);
     _bump(id);
     _results.remove(id);

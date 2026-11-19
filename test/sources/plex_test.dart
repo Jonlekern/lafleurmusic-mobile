@@ -225,6 +225,14 @@ void main() {
         expect(await again.test(), TestResult.unreachable);
         await again.refreshing;
         expect(resourceReads(tv), 3);
+        // a new code was accepted for this account: asked again at once, too
+        expect(await again.test(), TestResult.unreachable);
+        await again.refreshing;
+        expect(resourceReads(tv), 3, reason: 'cooling down again');
+        PlexSource.resetRefreshCooldown('acc1');
+        expect(await again.test(), TestResult.unreachable);
+        await again.refreshing;
+        expect(resourceReads(tv), 4);
       },
     );
 
@@ -377,6 +385,34 @@ void main() {
         });
       },
     );
+
+    test('30 concurrent prepare() with every address hanging: one probe round, '
+        'and none again right after', () {
+      fakeAsync((fa) {
+        final pms = FakePms()..hang = {homeLocal, homeRemote, homeRelay};
+        final s = plexSource(pms, now: fa.getClock(DateTime(2026, 11, 19)).now);
+        var failed = 0;
+        for (var i = 0; i < 30; i++) {
+          s.prepare().catchError((Object _) => failed++);
+        }
+        fa.elapse(const Duration(seconds: 12));
+        int identities() =>
+            pms.log.where((r) => r.url.path == '/identity').length;
+        final round = identities();
+        expect(failed, 30);
+        expect(round, 3, reason: 'one probe per address, once');
+        // a new call right after a failed round does not probe again
+        s.prepare().catchError((Object _) => failed++);
+        fa.elapse(const Duration(seconds: 1));
+        expect(identities(), round);
+        expect(failed, 31);
+        // later, it tries again
+        fa.elapse(const Duration(seconds: 6));
+        s.prepare().catchError((Object _) => failed++);
+        fa.elapse(const Duration(seconds: 12));
+        expect(identities(), round * 2);
+      });
+    });
 
     test('no plex.tv token kept: no refresh, unreachable', () async {
       final tv = FakePlexTv();

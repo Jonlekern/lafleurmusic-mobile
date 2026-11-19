@@ -63,6 +63,10 @@ class PlexSource
   /// The network changed (home / away): plex.tv may be asked again at once.
   static void resetRefreshCooldowns() => _cooldownUntil.clear();
 
+  /// A new code was just accepted for this account: plex.tv may be asked again at once.
+  static void resetRefreshCooldown(String accountId) =>
+      _cooldownUntil.remove(accountId);
+
   /// The account was removed: its cooldown and its running refresh are forgotten (the
   /// refresh, still running, then writes nothing and leaves no cooldown behind).
   static void forgetAccount(String accountId) {
@@ -140,14 +144,30 @@ class PlexSource
   /// the addresses may be stale (a new public IP), so plex.tv is asked for the new ones in
   /// the background; this call doesn't wait for it (a check must stay short), the next one
   /// uses what it found.
-  Future<Uri?> _pick() async {
+  /// Callers meeting a round already running wait for that same round.
+  Future<Uri?> _pick() => _picking ??= _pickRound().whenComplete(() {
+    _picking = null;
+  });
+
+  Future<Uri?>? _picking;
+
+  /// After a round where nothing answered, [prepare] doesn't probe again for this long.
+  static const pickRetryAfter = Duration(seconds: 5);
+  DateTime? _pickFailedAt;
+
+  Future<Uri?> _pickRound() async {
     final c = await bestConnection(
       _client,
       _server,
       headers: _headersWith(null),
       timeout: probeTimeout,
     );
-    if (c == null) _startRefresh();
+    if (c == null) {
+      _pickFailedAt = _now();
+      _startRefresh();
+    } else {
+      _pickFailedAt = null;
+    }
     return _base = c?.uri;
   }
 
@@ -314,8 +334,13 @@ class PlexSource
   Future<void> prepare() async {
     await _load();
     if (_token == null) throw _relink();
-    if (_base == null && await _pick() == null) {
-      throw PlexException('no address of the server answers');
+    if (_base == null) {
+      final failed = _pickFailedAt;
+      final recent =
+          failed != null && _now().difference(failed) < pickRetryAfter;
+      if (recent || await _pick() == null) {
+        throw PlexException('no address of the server answers');
+      }
     }
   }
 

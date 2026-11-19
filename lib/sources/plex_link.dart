@@ -344,7 +344,10 @@ class PlexLink {
     Map<String, String> headers,
   ) async {
     try {
-      final req = http.Request(method, url)..headers.addAll(headers);
+      final req = http.Request(method, url)
+        ..followRedirects =
+            false // the token never follows a redirect
+        ..headers.addAll(headers);
       return await _client
           .send(req)
           .then(http.Response.fromStream)

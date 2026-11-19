@@ -11,6 +11,19 @@ import 'fake_plex.dart';
 
 void main() {
   group('PIN code', () {
+    test('requests never follow a redirect (the token stays put)', () async {
+      final follows = <bool>[];
+      final link = PlexLink(
+        clientId: 'client-abc',
+        client: MockClient((r) async {
+          follows.add(r.followRedirects);
+          return jsonResponse('{"id":1,"code":"K7QX","expiresIn":900}', 201);
+        }),
+      );
+      await link.requestPin();
+      expect(follows, [false]);
+    });
+
     test('plex.tv can be pointed elsewhere (the end-to-end run)', () async {
       final seen = <Uri>[];
       final link = PlexLink(

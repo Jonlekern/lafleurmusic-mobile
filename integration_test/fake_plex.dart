@@ -243,8 +243,8 @@ class FakePlex {
     if (req.method == 'GET' && path == '/identity') {
       what = 'identity';
       json({'size': 0, 'claimed': true, 'machineIdentifier': machineId});
-    } else if (req.headers.value('x-plex-token') != serverToken &&
-        q['X-Plex-Token'] != serverToken) {
+    } else if (req.headers.value('x-plex-token') != serverToken) {
+      // the token is accepted in the header only, never in the address
       res.statusCode = HttpStatus.unauthorized;
     } else if (path == '/library/sections') {
       what = 'sections';
