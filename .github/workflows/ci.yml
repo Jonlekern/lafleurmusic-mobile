@@ -223,9 +223,9 @@ jobs:
           disable-animations: true
           script: |
             flutter test integration_test/app_test.dart
-            adb install -t -g offline-debug.apk
+            adb install -r -t -g offline-debug.apk
             flutter test integration_test/offline_test.dart
-            adb install -t -g accounts-debug.apk
+            adb install -r -t -g accounts-debug.apk
             flutter test integration_test/accounts_test.dart
 
   # Contract with a real Navidrome (plan 1, task 10): a throw-away server whose
