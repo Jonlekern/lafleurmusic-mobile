@@ -33,15 +33,15 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String _query = '';
   Stream<List<Account>>? _accounts; // abonnés une fois, pas à chaque image
-  Stream<List<Track>>? _tracks;
+  Stream<bool>? _anyTrack;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_tracks != null) return;
+    if (_anyTrack != null) return;
     final app = AppScope.of(context);
     _accounts = app.accounts?.watch();
-    _tracks = app.library.allTracks();
+    _anyTrack = app.library.anyTrack();
   }
 
   @override
@@ -51,22 +51,33 @@ class _HomeScreenState extends State<HomeScreen> {
     if (accounts == null) return _home(context);
     return StreamBuilder<List<Account>>(
       stream: accounts,
-      builder: (context, a) => StreamBuilder<List<Track>>(
-        stream: _tracks,
-        builder: (context, t) =>
-            (a.data?.isEmpty ?? false) && (t.data?.isEmpty ?? false)
-            ? PhoneScaffold(
-                header: PhoneHeader(
-                  trailing: HeaderButton(
-                    icon: Icons.settings_rounded,
-                    size: 16,
-                    onTap: () => pushPhone(context, const AccountsScreen()),
-                  ),
-                ),
-                body: const NoMusicBody(),
-              )
-            : _home(context),
-      ),
+      builder: (context, a) {
+        final list = a.data;
+        if (list == null) return const ColoredBox(color: LafleurColors.bg);
+        // un compte : l'Accueil habituel
+        if (list.isNotEmpty) {
+          return _home(context);
+        }
+        return StreamBuilder<bool>(
+          stream: _anyTrack,
+          builder: (context, t) {
+            final any = t.data;
+            if (any == null) return const ColoredBox(color: LafleurColors.bg);
+            return any
+                ? _home(context)
+                : PhoneScaffold(
+                    header: PhoneHeader(
+                      trailing: HeaderButton(
+                        icon: Icons.settings_rounded,
+                        size: 16,
+                        onTap: () => pushPhone(context, const AccountsScreen()),
+                      ),
+                    ),
+                    body: const NoMusicBody(),
+                  );
+          },
+        );
+      },
     );
   }
 

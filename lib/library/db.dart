@@ -840,8 +840,7 @@ class LibraryDb extends _$LibraryDb {
   }
 
   List<(Track, int)> _topRows(List<QueryRow> rows) => [
-    for (final r in rows)
-      (_fromRow(tracks.map(r.data)), r.read<int>('plays')),
+    for (final r in rows) (_fromRow(tracks.map(r.data)), r.read<int>('plays')),
   ];
 
   /// Retire les lignes [trackPaths] (seulement celles de [reason] si donné), en une
@@ -1189,6 +1188,14 @@ class LibraryDb extends _$LibraryDb {
 
   Stream<List<Track>> watchAllTracks({Set<String>? accounts}) =>
       _shownTracks(accounts, order: 'search_key').watch();
+
+  /// Whether any track is shown (one row read, not the whole library); emits only on change.
+  Stream<bool> watchAnyTrack({Set<String>? accounts}) => _shown(
+    accounts,
+    'SELECT 1 AS x FROM reps LIMIT 1',
+    const [],
+    null,
+  ).watch().map((rows) => rows.isNotEmpty).distinct();
 
   Stream<bool> watchAnyMissing() {
     final c = tracks.id.count();

@@ -116,6 +116,10 @@ class LibraryView {
   Stream<Set<String>> keptAlbums() =>
       _follow((a) => db.watchKeptAlbums(accounts: a));
 
+  /// Whether any song is shown (cheap: does not load the songs).
+  Stream<bool> anyTrack() =>
+      _follow((a) => db.watchAnyTrack(accounts: a)).distinct();
+
   Stream<List<Track>> allTracks() =>
       _follow((a) => db.watchAllTracks(accounts: a));
 

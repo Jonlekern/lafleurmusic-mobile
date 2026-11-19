@@ -191,7 +191,9 @@ void main() {
     await fillForm(tester);
     await tapAndSettle(tester, find.text('Enregistrer'));
     expect((await r.f.list(tester)).map((a) => a.name), ['Navidrome maison']);
-    await tester.pump(const Duration(seconds: 1)); // la page a fini de se fermer
+    await tester.pump(
+      const Duration(seconds: 1),
+    ); // la page a fini de se fermer
     expect(find.byType(AccountFormScreen), findsNothing);
     expect(find.text('Navidrome maison'), findsOneWidget); // sa puce
   });
@@ -219,4 +221,37 @@ void main() {
       expect(r.f.settings.localOnly, isFalse);
     },
   );
+
+  phoneTest('« a-t-on un morceau ? » ne se redit pas à chaque écriture', (
+    tester,
+  ) async {
+    final r = await pump(tester, localOnly: true);
+    final seen = <bool>[];
+    final sub = r.f.db.watchAnyTrack().listen(seen.add);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.runAsync(() => r.f.db.upsertTracks([_localTrack]));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.runAsync(
+      () => r.f.db.upsertTracks([
+        Track(
+          path: '/music/LAFLEURMUSIC/b.mp3',
+          title: 'Deux',
+          artist: 'X',
+          album: 'Y',
+          durationMs: 1000,
+          hasCover: false,
+          size: 1,
+        ),
+      ]),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.runAsync(sub.cancel);
+    expect(seen, [false, true]);
+  });
 }
