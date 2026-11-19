@@ -14,6 +14,7 @@ import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
+import 'package:lafleurmusic/sources/plex_link.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/theme/lafleur_theme.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
@@ -122,6 +123,7 @@ Future<AccountsFixture> pumpAccounts(
   FakeSecretStore? secretStore,
   bool fr = true,
   bool view = false,
+  PlexLink Function(String clientId)? plexLink,
 }) async {
   phoneSize(tester);
   final db = LibraryDb(
@@ -141,6 +143,7 @@ Future<AccountsFixture> pumpAccounts(
     accounts,
     db: db,
     resolver: resolver,
+    plexLink: plexLink,
     wait: (_) =>
         Completer<void>().future, // the 30 s follow-up sync never fires here
     draftSource: (d, password) {

@@ -14,10 +14,12 @@ import 'package:lafleurmusic/offline/downloader.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
 import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/sources/jellyfin.dart';
+import 'package:lafleurmusic/sources/plex.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/tags/tag_reader.dart';
 import 'package:lafleurmusic/tags/tag_writer.dart';
 
+import '../sources/fake_plex.dart' show Pms, homeLocal;
 import '../sources/fake_secret_store.dart';
 
 const _mb = 1024 * 1024;
@@ -841,6 +843,210 @@ void main() {
       // 1 sign-in, then 1 renewal for the original, 1 for the stream: no more
       expect(signIns.length, lessThanOrEqualTo(3));
       expect(d.lastError ?? '', isNot(contains('tok-1')));
+    });
+  });
+
+  group('Plex', () {
+    late Pms pms;
+    PlexSource plex() => pms.source();
+    Track pt(String id, {int no = 1, String album = 'Abbey Road'}) => _t(
+      id,
+      acc: 'acc1',
+      scheme: 'plex://',
+      suffix: 'flac',
+      no: no,
+      album: album,
+    );
+    Downloader makePlex(PlexSource s) => Downloader(
+      db: db,
+      resolver: MediaResolver((_) async => s),
+      device: device,
+      settings: () async => settings,
+      client: () => _Client((r) {
+        seen.add(r);
+        return handler(r);
+      }),
+      tags: io,
+      reader: reader,
+    );
+
+    setUp(() {
+      pms = Pms();
+      handler = (r) async => _ok([1, 2, 3, 4], type: 'audio/flac');
+    });
+
+    test('the original is fetched with the token in a header, never in the address', () async {
+      final d = makePlex(plex());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      final r = seen.single;
+      expect(r.url.path, '/library/parts/1010/1700000000/file.flac');
+      expect(r.url.queryParameters, {'download': '1'});
+      expect(r.headers['X-Plex-Token'], 'server-token-home');
+      expect(r.url.toString(), isNot(contains('server-token')));
+      expect((await db.offlineOf('plex://acc1/101'))!.state, 'done');
+    });
+
+    test(
+      'an album costs one read of its songs, then no more look-ups',
+      () async {
+        final d = makePlex(plex());
+        await add(pt('101'));
+        await add(pt('102', no: 2));
+        await d.keep([pt('101'), pt('102', no: 2)]);
+        await d.whenIdle();
+        expect(pms.paths, [
+          '/library/metadata/101',
+          '/library/metadata/11/children',
+        ]);
+        expect(
+          [for (final r in seen) r.url.path],
+          [
+            '/library/parts/1010/1700000000/file.flac',
+            '/library/parts/1020/1700000000/file.mp3',
+          ],
+        );
+        expect((await db.offlineOf('plex://acc1/102'))!.state, 'done');
+      },
+    );
+
+    test('original refused (403): the same file without ?download', () async {
+      handler = (r) async => r.url.queryParameters.containsKey('download')
+          ? _ok([], code: 403)
+          : _ok([9, 9], type: 'audio/flac');
+      final d = makePlex(plex());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      expect(seen, hasLength(2));
+      expect(seen.last.url.hasQuery, isFalse);
+      expect((await db.offlineOf('plex://acc1/101'))!.state, 'done');
+    });
+
+    test('a song the server no longer has (404 on its look-up) counts as refused, the next one goes on', () async {
+      pms.gone = {'101'};
+      final d = makePlex(plex());
+      await add(pt('101'));
+      await add(pt('121', album: 'Other', no: 2));
+      await d.keep([pt('101'), pt('121', album: 'Other', no: 2)]);
+      await d.whenIdle();
+      expect((await db.offlineOf('plex://acc1/101'))!.failures, greaterThan(0));
+      expect((await db.offlineOf('plex://acc1/121'))!.state, 'done');
+    });
+
+    test(
+      '404 on the file itself, original and stream: refused, counted',
+      () async {
+        handler = (r) async => _ok([], code: 404);
+        final d = makePlex(plex());
+        await add(pt('101'));
+        await d.keep([pt('101')]);
+        await d.whenIdle();
+        expect(
+          (await db.offlineOf('plex://acc1/101'))!.failures,
+          greaterThan(0),
+        );
+      },
+    );
+
+    test(
+      '401 (token revoked): not counted, no sign-in loop, the account waits',
+      () async {
+        handler = (r) async => _ok([], code: 401);
+        final d = makePlex(plex());
+        await add(pt('101'));
+        await add(pt('102', no: 2));
+        await d.keep([pt('101'), pt('102', no: 2)]);
+        await d.whenIdle();
+        expect(
+          seen,
+          hasLength(1),
+          reason: 'the account is skipped, nothing repeated',
+        );
+        for (final id in ['101', '102']) {
+          final row = (await db.offlineOf('plex://acc1/$id'))!;
+          expect((row.state, row.failures), ('queued', 0));
+        }
+        expect(d.lastError ?? '', isNot(contains('server-token')));
+      },
+    );
+
+    test(
+      '401 on the look-up: same, the account waits for a new code',
+      () async {
+        pms.songStatus = 401;
+        final d = makePlex(plex());
+        await add(pt('101'));
+        await d.keep([pt('101')]);
+        await d.whenIdle();
+        expect(seen, isEmpty);
+        final row = (await db.offlineOf('plex://acc1/101'))!;
+        expect((row.state, row.failures), ('queued', 0));
+      },
+    );
+
+    test('500 on the look-up: not counted, the account waits', () async {
+      pms.songStatus = 500;
+      final d = makePlex(plex());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      final row = (await db.offlineOf('plex://acc1/101'))!;
+      expect((row.state, row.failures), ('queued', 0));
+    });
+
+    test('404 on the file after a rescan: the address is looked up again, once, and the copy is made', () async {
+      var gone = 2; // the original, then the stream
+      handler = (r) async {
+        if (r.url.path.contains('/1010/') && gone > 0) {
+          gone--;
+          return _ok([], code: 404); // the old Part key
+        }
+        return _ok([1, 2, 3, 4], type: 'audio/flac');
+      };
+      final d = makePlex(plex());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      final row = (await db.offlineOf('plex://acc1/101'))!;
+      expect((row.state, row.failures), ('done', 0));
+      expect(pms.paths.where((p) => p == '/library/metadata/101'), hasLength(2));
+    });
+
+    test('404 on the file again after the second look-up: refused, counted', () async {
+      handler = (r) async => _ok([], code: 404);
+      final d = makePlex(plex());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      expect((await db.offlineOf('plex://acc1/101'))!.failures, greaterThan(0));
+      // each try: original + stream, then once more after a new look-up
+      expect(seen.length % 4, 0);
+    });
+
+    test('a revoked token is reported to the account at once', () async {
+      handler = (r) async => _ok([], code: 401);
+      final refused = <String>[];
+      PlexSource.onTokenRefused = refused.add;
+      addTearDown(PlexSource.resetStateForTests);
+      final d = makePlex(pms.source());
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      expect(refused.toSet(), {'acc1'});
+    });
+
+    test('the server unreachable stops the queue, nothing counted', () async {
+      final s = plex();
+      await s.prepare();
+      pms.pms.down = {homeLocal};
+      final d = makePlex(s);
+      await add(pt('101'));
+      await d.keep([pt('101')]);
+      await d.whenIdle();
+      final row = (await db.offlineOf('plex://acc1/101'))!;
+      expect((row.state, row.failures), ('queued', 0));
     });
   });
 

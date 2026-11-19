@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -9,6 +10,7 @@ import '../../theme/colors.dart';
 import '../../theme/widgets.dart';
 import 'display_choice.dart';
 import 'phone_shell.dart';
+import 'plex_link_screen.dart';
 
 /// Fond des champs et des segments de la maquette 2.
 const _fieldBg = Color(0xFF161616);
@@ -207,6 +209,112 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     if (saved && mounted && !widget.first) Navigator.of(context).maybePop();
   }
 
+  /// Plex : la connexion par code (écran suivant) enregistre le compte elle-même.
+  Future<void> _plexSignIn() async {
+    if (_locked) return;
+    final ok = await Navigator.of(context).push<bool>(
+      CupertinoPageRoute(builder: (_) => PlexLinkScreen(name: _name.text)),
+    );
+    // premier lancement : l'Accueil remplace ce formulaire tout seul
+    if (ok == true && mounted && !widget.first) {
+      Navigator.of(context).maybePop();
+    }
+  }
+
+  /// Plex, modification : « Nouveau code » remplace le jeton sur place (même compte).
+  Future<void> _plexRelink() async {
+    if (_locked) return;
+    final ok = await Navigator.of(context).push<bool>(
+      CupertinoPageRoute(
+        builder: (_) => PlexLinkScreen(relink: widget.editing),
+      ),
+    );
+    if (ok == true && mounted) Navigator.of(context).maybePop();
+  }
+
+  /// Plex, modification : seul le nom change (le jeton et les adresses viennent du code).
+  Future<void> _savePlexName() async {
+    if (_locked) return;
+    final service = AppScope.of(context).accountService;
+    final s = AppScope.of(context).strings;
+    final a = widget.editing!;
+    if (service == null) return;
+    setState(() => _busy = true);
+    var saved = false;
+    try {
+      await service.save(
+        AccountDraft(
+          type: a.type,
+          name: _name.text,
+          address: a.base.toString(),
+          user: a.user,
+        ),
+        editing: a,
+        keepHeaders: true,
+      );
+      saved = true;
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _message = s.saveFailed;
+          _ok = false;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (saved && mounted) Navigator.of(context).maybePop();
+  }
+
+  List<Widget> _plexFields(BuildContext context) {
+    final s = AppScope.of(context).strings;
+    return [
+      FieldLabel(s.fieldAccountName),
+      _Input(key: const ValueKey('account-name'), controller: _name),
+      if (widget.editing == null) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 22, 4, 0),
+          child: Text(
+            s.plexHint,
+            style: const TextStyle(
+              color: Color(0xFF999999),
+              fontSize: 13,
+              height: 1.6,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: BigButton(
+            label: s.plexSignIn,
+            onTap: _locked ? null : _plexSignIn,
+          ),
+        ),
+      ] else ...[
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            PillButton(
+              label: s.save,
+              primary: true,
+              onPressed: _locked ? null : _savePlexName,
+            ),
+          ],
+        ),
+        // le même compte Plex, un jeton neuf (comme « Nouveau code » de la liste)
+        Padding(
+          padding: const EdgeInsets.only(top: 22),
+          child: BigButton(
+            label: s.plexNewCode,
+            outline: true,
+            onTap: _locked ? null : _plexRelink,
+          ),
+        ),
+      ],
+    ];
+  }
+
   Future<void> _delete() async {
     final app = AppScope.of(context);
     final s = app.strings;
@@ -279,97 +387,101 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           const SizedBox(height: 6),
           if (_type == AccountType.subsonic)
             Text(s.subsonicServers, style: phoneHint),
-          FieldLabel(s.fieldName),
-          _Input(key: const ValueKey('account-name'), controller: _name),
-          FieldLabel(s.fieldAddress),
-          _Input(
-            key: const ValueKey('account-address'),
-            controller: _address,
-            keyboard: TextInputType.url,
-          ),
-          FieldLabel(s.fieldUser),
-          _Input(key: const ValueKey('account-user'), controller: _user),
-          FieldLabel(s.fieldPassword),
-          _Input(
-            key: const ValueKey('account-password'),
-            controller: _password,
-            obscure: true,
-            hint: widget.editing != null ? s.passwordUnchanged : null,
-          ),
-          FieldLabel(s.fieldHeaders),
-          for (var i = 0; i < _headers.length; i++)
-            Padding(
-              key: ValueKey('header-$i'),
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _Input(
-                      key: ValueKey('header-$i-name'),
-                      controller: _headers[i].name,
-                      small: true,
-                      hint: s.headerName,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: _Input(
-                      key: ValueKey('header-$i-value'),
-                      controller: _headers[i].value,
-                      small: true,
-                      hint: s.headerValue,
-                    ),
-                  ),
-                  GestureDetector(
-                    key: ValueKey('header-$i-remove'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => setState(() => _headers.removeAt(i).dispose()),
-                    child: const Padding(
-                      padding: EdgeInsets.fromLTRB(8, 8, 2, 8),
-                      child: Icon(
-                        Icons.close_rounded,
-                        size: 18,
-                        color: Color(0xFF777777),
+          if (_type == AccountType.plex) ..._plexFields(context),
+          if (_type != AccountType.plex) ...[
+            FieldLabel(s.fieldName),
+            _Input(key: const ValueKey('account-name'), controller: _name),
+            FieldLabel(s.fieldAddress),
+            _Input(
+              key: const ValueKey('account-address'),
+              controller: _address,
+              keyboard: TextInputType.url,
+            ),
+            FieldLabel(s.fieldUser),
+            _Input(key: const ValueKey('account-user'), controller: _user),
+            FieldLabel(s.fieldPassword),
+            _Input(
+              key: const ValueKey('account-password'),
+              controller: _password,
+              obscure: true,
+              hint: widget.editing != null ? s.passwordUnchanged : null,
+            ),
+            FieldLabel(s.fieldHeaders),
+            for (var i = 0; i < _headers.length; i++)
+              Padding(
+                key: ValueKey('header-$i'),
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _Input(
+                        key: ValueKey('header-$i-name'),
+                        controller: _headers[i].name,
+                        small: true,
+                        hint: s.headerName,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _Input(
+                        key: ValueKey('header-$i-value'),
+                        controller: _headers[i].value,
+                        small: true,
+                        hint: s.headerValue,
+                      ),
+                    ),
+                    GestureDetector(
+                      key: ValueKey('header-$i-remove'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () =>
+                          setState(() => _headers.removeAt(i).dispose()),
+                      child: const Padding(
+                        padding: EdgeInsets.fromLTRB(8, 8, 2, 8),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Color(0xFF777777),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _headers.add(_HeaderPair())),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2, bottom: 4),
-                child: Text(
-                  s.addHeader,
-                  style: const TextStyle(
-                    color: LafleurColors.pink,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+            Align(
+              alignment: Alignment.centerLeft,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _headers.add(_HeaderPair())),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Text(
+                    s.addHeader,
+                    style: const TextStyle(
+                      color: LafleurColors.pink,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              PillButton(
-                label: s.testAction,
-                onPressed: _locked ? null : _test,
-              ),
-              const SizedBox(width: 8),
-              PillButton(
-                label: s.save,
-                primary: true,
-                onPressed: _locked ? null : _save,
-              ),
-            ],
-          ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                PillButton(
+                  label: s.testAction,
+                  onPressed: _locked ? null : _test,
+                ),
+                const SizedBox(width: 8),
+                PillButton(
+                  label: s.save,
+                  primary: true,
+                  onPressed: _locked ? null : _save,
+                ),
+              ],
+            ),
+          ],
           if (_message != null)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -571,7 +683,7 @@ class PhoneSegment<T> extends StatelessWidget {
   }
 }
 
-/// Subsonic et Jellyfin ; Plex grisé (plus tard).
+/// Subsonic, Jellyfin, Plex.
 class AccountTypeSegment extends StatelessWidget {
   const AccountTypeSegment({
     super.key,
@@ -588,8 +700,7 @@ class AccountTypeSegment extends StatelessWidget {
       value: value,
       onChanged: onChanged,
       options: [
-        for (final t in AccountType.values)
-          SegmentOption(t, s.typeName(t), enabled: t != AccountType.plex),
+        for (final t in AccountType.values) SegmentOption(t, s.typeName(t)),
       ],
     );
   }

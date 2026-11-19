@@ -1,0 +1,37 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "totalSize": 1,
+  "offset": 0,
+  "Metadata": [
+   {
+    "ratingKey": "211",
+    "type": "track",
+    "title": "Encore",
+    "grandparentTitle": "Max",
+    "parentTitle": "Live 1990",
+    "index": 1,
+    "parentIndex": 1,
+    "duration": 200000,
+    "Media": [
+     {
+      "id": 2110,
+      "duration": 200000,
+      "container": "opus",
+      "audioCodec": "opus",
+      "Part": [
+       {
+        "id": 2110,
+        "key": "/library/parts/2110/1700000000/file.opus",
+        "duration": 200000,
+        "file": "/media/x",
+        "size": 5000,
+        "container": "opus"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -176,6 +176,10 @@ class MediaResolver {
       if (s is AuthRenewable) {
         await (s as AuthRenewable).prepare().timeout(sourceTimeout);
       }
+      // Plex: the file's address is looked up (one song) before the synchronous streamUri
+      if (s is SongResolving) {
+        await (s as SongResolving).resolveSong(id.$2).timeout(sourceTimeout);
+      }
       // Jellyfin: its sign-in header has commas, which mpv refuses (see streamHeaders)
       final headers = s is JellyfinSource ? s.streamHeaders : s.headers;
       return Media(
@@ -206,6 +210,10 @@ Future<Uint8List?> remoteCover(
   final own = c == null && s is! JellyfinSource;
   final cl = c ?? (own ? newServerClient() : null);
   try {
+    // Plex: the address and the token are chosen by prepare()
+    if (s is! JellyfinSource && s is AuthRenewable) {
+      await (s as AuthRenewable).prepare().timeout(timeout);
+    }
     final url = s.coverUri(coverId, size);
     // Jellyfin: the token may not be loaded yet, and a revoked one is renewed
     final res = s is JellyfinSource

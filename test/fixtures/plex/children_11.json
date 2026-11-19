@@ -1,0 +1,69 @@
+{
+ "MediaContainer": {
+  "size": 2,
+  "totalSize": 2,
+  "offset": 0,
+  "Metadata": [
+   {
+    "ratingKey": "101",
+    "type": "track",
+    "title": "Come Together",
+    "grandparentTitle": "The Beatles",
+    "parentTitle": "Abbey Road",
+    "index": 1,
+    "parentIndex": 1,
+    "duration": 259000,
+    "Media": [
+     {
+      "id": 1010,
+      "duration": 259000,
+      "container": "flac",
+      "audioCodec": "flac",
+      "Part": [
+       {
+        "id": 1010,
+        "key": "/library/parts/1010/1700000000/file.flac",
+        "duration": 259000,
+        "file": "/media/x",
+        "size": 31000000,
+        "container": "flac"
+       }
+      ]
+     }
+    ],
+    "viewCount": 3,
+    "parentThumb": "/library/metadata/11/thumb/1700000011"
+   },
+   {
+    "ratingKey": "102",
+    "type": "track",
+    "title": "Something",
+    "grandparentTitle": "The Beatles",
+    "parentTitle": "Abbey Road",
+    "index": 2,
+    "parentIndex": 1,
+    "duration": 183000,
+    "Media": [
+     {
+      "id": 1020,
+      "duration": 183000,
+      "container": "mp3",
+      "audioCodec": "mp3",
+      "Part": [
+       {
+        "id": 1020,
+        "key": "/library/parts/1020/1700000000/file.mp3",
+        "duration": 183000,
+        "file": "/media/x",
+        "size": 4400000,
+        "container": "mp3"
+       }
+      ]
+     }
+    ],
+    "originalTitle": "George Harrison",
+    "parentThumb": "/library/metadata/11/thumb/1700000011"
+   }
+  ]
+ }
+}
