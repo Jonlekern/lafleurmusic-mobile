@@ -38,11 +38,16 @@ enum PlaylistProblem {
   /// Too many songs for this server to take in one go (a Subsonic server without form POST).
   tooLong,
 
+  /// The playlist changed on the server meanwhile (« La playlist a changé, réessaie. »):
+  /// nothing sent; it was read again, so trying again works on what the server has.
+  changed,
+
   /// Anything else (the server answered with an error).
   failed,
 }
 
-/// A server playlist could not be changed: nothing was changed on the phone. Never carries
+/// A server playlist could not be changed. The phone shows what the server has: nothing, or
+/// (when the answer was lost or the playlist changed) the playlist read again. Never carries
 /// an address, a token or a password.
 class PlaylistWriteException implements Exception {
   PlaylistWriteException(this.problem, this.accountId);
@@ -60,7 +65,9 @@ class PlaylistWriteException implements Exception {
 /// A server playlist ([PlaylistRef.server]) is changed on its server ([PlaylistWriter]), then
 /// read again from it and stored as the sync stores it (`Playlists` / `PlaylistItems`): the
 /// server has the last word. Its actions run one at a time per playlist, in the order they
-/// were asked. A failure is a [PlaylistWriteException] and changes nothing here.
+/// were asked. A failure is a [PlaylistWriteException]; when the server may have done the
+/// change anyway (no answer, an error), the playlist is read again first, so trying again
+/// never adds a song twice.
 class PlaylistStore {
   /// [supportDir]: the app support folder (the chosen covers go in it); by default the
   /// system's. [sourceOf]: the account's source (the app's `MediaResolver.source`); without
@@ -75,11 +82,34 @@ class PlaylistStore {
   final Future<Directory> Function() _supportDir;
   final Future<MusicSource> Function(String accountId)? _sourceOf;
 
-  /// Accounts whose server refused a playlist change since the app started: « Où la
-  /// ranger » no longer offers them. Kept in memory only: after a restart, or as soon as a
-  /// change on that account works again (rights given back), the account is offered again.
+  /// Accounts whose server refused to create a playlist since the app started (or whose
+  /// source can't write): « Où la ranger » no longer offers them. In memory only: after a
+  /// restart, or once a creation there works, the account is offered again.
   ValueListenable<Set<String>> get readOnlyAccounts => _readOnly;
   final _readOnly = ValueNotifier<Set<String>>(const {});
+
+  /// Server playlists this account may not change: the server refused a change, or said so
+  /// when read (another user's, `readonly`). The edit buttons hide for them. In memory only;
+  /// a read saying it is editable again takes it out.
+  ValueListenable<Set<PlaylistRef>> get readOnlyPlaylists => _readOnlyLists;
+  final _readOnlyLists = ValueNotifier<Set<PlaylistRef>>(const {});
+
+  /// False for a server playlist known not to be changeable ([readOnlyPlaylists]).
+  bool canEdit(PlaylistRef ref) => !_readOnlyLists.value.contains(ref);
+
+  /// Reads [ref] from its server (stored as the sync does) and says whether this account may
+  /// change it; to call when a server playlist is opened. A phone playlist: true. Unknown
+  /// (no answer): what is known so far ([canEdit]).
+  Future<bool> checkEditable(PlaylistRef ref) async {
+    if (ref is! ServerPlaylistRef) return true;
+    try {
+      final (s, w) = await _writer(ref.accountId);
+      await _serial(ref, () => _reread(ref.accountId, s, w, ref.remoteId));
+    } on PlaylistWriteException {
+      return false;
+    }
+    return canEdit(ref);
+  }
 
   /// The last action asked for each server playlist (the next one waits for it).
   final _queues = <PlaylistRef, Future<void>>{};
@@ -99,13 +129,24 @@ class PlaylistStore {
 
   static const coverFolder = 'playlist_covers';
 
-  /// A new empty playlist named [name] (spaces around it dropped; empty: refused). Without
-  /// [accountId] (or with [phonePlaylistAccount]): on the phone; with a server account: made
-  /// on that server, then stored as the sync stores it.
-  Future<PlaylistRef> create(String name, {String? accountId}) async {
+  /// A new playlist named [name] (spaces around it dropped; empty: refused) holding
+  /// [songs] (keys, as [add] takes them, duplicates dropped). Without [accountId] (or with
+  /// [phonePlaylistAccount]): on the phone; with a server account: made on that server with
+  /// its songs at once (Plex: never an empty creation when there are songs), then stored as
+  /// the sync stores it.
+  Future<PlaylistRef> create(
+    String name, {
+    String? accountId,
+    List<String> songs = const [],
+  }) async {
     final n = _name(name);
     if (accountId != null && accountId != phonePlaylistAccount) {
-      return _createOnServer(accountId, n);
+      return _createOnServer(accountId, n, songs);
+    }
+    if (songs.isNotEmpty) {
+      final ref = await create(n);
+      await add(ref, songs);
+      return ref;
     }
     final id = await db
         .into(db.phonePlaylists)
@@ -185,7 +226,15 @@ class PlaylistStore {
             if (p >= 0 && p < count) p,
         ];
         if (ok.isEmpty) return;
-        await _onServer(ref, (w) => w.removeFromPlaylist(ref.remoteId, ok));
+        final seen = await _serverPaths(ref);
+        await _onServer(
+          ref,
+          (w) => w.removeFromPlaylist(
+            ref.remoteId,
+            ok,
+            expected: [for (final p in ok) _songIdOf(seen[p])],
+          ),
+        );
       });
     }
     final id = _phone(ref);
@@ -207,7 +256,15 @@ class PlaylistStore {
         RangeError.checkValidIndex(from, rows, 'from');
         RangeError.checkValidIndex(to, rows, 'to');
         if (from == to) return;
-        await _onServer(ref, (w) => w.movePlaylistItem(ref.remoteId, from, to));
+        await _onServer(
+          ref,
+          (w) => w.movePlaylistItem(
+            ref.remoteId,
+            from,
+            to,
+            expected: _songIdOf(rows[from]),
+          ),
+        );
       });
     }
     final id = _phone(ref);
@@ -259,6 +316,7 @@ class PlaylistStore {
               ))
               .go();
         });
+        _markList(ref, readOnly: false);
       });
     }
     final id = _phone(ref);
@@ -343,10 +401,13 @@ class PlaylistStore {
     return (s, s as PlaylistWriter);
   }
 
-  /// Runs [write] on [accountId]'s server; a failure becomes a [PlaylistWriteException]
-  /// (a refusal also marks the account, a success clears the mark).
+  /// Runs [write] on [accountId]'s server; a failure becomes a [PlaylistWriteException].
+  /// A refusal marks [ref] read-only, or the account when creating ([ref] null); success
+  /// clears that mark. When the server may have done the change anyway (no answer, an
+  /// error, the playlist changed), [ref] is read again and stored before the error.
   Future<T> _write<T>(
     String accountId,
+    ServerPlaylistRef? ref,
     Future<T> Function(MusicSource s, PlaylistWriter w) write,
   ) async {
     final (s, w) = await _writer(accountId);
@@ -355,10 +416,19 @@ class PlaylistStore {
       r = await write(s, w);
     } on Exception catch (e) {
       final problem = _problemOf(e);
-      if (problem == PlaylistProblem.refused) _markReadOnly(accountId, true);
+      if (problem == PlaylistProblem.refused) {
+        ref == null
+            ? _markReadOnly(accountId, true)
+            : _markList(ref, readOnly: true);
+      } else if (ref != null &&
+          (problem == PlaylistProblem.unreachable ||
+              problem == PlaylistProblem.failed ||
+              problem == PlaylistProblem.changed)) {
+        await _reread(accountId, s, w, ref.remoteId);
+      }
       throw PlaylistWriteException(problem, accountId);
     }
-    _markReadOnly(accountId, false);
+    if (ref == null) _markReadOnly(accountId, false);
     return r;
   }
 
@@ -367,10 +437,13 @@ class PlaylistStore {
     ServerPlaylistRef ref,
     Future<void> Function(PlaylistWriter w) write, {
     bool reread = true,
-  }) => _write(ref.accountId, (s, w) async {
+  }) => _write(ref.accountId, ref, (s, w) async {
     await write(w);
     if (reread) await _reread(ref.accountId, s, w, ref.remoteId);
   });
+
+  /// The song id in a stored server key (`<scheme>://acc/id`).
+  static String _songIdOf(String key) => parseRemoteKey(key)?.$2 ?? key;
 
   /// Reads playlist [id] from the server and stores it. The change is done: a failure here
   /// only leaves the old rows until the next action or sync. Returns false then.
@@ -387,12 +460,14 @@ class PlaylistStore {
       return false;
     }
     await _storeServer(accountId, _typeOf(s), p);
+    _markList(PlaylistRef.server(accountId, id), readOnly: !p.editable);
     return true;
   }
 
   static PlaylistProblem _problemOf(Exception e) => switch (e) {
     PlaylistWriteRefused() => PlaylistProblem.refused,
     PlaylistTooLong() => PlaylistProblem.tooLong,
+    PlaylistChanged() => PlaylistProblem.changed,
     SourceNetworkException() ||
     TimeoutException() => PlaylistProblem.unreachable,
     SubsonicException(code: 40 || 41) => PlaylistProblem.relink,
@@ -415,13 +490,25 @@ class PlaylistStore {
     );
   }
 
+  void _markList(PlaylistRef ref, {required bool readOnly}) {
+    final now = _readOnlyLists.value;
+    if (now.contains(ref) == readOnly) return;
+    _readOnlyLists.value = Set.unmodifiable(
+      readOnly ? {...now, ref} : ({...now}..remove(ref)),
+    );
+  }
+
   static AccountType _typeOf(MusicSource s) =>
       s is TypedSource ? (s as TypedSource).accountType : AccountType.subsonic;
 
-  Future<PlaylistRef> _createOnServer(String accountId, String name) => _write(
-    accountId,
-    (s, w) async {
-      final id = await w.createPlaylist(name);
+  Future<PlaylistRef> _createOnServer(
+    String accountId,
+    String name,
+    List<String> songs,
+  ) async {
+    final ids = await _songIdsFor(accountId, const [], songs, false);
+    return _write(accountId, null, (s, w) async {
+      final id = await w.createPlaylist(name, songIds: ids);
       // not read back: shown empty under its name until the next action or sync
       if (!await _reread(accountId, s, w, id)) {
         await _storeServer(
@@ -431,25 +518,42 @@ class PlaylistStore {
         );
       }
       return PlaylistRef.server(accountId, id);
-    },
-  );
+    });
+  }
+
+  /// The song ids on [accountId] for [keys] (see [add]): this server's copy of each, those
+  /// it does not have left out; without [allowDuplicates], those of [old] and repeats too.
+  Future<List<String>> _songIdsFor(
+    String accountId,
+    List<(String, String)> old,
+    List<String> keys,
+    bool allowDuplicates,
+  ) async {
+    final seen = _Seen()..addAll(old);
+    final merge = await _mergeKeys(keys);
+    final ids = <String>[];
+    for (final k in keys) {
+      final item = (k, merge[k] ?? '');
+      if (!allowDuplicates && seen.has(item)) continue;
+      final id = await _songIdOn(accountId, k, item.$2);
+      if (id == null) continue; // this server does not have that song
+      seen.add(item);
+      ids.add(id);
+    }
+    return ids;
+  }
 
   Future<int> _addOnServer(
     ServerPlaylistRef ref,
     List<String> keys,
     bool allowDuplicates,
   ) => _serial(ref, () async {
-    final seen = _Seen()..addAll(await _itemsWithMergeKeys(ref));
-    final merge = await _mergeKeys(keys);
-    final ids = <String>[];
-    for (final k in keys) {
-      final item = (k, merge[k] ?? '');
-      if (!allowDuplicates && seen.has(item)) continue;
-      final id = await _songIdOn(ref.accountId, k, item.$2);
-      if (id == null) continue; // this server does not have that song
-      seen.add(item);
-      ids.add(id);
-    }
+    final ids = await _songIdsFor(
+      ref.accountId,
+      await _itemsWithMergeKeys(ref),
+      keys,
+      allowDuplicates,
+    );
     if (ids.isEmpty) return 0;
     await _onServer(ref, (w) => w.addToPlaylist(ref.remoteId, ids));
     return ids.length;

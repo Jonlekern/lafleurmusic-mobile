@@ -391,9 +391,9 @@ void main() {
       },
     );
 
-    test('refused (error 50): a clear error, nothing changed, and the account '
-        'is no longer offered to keep a new playlist', () async {
-      nav.readOnly = true;
+    test('another user\'s playlist refuses a change (error 50): that '
+        'playlist only becomes read-only; the account still offered', () async {
+      nav.foreign = {'pl1'};
       expect(await srv.canWrite(acc), isTrue);
       await expectLater(
         srv.add(ref, [k('s4')]),
@@ -406,17 +406,102 @@ void main() {
         ),
       );
       expect(await stored('pl1'), [k('s1'), k('s2'), k('s3')]);
-      expect(srv.readOnlyAccounts.value, {acc});
-      expect(await srv.canWrite(acc), isFalse);
+      expect(srv.readOnlyPlaylists.value, {ref});
+      expect(srv.canEdit(ref), isFalse);
+      expect(srv.readOnlyAccounts.value, isEmpty);
+      expect(await srv.canWrite(acc), isTrue);
+      final mine = await srv.create('Mine', accountId: acc);
+      expect(srv.canEdit(mine), isTrue);
+      await srv.add(mine, [k('s4')]);
+      expect(nav.lists['pl10']!.songs, ['s4']);
+    });
+
+    test('known up front: a playlist the server says is someone else\'s or '
+        'readonly is read-only once read', () async {
+      nav.readonlyFlag = {'pl1'};
+      expect(await srv.checkEditable(ref), isFalse);
+      expect(srv.canEdit(ref), isFalse);
+      nav.readonlyFlag = {};
+      expect(await srv.checkEditable(ref), isTrue);
+      expect(srv.canEdit(ref), isTrue);
+      nav.foreign = {'pl1'};
+      expect(await srv.checkEditable(ref), isFalse);
+    });
+
+    test('create refused (error 50): the account is no longer offered to keep '
+        'a new playlist, until a creation works', () async {
+      nav.readOnly = true;
       await expectLater(
         srv.create('X', accountId: acc),
-        throwsA(isA<PlaylistWriteException>()),
+        throwsA(
+          isA<PlaylistWriteException>().having(
+            (e) => e.problem,
+            'problem',
+            PlaylistProblem.refused,
+          ),
+        ),
       );
       expect((await db.playlistsOf(acc)).map((l) => l.id), ['pl1']);
-      // the rights come back: a write that works clears the mark
+      expect(srv.readOnlyAccounts.value, {acc});
+      expect(await srv.canWrite(acc), isFalse);
       nav.readOnly = false;
-      await srv.rename(ref, 'Route');
+      await srv.create('Y', accountId: acc);
       expect(srv.readOnlyAccounts.value, isEmpty);
+    });
+
+    test('the answer to an add is lost after the server did it: the playlist '
+        'is read again, so trying again does not add it twice', () async {
+      nav.lostAnswers = 1;
+      await expectLater(
+        srv.add(ref, [k('s4')]),
+        throwsA(
+          isA<PlaylistWriteException>().having(
+            (e) => e.problem,
+            'problem',
+            PlaylistProblem.unreachable,
+          ),
+        ),
+      );
+      expect(await stored('pl1'), [k('s1'), k('s2'), k('s3'), k('s4')]);
+      expect(await srv.add(ref, [k('s4')]), 0);
+      expect(nav.lists['pl1']!.songs, ['s1', 's2', 's3', 's4']);
+    });
+
+    test('the playlist changed on the server meanwhile: « changed », read '
+        'again, nothing moved', () async {
+      nav.lists['pl1'] = (name: 'Road', songs: ['s2', 's1', 's3']);
+      await expectLater(
+        srv.move(ref, 0, 2), // we still see s1 first
+        throwsA(
+          isA<PlaylistWriteException>().having(
+            (e) => e.problem,
+            'problem',
+            PlaylistProblem.changed,
+          ),
+        ),
+      );
+      expect(nav.lists['pl1']!.songs, ['s2', 's1', 's3']);
+      expect(await stored('pl1'), [k('s2'), k('s1'), k('s3')]);
+      await expectLater(
+        srv.remove(ref, [1]),
+        completes,
+        reason: 'now the same list',
+      );
+      expect(nav.lists['pl1']!.songs, ['s2', 's3']);
+    });
+
+    test('create with songs: on the server at once (this server\'s copies); on '
+        'the phone too', () async {
+      await db.upsertTrack(_t('/m/s4.flac', title: 'song s4'));
+      final r = await srv.create(
+        'Mix',
+        accountId: acc,
+        songs: [k('s2'), '/m/s4.flac'],
+      );
+      expect(nav.lists[(r as ServerPlaylistRef).remoteId]!.songs, ['s2', 's4']);
+      expect(await stored(r.remoteId), [k('s2'), k('s4')]);
+      final p = await srv.create('Here', songs: ['/m/s4.flac', k('s2')]);
+      expect(await keys(p), ['/m/s4.flac', k('s2')]);
     });
 
     test('a source that cannot write: refused, never offered', () async {

@@ -65,7 +65,10 @@ void main() {
     expect(server.log.last.url.queryParameters, isNot(contains('after')));
     await src.movePlaylistItem('900', 0, 1);
     expect(server.songs('900'), ['211', '101', '102']);
-    await expectLater(src.movePlaylistItem('900', 0, 3), throwsRangeError);
+    await expectLater(
+      src.movePlaylistItem('900', 0, 3),
+      throwsA(isA<PlaylistChanged>()),
+    );
   });
 
   test('renamePlaylist, readPlaylist, deletePlaylist', () async {
@@ -117,5 +120,45 @@ void main() {
       src.addToPlaylist('900', ['300']),
       throwsA(isA<SourceNetworkException>()),
     );
+  });
+
+  test('a 401 on a write while reading works: a refusal, not « À '
+      'reconnecter »', () async {
+    String? relink;
+    PlexSource.onTokenRefused = (id) => relink = id;
+    server.writes401 = true;
+    await expectLater(
+      src.addToPlaylist('900', ['300']),
+      throwsA(isA<PlaylistWriteRefused>()),
+    );
+    expect(relink, isNull);
+  });
+
+  test('createPlaylist with songs: the first goes with the creation (never an '
+      'empty uri then), the others after', () async {
+    final id = await src.createPlaylist(
+      'Soirée',
+      songIds: ['300', '101', '102'],
+    );
+    expect(server.songs(id), ['300', '101', '102']);
+    final create = server.log.firstWhere((r) => r.method == 'POST');
+    expect(
+      create.url.queryParameters['uri'],
+      '$plexLibraryUri/library/metadata/300',
+    );
+  });
+
+  test('move/remove: another song there on the server: PlaylistChanged, '
+      'nothing sent', () async {
+    await expectLater(
+      src.movePlaylistItem('900', 0, 2, expected: '211'),
+      throwsA(isA<PlaylistChanged>()),
+    );
+    await expectLater(
+      src.removeFromPlaylist('900', [1], expected: ['101']),
+      throwsA(isA<PlaylistChanged>()),
+    );
+    expect(server.log.where((r) => r.method != 'GET'), isEmpty);
+    expect(server.songs('900'), ['101', '211', '102']);
   });
 }

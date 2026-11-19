@@ -47,11 +47,18 @@ void main() {
   });
 
   test('createPlaylist on an old server (no playlist in the answer) finds the '
-      'new one by name', () async {
+      'newest one with that name', () async {
     server.oldCreate = true;
+    server.newestFirst = true;
     server.lists['pl2'] = (name: 'Soirée', songs: ['s9']);
+    server.created['pl2'] = DateTime.utc(2025, 5, 1);
     final id = await src.createPlaylist('Soirée');
-    expect(id, 'pl10'); // the last one with that name: the one just made
+    expect(id, 'pl10'); // listed first, yet the newest
+  });
+
+  test('createPlaylist with songs: they are in it, in order', () async {
+    final id = await src.createPlaylist('Soirée', songIds: ['s3', 's1']);
+    expect(songs(server, id), ['s3', 's1']);
   });
 
   test(
@@ -97,7 +104,10 @@ void main() {
     });
 
     test('out of range: nothing sent', () async {
-      await expectLater(src.movePlaylistItem('pl1', 0, 3), throwsRangeError);
+      await expectLater(
+        src.movePlaylistItem('pl1', 0, 3),
+        throwsA(isA<PlaylistChanged>()),
+      );
       expect(server.log.where((r) => r.url.path.contains('create')), isEmpty);
     });
 
@@ -203,5 +213,66 @@ void main() {
         ),
       ),
     );
+  });
+
+  group('the playlist changed elsewhere', () {
+    test('move: another song at from on the server: PlaylistChanged, nothing '
+        'sent', () async {
+      await expectLater(
+        src.movePlaylistItem('pl1', 0, 2, expected: 's2'),
+        throwsA(isA<PlaylistChanged>()),
+      );
+      expect(server.log.where((r) => r.url.path.contains('create')), isEmpty);
+      await src.movePlaylistItem('pl1', 0, 2, expected: 's1');
+      expect(songs(server, 'pl1'), ['s2', 's3', 's1']);
+    });
+
+    test(
+      'remove: another song at a position: PlaylistChanged, nothing sent',
+      () async {
+        await expectLater(
+          src.removeFromPlaylist('pl1', [0, 2], expected: ['s1', 's2']),
+          throwsA(isA<PlaylistChanged>()),
+        );
+        expect(songs(server, 'pl1'), ['s1', 's2', 's3']);
+        await expectLater(
+          src.removeFromPlaylist('pl1', [5], expected: ['s1']),
+          throwsA(isA<PlaylistChanged>()),
+        );
+        await src.removeFromPlaylist('pl1', [2, 0], expected: ['s3', 's1']);
+        expect(songs(server, 'pl1'), ['s2']);
+      },
+    );
+  });
+
+  test(
+    'form POST support is not remembered from a proxy\'s error page',
+    () async {
+      server.formPost = true;
+      server.extensionsBroken = 1;
+      final long = [
+        for (var i = 0; i < 600; i++) 'song-id-${'$i'.padLeft(14, '0')}',
+      ];
+      server.lists['big'] = (name: 'Big', songs: [...long]);
+      await expectLater(
+        src.movePlaylistItem('big', 599, 0),
+        throwsA(isA<PlaylistTooLong>()),
+      );
+      await src.movePlaylistItem('big', 599, 0);
+      expect(songs(server, 'big').first, long.last);
+    },
+  );
+
+  test('readPlaylist: another user\'s playlist, or one marked readonly, is not '
+      'editable', () async {
+    expect((await src.readPlaylist('pl1')).editable, isTrue);
+    server.foreign = {'pl1'};
+    expect((await src.readPlaylist('pl1')).editable, isFalse);
+    server.foreign = {};
+    server.readonlyFlag = {'pl1'};
+    expect((await src.readPlaylist('pl1')).editable, isFalse);
+    // the sync's list says it too
+    final all = await src.playlists();
+    expect(all.single.editable, isFalse);
   });
 }

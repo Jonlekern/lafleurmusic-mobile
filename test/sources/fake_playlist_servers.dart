@@ -1,5 +1,6 @@
 // Fake servers that keep their playlists in memory (plan 9): handwritten answers in the
 // shapes of the real APIs. Never a real server.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -38,6 +39,25 @@ class FakeNavidrome {
   /// Requests longer than this are refused (414), like a proxy's limit.
   int maxUrl = 100000;
 
+  /// Playlists of another user (public): shown with that owner, error 50 on any change.
+  Set<String> foreign = {};
+
+  /// Playlists the server marks `readonly` (OpenSubsonic).
+  Set<String> readonlyFlag = {};
+
+  /// When each playlist was made (`created`); a new one gets the next second.
+  final created = <String, DateTime>{'pl1': DateTime.utc(2024, 1, 1)};
+  var _clock = DateTime.utc(2026, 11, 19, 10);
+
+  /// getPlaylists lists the newest first (the last one is then not the new one).
+  bool newestFirst = false;
+
+  /// The next this many answers to getOpenSubsonicExtensions are a proxy's 502 page.
+  int extensionsBroken = 0;
+
+  /// The next this many writes are applied, then their answer never comes (a timeout).
+  int lostAnswers = 0;
+
   static const _ok = {'status': 'ok', 'version': '1.16.1'};
 
   http.Response _json(Map<String, Object?> body) => http.Response(
@@ -64,6 +84,10 @@ class FakeNavidrome {
     return {
       'id': id,
       'name': p.name,
+      'owner': foreign.contains(id) ? 'someone' : 'johnny',
+      'public': foreign.contains(id),
+      if (readonlyFlag.contains(id)) 'readonly': true,
+      if (created[id] != null) 'created': created[id]!.toIso8601String(),
       'songCount': p.songs.length,
       'entry': [
         for (final s in p.songs) {'id': s, 'title': 'T$s', 'isDir': false},
@@ -86,7 +110,15 @@ class FakeNavidrome {
     if (inFlight > maxInFlight) maxInFlight = inFlight;
     try {
       if (delay > Duration.zero) await Future<void>.delayed(delay);
-      return _handle(r);
+      final res = _handle(r);
+      final m = r.url.pathSegments.last;
+      if (lostAnswers > 0 &&
+          m.contains('Playlist.view') &&
+          !m.startsWith('get')) {
+        lostAnswers--;
+        throw TimeoutException('answer lost');
+      }
+      return res;
     } finally {
       inFlight--;
     }
@@ -115,9 +147,17 @@ class FakeNavidrome {
         refuseNext--;
         return _error(50, 'User not authorized');
       }
+      final target = one('playlistId') ?? one('id');
+      if (foreign.contains(target)) {
+        return _error(50, 'User not authorized');
+      }
     }
     switch (method) {
       case 'getOpenSubsonicExtensions':
+        if (extensionsBroken > 0) {
+          extensionsBroken--;
+          return http.Response('<html>Bad gateway</html>', 502);
+        }
         return _json({
           'openSubsonicExtensions': [
             if (formPost)
@@ -135,7 +175,9 @@ class FakeNavidrome {
         return _json({
           'playlists': {
             'playlist': [
-              for (final id in lists.keys) {'id': id, 'name': lists[id]!.name},
+              for (final id
+                  in newestFirst ? lists.keys.toList().reversed : lists.keys)
+                {..._playlist(id)}..remove('entry'),
             ],
           },
         });
@@ -156,6 +198,7 @@ class FakeNavidrome {
         }
         final id = 'pl${nextId++}';
         lists[id] = (name: one('name')!, songs: songs);
+        created[id] = _clock = _clock.add(const Duration(seconds: 1));
         return oldCreate ? _json({}) : _json({'playlist': _playlist(id)});
       case 'updatePlaylist':
         final id = one('playlistId');
@@ -238,7 +281,13 @@ class FakeJellyfin {
         return http.Response('', 400);
       }
       final id = 'pl${_next++}';
-      lists[id] = (name: b['Name'] as String, rows: []);
+      lists[id] = (
+        name: b['Name'] as String,
+        rows: [
+          for (final s in (b['Ids'] as List).cast<String>())
+            (s, 'e${_entry++}'),
+        ],
+      );
       return jfJson({'Id': id});
     }
     var m = RegExp(r'^/Users/user-1/Items/(\w+)$').firstMatch(p);
@@ -343,6 +392,9 @@ class FakePlexPlaylists {
   /// Every write answers 403 (a shared user may not change this server's playlists).
   bool readOnly = false;
 
+  /// Every write answers 401 while reads with the same token work.
+  bool writes401 = false;
+
   /// The network is gone.
   bool down = false;
 
@@ -384,6 +436,7 @@ class FakePlexPlaylists {
     }
     final q = r.url.queryParameters;
     if (r.method != 'GET' && readOnly) return http.Response('', 403);
+    if (r.method != 'GET' && writes401) return http.Response('', 401);
     if (p == '/playlists' && r.method == 'POST') {
       final keys = _keys(q['uri']);
       if (q['type'] != 'audio' || q['smart'] != '0' || keys == null) {

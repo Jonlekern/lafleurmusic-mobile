@@ -80,7 +80,10 @@ void main() {
     await src.movePlaylistItem('pl1', 0, 2);
     expect(server.songs('pl1'), ['s2', 's3', 's1']);
     expect(server.log.last.url.path, '/Playlists/pl1/Items/e1/Move/2');
-    await expectLater(src.movePlaylistItem('pl1', 5, 0), throwsRangeError);
+    await expectLater(
+      src.movePlaylistItem('pl1', 5, 0),
+      throwsA(isA<PlaylistChanged>()),
+    );
   });
 
   test('renamePlaylist: POST /Playlists/{id}; a server before 10.9: the item '
@@ -145,5 +148,29 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('createPlaylist with songs: Ids in the body, in order', () async {
+    final id = await src.createPlaylist('Soirée', songIds: ['s3', 's1']);
+    expect(server.songs(id), ['s3', 's1']);
+  });
+
+  test('move/remove: another song there on the server: PlaylistChanged, '
+      'nothing sent', () async {
+    await expectLater(
+      src.movePlaylistItem('pl1', 0, 2, expected: 's2'),
+      throwsA(isA<PlaylistChanged>()),
+    );
+    await expectLater(
+      src.removeFromPlaylist('pl1', [1], expected: ['s1']),
+      throwsA(isA<PlaylistChanged>()),
+    );
+    expect(
+      server.log.where(
+        (r) => r.method != 'GET' && !r.url.path.contains('Authenticate'),
+      ),
+      isEmpty,
+    );
+    expect(server.songs('pl1'), ['s1', 's2', 's3']);
   });
 }

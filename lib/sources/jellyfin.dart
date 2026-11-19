@@ -732,7 +732,10 @@ class JellyfinSource
   }
 
   @override
-  Future<String> createPlaylist(String name) async {
+  Future<String> createPlaylist(
+    String name, {
+    List<String> songIds = const [],
+  }) async {
     final uid = await _uid();
     final d = _decode(
       await _write(
@@ -740,7 +743,7 @@ class JellyfinSource
         'Playlists',
         json: {
           'Name': name,
-          'Ids': const <String>[],
+          'Ids': songIds, // in the body: no address limit
           'UserId': uid,
           'MediaType': 'Audio',
         },
@@ -767,19 +770,27 @@ class JellyfinSource
   }
 
   /// The entry id of each row asked; a row without one (a server too old) is a refusal.
-  Future<List<String>> _entryIds(String id, Iterable<int> positions) async {
-    final rows = await _entries(await _uid(), id);
-    return [
-      for (final p in positions)
-        if (p >= 0 && p < rows.length)
-          rows[p].$2 ??
-              (throw PlaylistWriteRefused('Jellyfin: no PlaylistItemId')),
-    ];
-  }
+  static List<String> _entryIds(
+    List<(String, String?)> rows,
+    Iterable<int> positions,
+  ) => [
+    for (final p in positions)
+      if (p >= 0 && p < rows.length)
+        rows[p].$2 ??
+            (throw PlaylistWriteRefused('Jellyfin: no PlaylistItemId')),
+  ];
 
   @override
-  Future<void> removeFromPlaylist(String id, List<int> positions) async {
-    final entries = await _entryIds(id, positions.toSet().toList()..sort());
+  Future<void> removeFromPlaylist(
+    String id,
+    List<int> positions, {
+    List<String>? expected,
+  }) async {
+    final rows = await _entries(await _uid(), id);
+    if (expected != null) {
+      checkPlaylistRows([for (final r in rows) r.$1], positions, expected);
+    }
+    final entries = _entryIds(rows, positions.toSet().toList()..sort());
     for (var i = 0; i < entries.length; i += _idsBatch) {
       final batch = entries.sublist(i, min(i + _idsBatch, entries.length));
       await _write(
@@ -791,12 +802,20 @@ class JellyfinSource
   }
 
   @override
-  Future<void> movePlaylistItem(String id, int from, int to) async {
+  Future<void> movePlaylistItem(
+    String id,
+    int from,
+    int to, {
+    String? expected,
+  }) async {
     final rows = await _entries(await _uid(), id);
-    RangeError.checkValidIndex(from, rows, 'from');
-    RangeError.checkValidIndex(to, rows, 'to');
+    checkPlaylistRows(
+      [for (final r in rows) r.$1],
+      [from, to],
+      expected == null ? null : [expected],
+    );
     if (from == to) return;
-    final entry = (await _entryIds(id, [from])).single;
+    final entry = _entryIds(rows, [from]).single;
     await _write('POST', 'Playlists/$id/Items/$entry/Move/$to');
   }
 

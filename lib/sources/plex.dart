@@ -604,8 +604,10 @@ class PlexSource
   static const _keysBatch = 100;
 
   /// A playlist change on the server in use. No address answering is a
-  /// [SourceNetworkException]; 401 « À reconnecter »; 403 a [PlaylistWriteRefused]; another
-  /// refusal a [PlexException] with its code.
+  /// [SourceNetworkException]; 403 a [PlaylistWriteRefused]; another refusal a
+  /// [PlexException] with its code. A 401 is checked with one read (`library/sections`):
+  /// the read works → the token is fine, this change is not allowed ([PlaylistWriteRefused]);
+  /// the read is refused too → « À reconnecter ».
   Future<http.Response> _write(
     String method,
     String path, [
@@ -626,7 +628,16 @@ class PlexSource
       ..headers.addAll(headers);
     final res = await _send(req);
     final c = res.statusCode;
-    if (c == 401) throw _relink();
+    if (c == 401) {
+      final check = await _send(
+        http.Request('GET', plexUrl(base, 'library/sections'))
+          ..followRedirects = false
+          ..headers.addAll(headers),
+      );
+      if (check.statusCode == 200) throw PlaylistWriteRefused('Plex 401');
+      if (check.statusCode == 401) throw _relink();
+      throw PlexException('playlist change refused', statusCode: c);
+    }
     if (c == 403) throw PlaylistWriteRefused('Plex 403');
     if (c < 200 || c >= 300) {
       throw PlexException('playlist change refused', statusCode: c);
@@ -634,14 +645,26 @@ class PlexSource
     return res;
   }
 
+  /// With songs, the first goes with the creation (`uri=…/library/metadata/{first}`), the
+  /// others are added after. Empty, the uri names the library only: a shape not yet checked
+  /// against a real Plex Media Server.
   @override
-  Future<String> createPlaylist(String name) async {
+  Future<String> createPlaylist(
+    String name, {
+    List<String> songIds = const [],
+  }) async {
     final res = await _write('POST', 'playlists', {
       'type': 'audio',
       'title': name,
       'smart': '0',
-      'uri': _libraryUri(),
+      'uri': _libraryUri(songIds.take(1).toList()),
     });
+    final id = _newId(res);
+    await addToPlaylist(id, songIds.skip(1).toList());
+    return id;
+  }
+
+  String _newId(http.Response res) {
     try {
       final d = jsonDecode(utf8.decode(res.bodyBytes, allowMalformed: true));
       final mc = d is Map ? d['MediaContainer'] : null;
@@ -679,8 +702,15 @@ class PlexSource
   ];
 
   @override
-  Future<void> removeFromPlaylist(String id, List<int> positions) async {
+  Future<void> removeFromPlaylist(
+    String id,
+    List<int> positions, {
+    List<String>? expected,
+  }) async {
     final rows = await _entries(id);
+    if (expected != null) {
+      checkPlaylistRows([for (final r in rows) r.$1], positions, expected);
+    }
     for (final item in _itemIds(rows, positions.toSet())) {
       await _write('DELETE', 'playlists/$id/items/$item');
     }
@@ -689,10 +719,18 @@ class PlexSource
   /// `PUT …/items/{item}/move?after={the row that will come before it}`; to the top, no
   /// `after`.
   @override
-  Future<void> movePlaylistItem(String id, int from, int to) async {
+  Future<void> movePlaylistItem(
+    String id,
+    int from,
+    int to, {
+    String? expected,
+  }) async {
     final rows = await _entries(id);
-    RangeError.checkValidIndex(from, rows, 'from');
-    RangeError.checkValidIndex(to, rows, 'to');
+    checkPlaylistRows(
+      [for (final r in rows) r.$1],
+      [from, to],
+      expected == null ? null : [expected],
+    );
     if (from == to) return;
     final ids = _itemIds(rows, List.generate(rows.length, (i) => i));
     final item = ids.removeAt(from);

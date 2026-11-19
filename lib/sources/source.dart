@@ -76,10 +76,15 @@ class SourcePlaylist {
     required this.id,
     required this.name,
     required this.songIds,
+    this.editable = true,
   });
 
   final String id, name;
   final List<String>? songIds;
+
+  /// False when the server says this account may not change it (Subsonic: another user's
+  /// playlist, or OpenSubsonic `readonly`). True when the server does not say.
+  final bool editable;
 }
 
 /// A network failure talking to a source (refused, timeout, TLS…).
@@ -190,18 +195,31 @@ abstract interface class HttpSource {
 /// won't let this account write throws a [PlaylistWriteRefused]; a network failure, a
 /// [SourceNetworkException]. A source that can never write does not implement this.
 abstract interface class PlaylistWriter {
-  /// A new empty playlist named [name]; returns its id on the server.
-  Future<String> createPlaylist(String name);
+  /// A new playlist named [name] holding [songIds] (empty: an empty playlist); returns its
+  /// id on the server.
+  Future<String> createPlaylist(String name, {List<String> songIds = const []});
 
   /// Adds [songIds] (this server's ids) at the end, in their order.
   Future<void> addToPlaylist(String id, List<String> songIds);
 
-  /// Takes the rows at [positions] out; the others keep their order.
-  Future<void> removeFromPlaylist(String id, List<int> positions);
+  /// Takes the rows at [positions] out; the others keep their order. [expected]: the song
+  /// id the caller sees at each position (same order); when the server has another one
+  /// there, a [PlaylistChanged] and nothing sent.
+  Future<void> removeFromPlaylist(
+    String id,
+    List<int> positions, {
+    List<String>? expected,
+  });
 
-  /// Moves the row at [from] so it ends at [to] (list-move semantics; out of range: a
-  /// [RangeError], nothing sent).
-  Future<void> movePlaylistItem(String id, int from, int to);
+  /// Moves the row at [from] so it ends at [to] (list-move semantics; out of range on the
+  /// server: a [PlaylistChanged], nothing sent). [expected]: the song id the caller sees at
+  /// [from]; another one there on the server is a [PlaylistChanged] too.
+  Future<void> movePlaylistItem(
+    String id,
+    int from,
+    int to, {
+    String? expected,
+  });
 
   Future<void> renamePlaylist(String id, String name);
   Future<void> deletePlaylist(String id);
@@ -217,6 +235,28 @@ class PlaylistWriteRefused implements Exception {
   final String message;
   @override
   String toString() => 'PlaylistWriteRefused: $message';
+}
+
+/// The playlist on the server is not the one the caller saw (changed elsewhere meanwhile):
+/// nothing was sent. Read it again and let the user try again.
+class PlaylistChanged implements Exception {
+  @override
+  String toString() => 'PlaylistChanged';
+}
+
+/// Checks that [rows] (a fresh read) has [expected] at each of [positions] (same order;
+/// null: nothing to check). A position out of [rows] or another song there: [PlaylistChanged].
+void checkPlaylistRows(
+  List<String> rows,
+  List<int> positions,
+  List<String>? expected,
+) {
+  for (final (i, p) in positions.indexed) {
+    if (p < 0 || p >= rows.length) throw PlaylistChanged();
+    if (expected != null && i < expected.length && rows[p] != expected[i]) {
+      throw PlaylistChanged();
+    }
+  }
 }
 
 /// The list is too long for this server to take in one request, and it can't be sent in

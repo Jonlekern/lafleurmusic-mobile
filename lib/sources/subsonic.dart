@@ -294,12 +294,25 @@ class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
         : null;
     final heads = [
       for (final p in (raw is List ? raw : const []).whereType<Map>())
-        if (p['id'] != null) ('${p['id']}', '${p['name'] ?? ''}'),
+        if (p['id'] != null) ('${p['id']}', '${p['name'] ?? ''}', _editable(p)),
     ];
     return [
-      for (final (id, name) in heads)
-        SourcePlaylist(id: id, name: name, songIds: await _playlistSongs(id)),
+      for (final (id, name, editable) in heads)
+        SourcePlaylist(
+          id: id,
+          name: name,
+          songIds: await _playlistSongs(id),
+          editable: editable,
+        ),
     ];
+  }
+
+  /// Another user's playlist (`owner`), or one the server marks `readonly` (OpenSubsonic),
+  /// can't be changed by this account.
+  bool _editable(Map p) {
+    if (p['readonly'] == true) return false;
+    final owner = p['owner'];
+    return owner == null || '$owner'.toLowerCase() == _user.toLowerCase();
   }
 
   /// Null when this playlist won't read (the others still do).
@@ -331,8 +344,10 @@ class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
       ok =
           list is List &&
           list.whereType<Map>().any((e) => e['name'] == 'formPost');
-    } on SubsonicException {
-      ok = false; // not OpenSubsonic
+    } on SubsonicException catch (e) {
+      // not a Subsonic answer (a proxy's error page): not remembered, asked again next time
+      if (e.httpStatus != null) return false;
+      ok = false; // a Subsonic error: not OpenSubsonic
     }
     return _formPostKnown = ok;
   }
@@ -389,21 +404,40 @@ class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
   }
 
   @override
-  Future<String> createPlaylist(String name) async {
+  Future<String> createPlaylist(
+    String name, {
+    List<String> songIds = const [],
+  }) async {
     final r = await _write('createPlaylist', {'name': name});
     final p = r['playlist'];
-    if (p is Map && p['id'] != null) return '${p['id']}';
-    // Subsonic before 1.14 answers nothing: the last playlist with that name is the new one
+    final String id;
+    if (p is Map && p['id'] != null) {
+      id = '${p['id']}';
+    } else {
+      id = await _newestNamed(name);
+    }
+    // the songs after: added in slices when many (createPlaylist can't be split)
+    await addToPlaylist(id, songIds);
+    return id;
+  }
+
+  /// Subsonic before 1.14 answers a creation with nothing: the newest playlist with that
+  /// name (by `created`, the server's own clock) is the new one; without dates, the last.
+  Future<String> _newestNamed(String name) async {
     final all = await _call('getPlaylists', const {});
     final raw = all['playlists'] is Map
         ? (all['playlists'] as Map)['playlist']
         : null;
     final same = [
       for (final l in (raw is List ? raw : const []).whereType<Map>())
-        if (l['id'] != null && '${l['name']}' == name) '${l['id']}',
+        if (l['id'] != null && '${l['name']}' == name)
+          ('${l['id']}', DateTime.tryParse('${l['created'] ?? ''}')),
     ];
     if (same.isEmpty) throw SubsonicException('created playlist not found');
-    return same.last;
+    if (same.every((l) => l.$2 != null)) {
+      same.sort((a, b) => a.$2!.compareTo(b.$2!));
+    }
+    return same.last.$1;
   }
 
   @override
@@ -419,7 +453,14 @@ class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
   }
 
   @override
-  Future<void> removeFromPlaylist(String id, List<int> positions) async {
+  Future<void> removeFromPlaylist(
+    String id,
+    List<int> positions, {
+    List<String>? expected,
+  }) async {
+    if (expected != null) {
+      checkPlaylistRows((await readPlaylist(id)).songIds!, positions, expected);
+    }
     // the last ones first: a slice never moves the positions of the next one
     final sorted = positions.toSet().toList()..sort((a, b) => b - a);
     if (sorted.isEmpty) return;
@@ -435,10 +476,14 @@ class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
   /// `updatePlaylist` can't move: the whole list is written again in its new order
   /// (`createPlaylist?playlistId=…&songId=…`), in one request, never in parts.
   @override
-  Future<void> movePlaylistItem(String id, int from, int to) async {
+  Future<void> movePlaylistItem(
+    String id,
+    int from,
+    int to, {
+    String? expected,
+  }) async {
     final ids = [...(await readPlaylist(id)).songIds!];
-    RangeError.checkValidIndex(from, ids, 'from');
-    RangeError.checkValidIndex(to, ids, 'to');
+    checkPlaylistRows(ids, [from, to], expected == null ? null : [expected]);
     if (from == to) return;
     ids.insert(to, ids.removeAt(from));
     await _writeList(
@@ -468,6 +513,7 @@ class SubsonicSource implements MusicSource, HttpSource, PlaylistWriter {
     return SourcePlaylist(
       id: id,
       name: '${p['name'] ?? ''}',
+      editable: _editable(p),
       songIds: [
         for (final e in entries.whereType<Map>())
           if (e['id'] != null) '${e['id']}',
