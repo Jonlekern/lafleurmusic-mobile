@@ -589,5 +589,47 @@ void main() {
         );
       },
     );
+
+    testWidgets(
+      'VoiceOver / TalkBack : « pas sur le téléphone » dit avant de toucher',
+      (tester) async {
+        final h = tester.ensureSemantics();
+        await pumpKeep(tester, home: const ClassicShell());
+        await tester.tap(find.text('Albums'));
+        await settle(tester);
+        await rotateTo(tester, 'Studio Lafleur');
+        await press(tester, 'select');
+        expect(
+          tester.getSemantics(find.text('Night Swim')),
+          isSemantics(
+            label: 'Night Swim',
+            hint: 'Kavinsky · pas sur le téléphone',
+            isButton: true,
+            hasTapAction: true,
+          ),
+        );
+        expect(
+          tester.getSemantics(find.text('Ocean Drive')),
+          isSemantics(label: 'Ocean Drive', hint: '', isButton: true),
+        );
+        h.dispose();
+      },
+    );
+
+    testWidgets('une ligne sans effet (grisée) n\'est pas un bouton', (
+      tester,
+    ) async {
+      final h = tester.ensureSemantics();
+      await pumpPhone(tester, home: const ClassicShell()); // sans téléchargeur
+      expect(
+        tester.getSemantics(find.text('Sur mon téléphone')),
+        isSemantics(
+          label: 'Sur mon téléphone',
+          isButton: false,
+          hasTapAction: false,
+        ),
+      );
+      h.dispose();
+    });
   });
 }

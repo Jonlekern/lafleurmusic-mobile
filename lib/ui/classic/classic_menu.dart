@@ -56,8 +56,10 @@ class _Level {
   bool Function(int i) dim = _no;
   // grisée : pas sur le téléphone, rien à jouer hors ligne (PhoneTrackRow `playable`)
   bool Function(int i) playable = _yes;
-  Object? Function(int i) key =
-      _none; // l'élément de la ligne, pour le retrouver
+  // l'élément de la ligne, pour le retrouver
+  Object? Function(int i) key = _none;
+  // pour « artiste · pas sur le téléphone »
+  String Function(int i) artist = _empty;
   void Function(int i)? choose;
   final playableCache = <String, bool>{};
   int selected = 0;
@@ -68,6 +70,7 @@ class _Level {
   static bool _no(int _) => false;
   static bool _yes(int _) => true;
   static Object? _none(int _) => null;
+  static String _empty(int _) => '';
 }
 
 class _ClassicMenuState extends State<ClassicMenu> {
@@ -195,6 +198,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
     required void Function(List<T> items, int i) choose,
     bool Function(T item)? dim,
     bool Function(_Level level, T item)? playable,
+    String Function(T item)? artist,
     bool chevron = true,
     String Function(Strings s)? empty,
   }) {
@@ -227,6 +231,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
           ..playable = playable == null
               ? _Level._yes
               : ((i) => playable(level, items[i]))
+          ..artist = artist == null ? _Level._empty : ((i) => artist(items[i]))
           ..choose = ((i) => choose(items, i))
           ..selected = at;
         level.playableCache.clear();
@@ -257,6 +262,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
     key: (t) => t.path,
     dim: (t) => t.missing,
     playable: _playableNow,
+    artist: (t) => t.artist,
     choose: _playFrom,
     chevron: false,
     empty: empty,
@@ -278,6 +284,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
       dim: (item) => item.$2 == null || item.$2!.missing,
       playable: (level, item) =>
           item.$2 == null || _playableNow(level, item.$2!),
+      artist: (item) => item.$2?.artist ?? '',
       chevron: false,
       choose: (items, i) {
         if (items[i].$2 == null) return;
@@ -513,12 +520,22 @@ class _Screen extends StatelessWidget {
                     itemCount: l.count,
                     itemBuilder: (_, i) {
                       final dim = l.dim(i);
+                      final playable = l.playable(i);
+                      final artist = l.artist(i);
                       return ClassicRow(
                         label: l.label(strings, i),
                         selected: i == l.selected,
                         chevron: l.chevron,
                         dim: dim,
-                        playable: l.playable(i),
+                        playable: playable,
+                        // comme le sous-titre de PhoneTrackRow, dit avant de toucher
+                        hint: playable
+                            ? null
+                            : strings.notOnDevice(
+                                artist.isEmpty ? strings.unknownArtist : artist,
+                                onIphone,
+                                tablet: onTablet,
+                              ),
                         // comme le mode normal : une ligne sans effet ne se touche pas
                         onTap: dim ? null : () => onTap(i),
                       );
@@ -540,6 +557,7 @@ class ClassicRow extends StatelessWidget {
     this.chevron = true,
     this.dim = false,
     this.playable = true,
+    this.hint,
     this.onTap,
   });
   final String label;
@@ -549,6 +567,8 @@ class ClassicRow extends StatelessWidget {
   dim; // morceau absent, ligne sans effet (comme le mode normal : estompée)
   final bool
   playable; // faux : grisée, pas sur le téléphone (comme PhoneTrackRow)
+  // lecteur d'écran seulement (« artiste · pas sur le téléphone »)
+  final String? hint;
   final VoidCallback? onTap;
 
   @override
@@ -563,8 +583,10 @@ class ClassicRow extends StatelessWidget {
       fontWeight: FontWeight.w700,
     );
     return Semantics(
-      button: true,
+      // une ligne sans effet n'est pas un bouton (comme le mode normal)
+      button: onTap != null,
       selected: selected,
+      hint: hint,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
