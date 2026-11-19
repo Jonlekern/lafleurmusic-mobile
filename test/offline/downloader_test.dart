@@ -299,7 +299,30 @@ void main() {
     }
     final r = await d.keep([_t('1')]);
     expect(r.count, 0);
-    expect((await db.offlineOf('subsonic://acc/1'))!.state, 'failed');
+    expect(
+      await db.offlineOf('subsonic://acc/1'),
+      isNull,
+      reason: 'no « À réessayer » row left to download a second copy',
+    );
+  });
+
+  test('two rows naming one file (a copy deleted by hand, its name reused): '
+      'forgetting one keeps the file the other uses', () async {
+    final d = make();
+    await add(_t('1'));
+    await add(_t('1', acc: 'B'));
+    final f = File('${root.path}/Art/Alb/01 Song 1.mp3')
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([1, 2, 3, 4]);
+    await db.queueOffline(['subsonic://acc/1'], OfflineReason.top100);
+    await db.markOfflineDone('subsonic://acc/1', 'Art/Alb/01 Song 1.mp3', 4);
+    await db.queueOffline(['subsonic://B/1'], OfflineReason.user);
+    await db.markOfflineDone('subsonic://B/1', 'art/alb/01 song 1.mp3', 4);
+    await d.forget(['subsonic://acc/1'], only: OfflineReason.top100);
+    expect(await db.offlineOf('subsonic://acc/1'), isNull);
+    expect(f.existsSync(), isTrue, reason: 'B still plays it');
+    await d.forget(['subsonic://B/1']);
+    expect(f.existsSync(), isFalse);
   });
 
   test(

@@ -80,7 +80,7 @@ void main() {
     printOnFailure(
       'albums $tAlbums, kept $tKept, album $tAlbum, all $tAll, artist $tArtist',
     );
-    for (final t in [tAlbums, tKept, tAlbum, tArtist]) {
+    for (final t in [tAlbums, tKept, tAlbum, tArtist, tAll]) {
       expect(t, lessThan(_bound));
     }
   });

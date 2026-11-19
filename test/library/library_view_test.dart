@@ -229,6 +229,67 @@ void main() {
   });
 
   test(
+    'files placed by hand (no disc) sort among the server songs (disc 1)',
+    () async {
+      await account('A', 0);
+      Track s(int no, {String acc = 'A'}) => Track(
+        path: acc == 'local' ? '/m/$no.mp3' : 'subsonic://A/$no',
+        accountId: acc,
+        title: 'S$no',
+        artist: 'X',
+        albumArtist: acc == 'local' ? '' : 'X',
+        album: 'Alb',
+        disc: acc == 'local' ? null : 1,
+        trackNo: no,
+        durationMs: 1,
+        hasCover: false,
+        size: 1,
+      );
+      await db.upsertTracks([
+        for (final n in [1, 3, 4, 5, 6, 7, 8, 9, 10]) s(n),
+        s(2, acc: 'local'), // not on the server
+        s(3, acc: 'local'), // stands in for the server's song 3
+      ]);
+      final v = view();
+      final album = (await v.albums().first).single;
+      expect(
+        [for (final t in await v.albumTracks(album.key).first) t.path],
+        [
+          'subsonic://A/1',
+          '/m/2.mp3',
+          '/m/3.mp3',
+          for (var n = 4; n <= 10; n++) 'subsonic://A/$n',
+        ],
+      );
+    },
+  );
+
+  test('the server album renamed: the files placed by hand leave it', () async {
+    await twoAccounts();
+    await db.upsertTracks([
+      tr('local', 'x', albumArtist: '', title: 'Bonus', no: 9),
+      tr('local', 'y', albumArtist: '', title: 'One', no: 1, artist: 'Other'),
+    ]);
+    expect(await view().albums().first, hasLength(1));
+    await db.upsertTracks([
+      for (final (acc, id, title, no) in [
+        ('A', 'a1', 'One', 1),
+        ('A', 'a2', 'Two', 2),
+        ('B', 'b1', 'One', 1),
+        ('B', 'b2', 'Two', 2),
+        ('B', 'b3', 'Three', 3),
+      ])
+        tr(acc, id, title: title, no: no, album: 'Winter Mix'),
+    ]);
+    final albums = await view().albums().first;
+    expect(albums.map((a) => a.name).toSet(), {'Summer Mix', 'Winter Mix'});
+    expect(
+      albums.firstWhere((a) => a.name == 'Summer Mix').key,
+      albumMergeKey(tr('local', 'x', albumArtist: '')),
+    );
+  });
+
+  test(
     'a local album of the same name with no common song stays apart',
     () async {
       await twoAccounts();

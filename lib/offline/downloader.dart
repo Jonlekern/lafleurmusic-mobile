@@ -178,6 +178,7 @@ class Downloader extends ChangeNotifier {
     final fresh = <Track>[]; // ni terminés ni déjà en file
     final toQueue = <String>[];
     final done = <String>[];
+    final dropOwn = <String>[];
     for (final t in batch) {
       // le même morceau sur un autre compte, déjà gardé ou en file : pas de seconde copie
       final own = await db.offlineOf(t.path);
@@ -185,6 +186,8 @@ class Downloader extends ChangeNotifier {
           ? await db.twinOffline(t.path) ?? own
           : own;
       final path = row?.trackPath ?? t.path;
+      // its own failed row gives way to the twin's copy (no retry of a second copy)
+      if (own != null && path != t.path) dropOwn.add(t.path);
       if (row?.state == OfflineState.done.name) {
         done.add(path);
         continue;
@@ -223,6 +226,7 @@ class Downloader extends ChangeNotifier {
       }
     }
     await db.queueOffline(toQueue, reason);
+    await db.removeOffline(dropOwn);
     // un « Garder » de l'utilisateur lève le blocage du Top 100
     if (reason == OfflineReason.user) {
       await db.unblockAutoKeep([

@@ -443,8 +443,20 @@ class LibraryDb extends _$LibraryDb {
   /// Writes [list] (same path: every column replaced), then settles the albums of those
   /// names (rule Q5b, [_relinkAlbums]).
   Future<void> upsertTracks(List<Track> list) => transaction(() async {
+    // the album names these paths had (a renamed album leaves its old name to settle too)
+    final old = <String>{};
+    for (var i = 0; i < list.length; i += 500) {
+      final chunk = [for (final t in list.skip(i).take(500)) t.path];
+      for (final r
+          in await (selectOnly(tracks)
+                ..addColumns([tracks.album])
+                ..where(tracks.path.isIn(chunk)))
+              .get()) {
+        old.add(albumNameKey(r.read(tracks.album)!));
+      }
+    }
     await _upsert(list);
-    await _relinkAlbums({for (final t in list) albumNameKey(t.album)});
+    await _relinkAlbums({...old, for (final t in list) albumNameKey(t.album)});
   });
 
   /// Rule Q5b: files placed by hand without album artist (key `name NUL`) join the server
@@ -725,6 +737,18 @@ class LibraryDb extends _$LibraryDb {
       taken[p] = row.filePath;
     }
     await removeOffline(taken.keys.toList());
+    // a file another row still names is not given back to delete (two rows can name one
+    // file: a copy deleted by hand frees its name for the next download)
+    for (final e in taken.entries.toList()) {
+      final rel = e.value;
+      if (rel == null) continue;
+      final shared = await customSelect(
+        'SELECT 1 FROM offline WHERE lower(file_path) = lower(?) LIMIT 1',
+        variables: [Variable.withString(rel)],
+        readsFrom: {offline},
+      ).get();
+      if (shared.isNotEmpty) taken[e.key] = null;
+    }
     return taken;
   });
 
@@ -912,8 +936,9 @@ class LibraryDb extends _$LibraryDb {
   ).map((r) => _fromRow(tracks.map(r.data)));
 
   // album, artist, genre: by disc, then number, those without one at the end
+  // (files placed by hand have no disc: they count as disc 1, among the server's songs)
   static const _byDisc =
-      'disc IS NULL, disc, track_no IS NULL, track_no, title';
+      'COALESCE(NULLIF(disc, 0), 1), track_no IS NULL, track_no, title';
 
   /// The albums shown (one per [albumMergeKey], whatever the account): name, songs, length.
   Stream<List<Album>> watchAlbums({Set<String>? accounts}) =>
