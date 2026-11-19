@@ -9,8 +9,10 @@ import 'package:path/path.dart' as p;
 import '../../app_scope.dart';
 import '../../library/merge.dart';
 import '../../library/models.dart';
+import '../../player/player.dart';
 import '../../sources/accounts.dart';
 import '../../theme/colors.dart';
+import '../classic/classic_shell.dart';
 import '../coverflow_screen.dart';
 import '../library_screen.dart';
 import '../tablet.dart';
@@ -39,9 +41,31 @@ class AdaptiveHome extends StatefulWidget {
 
 class _AdaptiveHomeState extends State<AdaptiveHome> {
   bool? _tablet;
+  ValueNotifier<bool>? _classic;
+  PlayerController? _player;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final app = AppScope.of(context);
+    _player = app.player;
+    final classic = app.classicMode;
+    if (identical(classic, _classic)) return;
+    _classic?.removeListener(_modeChanged);
+    _classic = classic?..addListener(_modeChanged);
+  }
+
+  /// Retour au mode normal : il n'a pas de volume, celui de l'appli revient à fond
+  /// (la molette du Mode Classic a pu le baisser).
+  void _modeChanged() {
+    final player = _player;
+    if ((_classic?.value ?? true) || player == null) return;
+    if (player.volume != 100) player.setVolume(100);
+  }
 
   @override
   void dispose() {
+    _classic?.removeListener(_modeChanged);
     setTabletMode(false);
     super.dispose();
   }
@@ -64,19 +88,46 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
         }
       }
     }
-    return AdaptiveHome.isPhone(size)
-        ? PhoneShell(
-            debugStart: widget.debugStart,
-            debugScreens: widget.debugScreens,
-          )
-        : const LibraryScreen();
+    if (!AdaptiveHome.isPhone(size)) return const LibraryScreen();
+    // le réglage Mode Classic remplace la vue téléphone, à chaud (le lecteur ne change pas)
+    final classic = AppScope.of(context).classicMode ?? _normalMode;
+    return ValueListenableBuilder<bool>(
+      valueListenable: classic,
+      builder: (_, on, _) => on
+          ? ClassicShell(
+              debugStart: widget.debugStart,
+              debugScreens: widget.debugScreens,
+            )
+          : PhoneShell(
+              debugStart: widget.debugStart,
+              debugScreens: widget.debugScreens,
+            ),
+    );
   }
 }
 
 /// Téléphone debout (maquette 1) : les colonnes du Mac empilées. Accueil → Album / Morceaux / Artistes /
 /// Genres / Top 100 → En cours. Retour : glisser depuis le bord gauche, ou le bouton retour d'Android.
 class PhoneShell extends StatefulWidget {
-  const PhoneShell({super.key, this.debugStart, this.debugScreens});
+  const PhoneShell({
+    super.key,
+    this.debugStart,
+    this.debugScreens,
+    this.home = const HomeScreen(),
+    this.onFlowOpen,
+    this.homeAtRoot,
+  });
+
+  /// Couché, « Ouvrir l'album » du Cover Flow : à la place de l'écran Album (Mode Classic : l'album
+  /// s'ouvre dans le menu, le Cover Flow reste jusqu'au redressement).
+  final void Function(Album album)? onFlowOpen;
+
+  /// Le premier écran n'a rien à remonter (le menu du Mode Classic, à sa racine) : sous le Cover Flow,
+  /// retour quitte l'appli seulement alors. Sans : toujours vrai.
+  final ValueListenable<bool>? homeAtRoot;
+
+  /// Le premier écran : l'Accueil, ou le menu du Mode Classic.
+  final Widget home;
 
   /// Mode démo (debug) : écran ouvert au lancement, « album » ou « now ».
   final String? debugStart;
@@ -187,6 +238,8 @@ class _PhoneShellState extends State<PhoneShell> {
   }
 
   void _openFromFlow(Album a) {
+    final open = widget.onFlowOpen;
+    if (open != null) return open(a);
     final ctx = _nav.currentContext;
     if (ctx == null) return;
     setState(() {
@@ -221,7 +274,7 @@ class _PhoneShellState extends State<PhoneShell> {
         key: _nav,
         observers: [_routes],
         onGenerateRoute: (_) =>
-            CupertinoPageRoute<void>(builder: (_) => const _Start()),
+            CupertinoPageRoute<void>(builder: (_) => _Start(home: widget.home)),
       ),
     );
     final app = AppScope.of(context);
@@ -229,25 +282,36 @@ class _PhoneShellState extends State<PhoneShell> {
     final key = now != null ? albumKeyOf(now) : _lastAlbumKey;
     final i = _albums.indexWhere((a) => a.key == key);
     // le Cover Flow se pose sur l'écran ; dessous, le navigateur reste où il était
-    return PopScope(
-      canPop: !flow || _routes.depth <= 1,
-      child: Stack(
-        children: [
-          Positioned.fill(child: nav),
-          if (flow)
-            Positioned.fill(
-              child: CoverflowScreen(
-                phone: true,
-                albums: _albums,
-                initial: i < 0 ? 0 : i,
-                onOpen: _openFromFlow,
-              ),
+    final stack = Stack(
+      children: [
+        Positioned.fill(child: nav),
+        if (flow)
+          Positioned.fill(
+            child: CoverflowScreen(
+              phone: true,
+              albums: _albums,
+              initial: i < 0 ? 0 : i,
+              onOpen: _openFromFlow,
             ),
-        ],
-      ),
+          ),
+      ],
     );
+    Widget scope(bool homeAtRoot) => PopScope(
+      canPop: !flow || (_routes.depth <= 1 && homeAtRoot),
+      child: stack,
+    );
+    final root = widget.homeAtRoot;
+    return root == null
+        ? scope(true)
+        : ValueListenableBuilder<bool>(
+            valueListenable: root,
+            builder: (_, atRoot, _) => scope(atRoot),
+          );
   }
 }
+
+/// Sans réglage (tests, démo) : le mode normal.
+final _normalMode = ValueNotifier<bool>(false);
 
 /// Suit les écrans empilés : leur nombre, et le premier écran nommé en partant du dessus (les feuilles et
 /// boîtes de dialogue n'ont pas de nom : En cours reste En cours dessous).
@@ -295,7 +359,8 @@ class _RouteWatcher extends NavigatorObserver {
 /// Premier écran : l'Accueil ; sur un téléphone sans aucun compte, « Ajouter un compte » (premier lancement),
 /// remplacé par l'Accueil dès que le compte est enregistré.
 class _Start extends StatefulWidget {
-  const _Start();
+  const _Start({required this.home});
+  final Widget home;
 
   @override
   State<_Start> createState() => _StartState();
@@ -321,7 +386,7 @@ class _StartState extends State<_Start> {
   @override
   Widget build(BuildContext context) {
     final stream = _accounts;
-    if (stream == null) return const HomeScreen();
+    if (stream == null) return widget.home;
     return StreamBuilder<List<Account>>(
       stream: stream,
       builder: (_, snap) {
@@ -329,7 +394,7 @@ class _StartState extends State<_Start> {
         if (list == null) return const ColoredBox(color: LafleurColors.bg);
         return list.isEmpty
             ? const AccountFormScreen(first: true)
-            : const HomeScreen();
+            : widget.home;
       },
     );
   }

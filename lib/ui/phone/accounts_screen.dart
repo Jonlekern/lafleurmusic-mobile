@@ -169,6 +169,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     padding: const EdgeInsets.fromLTRB(4, 22, 4, 8),
                     child: Text(s.display, style: _secStyle),
                   ),
+                  // Mode normal / Mode Classic (maquette 12 C) : le téléphone seulement
+                  if (app.classicMode case final classic?
+                      when !onTablet &&
+                          AdaptiveHome.isPhone(MediaQuery.sizeOf(context)))
+                    ClassicModeChoice(mode: classic),
                   DisplaySegment(
                     value: mode,
                     onChanged: (m) {
@@ -511,6 +516,41 @@ class DisplaySegment extends StatelessWidget {
         SegmentOption(DisplayMode.all, s.allAccounts),
         SegmentOption(DisplayMode.custom, s.customDisplay),
       ],
+    );
+  }
+}
+
+/// Mode normal / Mode Classic et sa légende (maquette 12 C). Changer remplace la vue
+/// téléphone à chaud ; le lecteur et la file ne bougent pas.
+class ClassicModeChoice extends StatelessWidget {
+  const ClassicModeChoice({super.key, required this.mode});
+  final ValueNotifier<bool> mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context).strings;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ValueListenableBuilder<bool>(
+            valueListenable: mode,
+            builder: (_, on, _) => PhoneSegment<bool>(
+              value: on,
+              onChanged: (v) => mode.value = v,
+              options: [
+                SegmentOption(false, s.normalMode),
+                SegmentOption(true, s.classicMode),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+            child: Text(s.classicModeNote, style: phoneHint),
+          ),
+        ],
+      ),
     );
   }
 }

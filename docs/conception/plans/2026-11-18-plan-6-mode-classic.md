@@ -36,7 +36,7 @@
 **Interfaces:**
 - Produces : `ClickWheel({required void Function(int steps) onRotate, VoidCallback? onSelect, onMenu, onPrevious, onNext, onPlayPause})` ; l'angle est suivi autour du centre, un cran = 15°, `onRotate(+1/-1)` par cran avec `HapticFeedback.selectionClick()` ; une tape sans rotation sur une zone déclenche son bouton.
 
-- [ ] Step 1: tests (crans, sens, points 1-2, tapes). Échec, implémentation, verts ; golden comparé à la maquette 6 A. Commit `feat: click wheel widget`.
+- [x] Step 1: tests (crans, sens, points 1-2, tapes). Échec, implémentation, verts ; golden comparé à la maquette 6 A. Commit `feat: click wheel widget`.
 
 ### Task 2: Le Mode Classic
 
@@ -45,16 +45,16 @@
 **Interfaces:**
 - Produces : écran du haut (titre de la liste, ▶︎ et batterie stylisés, lignes, ligne choisie en rose) ; la molette déplace la ligne choisie, le milieu ouvre, MENU revient ; Albums / Artistes / Morceaux / Playlists / Top 100 lisent les mêmes listes que le mode normal ; « En cours » ouvre l'écran En cours Classic (tâche 3).
 
-- [ ] Step 1: tests (navigation complète à la molette, points 3 et 5). Échec, implémentation, verts ; goldens ; captures simulateur. Commit `feat: Classic mode navigation`.
+- [x] Step 1: tests (navigation complète à la molette, points 3 et 5). Échec, implémentation, verts ; goldens ; captures simulateur. Commit `feat: Classic mode navigation`.
 
 ### Task 3: En cours en Mode Classic et choix du mode
 
 **Files:** Create `lib/ui/classic/classic_now.dart`, `maquettes/12-classic.png` (déjà faite) · Modify `lib/ui/phone/accounts_screen.dart` (Réglages : section « MODE » avec « Normal / Classic »), `lib/settings.dart`, `lib/l10n/strings.dart` · Test widget + goldens
 
 - [x] Step 1: maquette validée (`maquettes/12-classic.png`).
-- [ ] Step 2: tests (volume à la molette, avancer dans le morceau, point 4, réglage gardé). Échec, implémentation, verts ; goldens ; captures. Commit `feat: Classic now playing and mode setting`.
+- [x] Step 2: tests (volume à la molette, avancer dans le morceau, point 4, réglage gardé). Échec, implémentation, verts ; goldens ; captures. Commit `feat: Classic now playing and mode setting`.
 
 ### Task 4: Bout en bout et documents
 
 - [ ] Step 1: essai d'intégration : passer en Classic, choisir un album à la molette, jouer, revenir en mode normal ; simulateur iPhone + job Android ; CI verte.
-- [ ] Step 2: README et checklist. Commit `docs: plan 6 Classic mode status`.
+- [x] Step 2: README et checklist. Commit `docs: plan 6 Classic mode status`.

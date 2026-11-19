@@ -188,4 +188,26 @@ void main() {
       expect((await AppSettings.load(f)).albumSort, AlbumSort.name);
     },
   );
+
+  test('Classic mode: normal by default, saved and read back', () async {
+    final f = File('${dir.path}/classic.json');
+    expect(AppSettings().classicMode, isFalse);
+    await (AppSettings()..classicMode = true).save(f);
+    expect((await AppSettings.load(f)).classicMode, isTrue);
+    await (AppSettings()..classicMode = false).save(f);
+    expect((await AppSettings.load(f)).classicMode, isFalse);
+  });
+
+  test('Classic mode: missing or unreadable means normal', () async {
+    final f = File('${dir.path}/classic-bad.json');
+    for (final json in [
+      '{}',
+      '{"classicMode":"yes"}',
+      '{"classicMode":1}',
+      'nope',
+    ]) {
+      f.writeAsStringSync(json);
+      expect((await AppSettings.load(f)).classicMode, isFalse, reason: json);
+    }
+  });
 }

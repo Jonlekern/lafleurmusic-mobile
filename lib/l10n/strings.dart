@@ -649,6 +649,35 @@ class Strings {
     'If you ticked “Don’t ask me again”, turn it back on here.',
   );
 
+  // plan 6 : Mode Classic, zones de la molette (VoiceOver / TalkBack)
+  String get wheelMenu => 'MENU';
+  String get previousTrack => _t('Morceau précédent', 'Previous track');
+  String get nextTrack => _t('Morceau suivant', 'Next track');
+  String get playPause => _t('Lecture / pause', 'Play / pause');
+  String get wheelSelect => _t('Choisir', 'Select');
+  String get wheel => _t('Molette', 'Wheel');
+  // plan 6 : Mode Classic, le menu (maquette 6 A)
+  String get classicMusic => _t('MUSIQUE', 'MUSIC');
+  String get classicPlaylists => 'Playlists';
+  String get classicNowPlaying => _t('En cours', 'Now Playing');
+  String get classicSettings => _t('Réglages', 'Settings');
+  // plan 6 : Mode Classic, En cours et le choix du mode (maquette 12)
+  String classicPosition(int n, int total) =>
+      _t('$n sur $total', '$n of $total');
+  String get classicScrub => _t(
+    '◆ Tourne pour avancer dans le morceau',
+    '◆ Turn to move through the song',
+  );
+  String get classicTrackPosition =>
+      _t('Position dans le morceau', 'Position in the song');
+  String get classicVolume => 'Volume';
+  String get normalMode => _t('Mode normal', 'Normal mode');
+  String get classicMode => _t('Mode Classic', 'Classic mode');
+  String get classicModeNote => _t(
+    "Mode Classic : un menu comme l'iPod et une molette à tourner du doigt. Ta musique et ta file ne changent pas.",
+    'Classic mode: a menu like the iPod and a wheel you turn with your finger. Your music and your queue stay the same.',
+  );
+
   /// Taille lisible : Mo en dessous d'un Go, sinon Go à une décimale (virgule en français).
   String size(int bytes) {
     const mb = 1024 * 1024, gb = 1024 * mb;

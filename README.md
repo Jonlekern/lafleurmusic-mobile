@@ -4,7 +4,7 @@ An iPod-style music player for Android and iPhone, in the LAFLEURSTUDIO style.
 It plays the music from your own server and keeps a copy of your favourites on the phone.
 The phone sibling of [LAFLEURMUSIC for desktop](https://github.com/Jonlekern/lafleurmusic-desktop).
 
-**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin), plan 5 (Plex) and plan 8 (queue and library) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
+**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin), plan 5 (Plex), plan 6 (Classic mode: an iPod-style menu with a click wheel, chosen in Settings) and plan 8 (queue and library) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
 
 What works now:
 
@@ -31,7 +31,7 @@ What works now:
 - **Queue:** swipe a song to the right to add it to the queue (a bubble offers Undo and View queue); to the
   left to play it next. "Clear" in Up Next removes only what you added, after asking; the rest of the album
   stays. Files placed by hand work the same way.
-- **Albums:** tap the ALBUMS title on Home for the Albums screen: the last albums you played, and a sort
+- **Albums:** the Albums row on Home (or the ALBUMS title) opens the Albums screen: the last albums you played, and a sort
   by name, artist, recently added or most played, which the app remembers. "Go to album" and "Go to artist"
   are at the top of the Now Playing ⋯ menu (phone only).
 - **Offline:** keep songs or albums on the phone ("Keep on my iPhone / phone") as real

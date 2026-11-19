@@ -8,6 +8,7 @@ import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/offline/downloader.dart' show Downloader;
 import 'package:lafleurmusic/player/equalizer.dart';
 import 'package:lafleurmusic/player/player.dart';
 import 'package:lafleurmusic/player/queue.dart';
@@ -63,6 +64,8 @@ Future<PhoneFixture> pumpPhone(
   WidgetTester tester, {
   bool images = false,
   Widget home = const PhoneShell(),
+  ValueNotifier<bool>? classicMode,
+  Downloader? downloader,
 }) async {
   phoneSize(tester);
   final dir = Directory.systemTemp.createTempSync('phone');
@@ -111,9 +114,11 @@ Future<PhoneFixture> pumpPhone(
       covers: ReadyCovers(files),
       strings: Strings.of(const Locale('fr')),
       equalizer: ValueNotifier(Equalizer.named('flat')),
+      classicMode: classicMode,
       settings: AppSettings(),
       saveSettings: () {},
       accounts: accounts,
+      downloader: downloader,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: lafleurTheme(),

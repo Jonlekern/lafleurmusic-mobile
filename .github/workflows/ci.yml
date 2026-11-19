@@ -165,12 +165,14 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           # sound proof, then the end-to-end runs against a fake Subsonic server:
-          # first launch (plan 1), offline (plan 2), accounts (plans 3 to 5: Navidrome + Jellyfin + Plex)
+          # first launch (plan 1), offline (plan 2), accounts (plans 3 to 5: Navidrome + Jellyfin + Plex),
+          # Classic mode (plan 6: the wheel)
           script: |
             flutter test integration_test/sound_proof_test.dart
             flutter test integration_test/app_test.dart
             flutter test integration_test/offline_test.dart
             flutter test integration_test/accounts_test.dart
+            flutter test integration_test/classic_test.dart
 
   # Android 9 (API 28): storage still asks for the write permission at run time
   # (until API 29). The app must start without it (end-to-end run, nothing

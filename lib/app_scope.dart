@@ -26,6 +26,7 @@ class AppScope extends InheritedWidget {
     required this.strings,
     ValueNotifier<Equalizer>? equalizer,
     this.artistGrid,
+    this.classicMode,
     this.settings,
     this.saveSettings,
     this.loudness,
@@ -45,6 +46,8 @@ class AppScope extends InheritedWidget {
   final ValueNotifier<Equalizer>? _eq;
   final ValueNotifier<bool>?
   artistGrid; // vue Artistes : grille (sinon liste), retenue
+  /// Téléphone : Mode Classic (menu et molette) ou mode normal ; retenu, changé à chaud.
+  final ValueNotifier<bool>? classicMode;
   final AppSettings? settings; // réglages (enregistrés par saveSettings)
   final VoidCallback? saveSettings;
   final LoudnessService? loudness; // Volume égal

@@ -33,6 +33,7 @@ class AppSettings {
     this.oneAccount,
     this.confirmRemove = true,
     this.albumSort = AlbumSort.name,
+    this.classicMode = false,
     List<String>? customAccounts,
   }) : customAccounts = customAccounts ?? [],
        equalizer = equalizer ?? Equalizer.named('flat');
@@ -61,6 +62,7 @@ class AppSettings {
   List<String> customAccounts; // les comptes montrés quand displayMode = custom
   AlbumSort albumSort; // tri de la liste des albums
   bool confirmRemove; // « Retirer du téléphone » demande d'abord confirmation
+  bool classicMode; // téléphone : Mode Classic (menu et molette) au lieu du mode normal
 
   static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
 
@@ -116,6 +118,7 @@ class AppSettings {
             (m) => m.name == j['albumSort'],
             orElse: () => AlbumSort.name,
           ),
+          classicMode: j['classicMode'] == true,
           customAccounts: j['customAccounts'] is List
               ? [
                   for (final a in j['customAccounts']! as List)
@@ -161,6 +164,7 @@ class AppSettings {
         'customAccounts': customAccounts,
         'confirmRemove': confirmRemove,
         'albumSort': albumSort.name,
+        'classicMode': classicMode,
       }),
     );
     await tmp.rename(f.path);
