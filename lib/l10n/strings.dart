@@ -562,6 +562,13 @@ class Strings {
     'If you ticked “Don’t ask me again”, turn it back on here.',
   );
 
+  // plan 6 : Mode Classic, zones de la molette (VoiceOver / TalkBack)
+  String get wheelMenu => 'MENU';
+  String get previousTrack => _t('Morceau précédent', 'Previous track');
+  String get nextTrack => _t('Morceau suivant', 'Next track');
+  String get playPause => _t('Lecture / pause', 'Play / pause');
+  String get wheelSelect => _t('Choisir', 'Select');
+
   /// Taille lisible : Mo en dessous d'un Go, sinon Go à une décimale (virgule en français).
   String size(int bytes) {
     const mb = 1024 * 1024, gb = 1024 * mb;
