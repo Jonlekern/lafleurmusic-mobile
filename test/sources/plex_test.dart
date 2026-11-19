@@ -430,9 +430,9 @@ void main() {
       },
     );
 
-    test('playback comes in the next task', () {
+    test('a song not looked up has no address; the type is Plex', () {
       final s = plexSource(FakePms());
-      expect(() => s.streamUri('1'), throwsUnimplementedError);
+      expect(() => s.streamUri('1'), throwsStateError);
       expect(s.accountType, AccountType.plex);
     });
   });

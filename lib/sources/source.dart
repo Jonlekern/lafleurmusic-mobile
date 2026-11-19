@@ -165,6 +165,16 @@ abstract interface class AuthRenewable {
   Future<void> renewAuth();
 }
 
+/// A source that must look a song's file address up on the server before [MusicSource.streamUri]
+/// and [MusicSource.downloadUri] (both synchronous) can answer (Plex: the file's `Part` key).
+/// Callers wait for it after [AuthRenewable.prepare].
+abstract interface class SongResolving {
+  /// Looks the file of [songId] up. Throws when the server doesn't have it (Plex: a
+  /// `PlexException` with status 404: this song only is refused). [batch]: a run over many
+  /// songs (offline copies): the rest of the song's album may be read at once.
+  Future<void> resolveSong(String songId, {bool batch = false});
+}
+
 /// A source reached over HTTP: its client also fetches the covers (same connection pool, mockable in tests).
 abstract interface class HttpSource {
   http.Client get httpClient;

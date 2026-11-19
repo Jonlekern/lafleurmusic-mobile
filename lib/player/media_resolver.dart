@@ -176,6 +176,10 @@ class MediaResolver {
       if (s is AuthRenewable) {
         await (s as AuthRenewable).prepare().timeout(sourceTimeout);
       }
+      // Plex: the file's address is looked up (one song) before the synchronous streamUri
+      if (s is SongResolving) {
+        await (s as SongResolving).resolveSong(id.$2).timeout(sourceTimeout);
+      }
       // Jellyfin: its sign-in header has commas, which mpv refuses (see streamHeaders)
       final headers = s is JellyfinSource ? s.streamHeaders : s.headers;
       return Media(

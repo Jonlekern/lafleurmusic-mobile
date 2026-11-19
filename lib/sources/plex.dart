@@ -16,7 +16,12 @@ import 'source.dart';
 /// tested again when the network changes). Plex tokens don't renew: a 401 means « À
 /// reconnecter », and a new code replaces the token in place.
 class PlexSource
-    implements MusicSource, HttpSource, TypedSource, AuthRenewable {
+    implements
+        MusicSource,
+        HttpSource,
+        TypedSource,
+        AuthRenewable,
+        SongResolving {
   PlexSource({
     required this.accountId,
     required this._server,
@@ -309,11 +314,10 @@ class PlexSource
 
   // ---- library, playback (tasks 2 and 3) ----------------------------------------------------
 
-  /// GET [path] on the server in use, JSON back. A 401 is « À reconnecter »; another
-  /// refusal is a [PlexException] with its code. [start]/[size]: one page.
-  Future<Map> _get(
-    String path, {
-    Map<String, String>? query,
+  /// GET [path] on the server in use; anything but a 200 throws.
+  Future<http.Response> _getRaw(
+    String path,
+    Map<String, String>? query, {
     int? start,
     int? size,
   }) async {
@@ -330,6 +334,18 @@ class PlexSource
     if (res.statusCode != 200) {
       throw PlexException('request refused', statusCode: res.statusCode);
     }
+    return res;
+  }
+
+  /// GET [path] on the server in use, JSON back. A 401 is « À reconnecter »; another
+  /// refusal is a [PlexException] with its code. [start]/[size]: one page.
+  Future<Map> _get(
+    String path, {
+    Map<String, String>? query,
+    int? start,
+    int? size,
+  }) async {
+    final res = await _getRaw(path, query, start: start, size: size);
     try {
       final d = jsonDecode(utf8.decode(res.bodyBytes, allowMalformed: true));
       final mc = d is Map ? d['MediaContainer'] : null;
@@ -429,7 +445,8 @@ class PlexSource
     return songs;
   }
 
-  SourceSong _song(Map m) {
+  /// The first `Part` of the first `Media` of a track (a track with several keeps the first).
+  static Map? _firstPart(Map m) {
     final media = m['Media'] is List && (m['Media'] as List).isNotEmpty
         ? (m['Media'] as List).first
         : null;
@@ -439,6 +456,14 @@ class PlexSource
             (media['Part'] as List).isNotEmpty
         ? (media['Part'] as List).first
         : null;
+    return part is Map ? part : null;
+  }
+
+  SourceSong _song(Map m) {
+    final media = m['Media'] is List && (m['Media'] as List).isNotEmpty
+        ? (m['Media'] as List).first
+        : null;
+    final part = _firstPart(m);
     final p = part is Map ? part : const {};
     // the artist of the album's artist node: the album's own artist, never the track's
     final albumArtist = _str(m['grandparentTitle']);
@@ -535,17 +560,90 @@ class PlexSource
     });
   }
 
+  /// How long a looked-up file address is trusted (the server may re-analyse its files).
+  static const partTtl = Duration(minutes: 30);
+  static const _partsMax = 20000;
+  final _parts = <String, ({String key, DateTime at})>{};
+  final _albumsRead = <String>{};
+
+  String? _partOf(String songId) {
+    final p = _parts[songId];
+    if (p == null) return null;
+    if (_now().difference(p.at) >= partTtl) {
+      _parts.remove(songId);
+      return null;
+    }
+    return p.key;
+  }
+
+  void _remember(String songId, Map m) {
+    final key = _str(_firstPart(m)?['key']);
+    if (key.isEmpty) return;
+    if (_parts.length >= _partsMax) {
+      _parts.clear();
+      _albumsRead.clear();
+    }
+    _parts[songId] = (key: key, at: _now());
+  }
+
+  /// Looks the file of [songId] up (`GET /library/metadata/{id}`; its first Part). [batch]:
+  /// the song's album is then read once (`/children`, one request for all its songs) so
+  /// the next songs of that album cost nothing; if that fails, songs are read one by one.
+  /// A song the server doesn't have, or without a file, is a 404 [PlexException].
   @override
-  Uri streamUri(String songId) =>
-      throw UnimplementedError('Plex playback: plan 5 task 3');
+  Future<void> resolveSong(String songId, {bool batch = false}) async {
+    await prepare();
+    if (_partOf(songId) != null) return;
+    final d = await _get('library/metadata/$songId');
+    final raw = d['Metadata'];
+    final m = raw is List && raw.isNotEmpty && raw.first is Map
+        ? raw.first as Map
+        : null;
+    if (m == null) {
+      throw PlexException('song not found', statusCode: 404);
+    }
+    _remember(songId, m);
+    if (_partOf(songId) == null) {
+      throw PlexException('song has no file', statusCode: 404);
+    }
+    final album = _str(m['parentRatingKey']);
+    if (batch && album.isNotEmpty && _albumsRead.add(album)) {
+      try {
+        await for (final items in _pages('library/metadata/$album/children')) {
+          for (final t in items) {
+            if (t['ratingKey'] != null) _remember('${t['ratingKey']}', t);
+          }
+        }
+      } on Object {
+        _albumsRead.remove(album); // the songs are read one by one
+      }
+    }
+  }
+
+  Uri _partUri(String songId, [Map<String, String>? query]) {
+    final base = _base, key = _partOf(songId);
+    if (base == null || key == null) {
+      throw StateError('Plex song not resolved'); // resolveSong() first
+    }
+    return plexUrl(base, key, query);
+  }
+
+  /// The original file; the token goes in [headers] only (never in this address).
+  @override
+  Uri streamUri(String songId) => _partUri(songId);
 
   @override
-  Uri downloadUri(String songId) =>
-      throw UnimplementedError('Plex downloads: plan 5 task 3');
+  Uri downloadUri(String songId) => _partUri(songId, {'download': '1'});
 
+  /// Marks the song played. Plex takes no date: a listen sent later (it waited offline)
+  /// counts as played now. A 404 (the song is gone) is a [PlexException] with that code.
   @override
-  Future<void> scrobble(String songId, DateTime at) =>
-      throw UnimplementedError('Plex listens: plan 5 task 3');
+  Future<void> scrobble(String songId, DateTime at) async {
+    await _getRaw('/:/scrobble', {
+      'key': songId,
+      'identifier': 'com.plexapp.plugins.library',
+    });
+  }
 
   @override
   void close() {

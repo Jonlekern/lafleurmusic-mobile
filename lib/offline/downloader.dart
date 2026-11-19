@@ -10,6 +10,7 @@ import '../library/db.dart';
 import '../library/models.dart';
 import '../player/media_resolver.dart';
 import '../settings.dart';
+import '../sources/plex_link.dart' show PlexException;
 import '../sources/source.dart';
 import '../tags/tag_reader.dart';
 import '../tags/tag_writer.dart';
@@ -648,6 +649,16 @@ class Downloader extends ChangeNotifier {
     // Jellyfin: the token is read synchronously below, so it is loaded (or signed in) first
     final auth = source is AuthRenewable ? source as AuthRenewable : null;
     await auth?.prepare();
+    // Plex: the file's address is looked up first (the rest of the album at once); a song the
+    // server no longer has is a refusal of this song only (a revoked token or a 5xx is not)
+    if (source is SongResolving) {
+      try {
+        await (source as SongResolving).resolveSong(key.$2, batch: true);
+      } on PlexException catch (e) {
+        if (e.statusCode == 404 && !e.tokenRefused) throw _Refusal();
+        rethrow;
+      }
+    }
 
     var viaDownload = true;
     http.StreamedResponse res;

@@ -3,15 +3,17 @@ import 'dart:async';
 import '../player/media_resolver.dart';
 import '../player/player.dart';
 import '../sources/jellyfin.dart' show JellyfinException;
+import '../sources/plex_link.dart' show PlexException;
 import '../sources/source.dart';
 import '../sources/subsonic.dart';
 import 'db.dart';
 
-/// Le serveur ne connaît pas ce morceau (Subsonic 70, Jellyfin 404) : renvoyer l'écoute ne
+/// Le serveur ne connaît pas ce morceau (Subsonic 70, Jellyfin and Plex 404) : renvoyer l'écoute ne
 /// servirait à rien.
 bool scrobbleRefused(Object e) =>
     (e is SubsonicException && e.code == 70) ||
-    (e is JellyfinException && e.statusCode == 404);
+    (e is JellyfinException && e.statusCode == 404) ||
+    (e is PlexException && e.statusCode == 404);
 
 /// Compte une écoute quand on a écouté la moitié du morceau ou 4 min, une fois par lecture.
 /// Morceau du serveur : l'écoute est aussi envoyée au serveur (scrobble) par [sourceOf].
