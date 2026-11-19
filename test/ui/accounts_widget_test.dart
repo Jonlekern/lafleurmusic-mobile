@@ -241,6 +241,37 @@ void main() {
     });
   });
 
+  testWidgets(
+    'modifier un compte : le type ne change pas (Subsonic reste Subsonic)',
+    (tester) async {
+      final f = await pumpAccounts(
+        tester,
+        seed: [mockupAccounts.first],
+        home: () => Builder(
+          builder: (ctx) => FutureBuilder(
+            future: AppScope.of(ctx).accounts!.watch().first,
+            builder: (_, snap) => snap.hasData
+                ? AccountFormScreen(editing: snap.data!.single)
+                : const SizedBox(),
+          ),
+        ),
+      );
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await settle(tester);
+      AccountType shown() => tester
+          .widget<AccountTypeSegment>(find.byType(AccountTypeSegment))
+          .value;
+      expect(shown(), AccountType.subsonic);
+      await tapAndSettle(tester, find.text('Jellyfin'));
+      expect(shown(), AccountType.subsonic);
+      expect(find.textContaining('Navidrome, Airsonic'), findsOneWidget);
+      await tapAndSettle(tester, find.text('Enregistrer'));
+      final list = await f.list(tester);
+      expect(list.single.type, AccountType.subsonic);
+      expect(f.synced, [list.single.id]);
+    },
+  );
+
   group('écran 6, Réglages → Comptes', () {
     testWidgets('les comptes, leur état (connecté / absent), l’ordre', (
       tester,

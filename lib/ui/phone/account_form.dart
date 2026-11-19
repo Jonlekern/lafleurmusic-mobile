@@ -271,7 +271,10 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           FieldLabel(s.serverType, top: 2),
           AccountTypeSegment(
             value: _type,
-            onChanged: (t) => setState(() => _type = t),
+            // an account keeps its type: editing, a tap changes nothing (same look)
+            onChanged: (t) {
+              if (widget.editing == null) setState(() => _type = t);
+            },
           ),
           const SizedBox(height: 6),
           if (_type == AccountType.subsonic)

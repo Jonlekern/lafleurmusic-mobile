@@ -213,7 +213,8 @@ class AccountService extends ChangeNotifier {
 
   Map<String, OfflineRow> _kept = const {};
   String? _root, _docs;
-  CopyRoot? _copyRoot; // the reachable copies' folder, as of the last [refreshRoot]
+  CopyRoot?
+  _copyRoot; // the reachable copies' folder, as of the last [refreshRoot]
   StreamSubscription<Map<String, OfflineRow>>? _keptSub;
   // songs on several rows: merge key → (path, account), local files then the accounts' order
   Map<String, List<(String, String)>> _twins = const {};
@@ -424,7 +425,7 @@ class AccountService extends ChangeNotifier {
     } else {
       a = Account(
         id: editing.id,
-        type: d.type,
+        type: editing.type, // never changed by an edit: its keys and secrets belong to it
         name: d.displayName,
         base: base,
         user: d.user.trim(),

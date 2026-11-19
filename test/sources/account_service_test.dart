@@ -121,6 +121,37 @@ void main() {
     ];
 
     test(
+      'an edit never changes the type: a Subsonic account stays Subsonic',
+      () async {
+        final service = AccountService(
+          accounts,
+          db: db,
+          sourceOf: (_) async => _CountingSource(a.id),
+          wait: (_) => Completer<void>().future,
+        );
+        final saved = await service.save(
+          const AccountDraft(
+            type: AccountType.jellyfin,
+            name: 'N2',
+            address: 'http://h',
+            user: 'u',
+          ),
+          editing: a,
+        );
+        expect(saved.type, AccountType.subsonic);
+        final stored = (await accounts.watch().first).single;
+        expect(stored.type, AccountType.subsonic);
+        expect(stored.name, 'N2');
+        // its keys still work: its source is a Subsonic one, with its password
+        final source = await accounts.source(a.id);
+        expect(source, isA<SubsonicSource>());
+        expect(await accounts.password(a.id), 'pw');
+        source.close();
+        service.dispose();
+      },
+    );
+
+    test(
       'removing during a sync leaves no track and no result behind',
       () async {
         final src = GatedSource(a.id, albumCount: 3);
