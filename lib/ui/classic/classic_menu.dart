@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../l10n/strings.dart';
 import '../../library/models.dart';
 import '../../theme/colors.dart';
 import '../coverflow_screen.dart';
@@ -19,6 +20,9 @@ import 'click_wheel.dart';
 // Maquette 6 A (maquettes/src/6-molette.html, .ipodscr)
 const _screenBg = Color(0xFF111111);
 const _titleColor = Color(0xFF999999);
+const _notOnPhone = Color(
+  0xFF555555,
+); // PhoneTrackRow, morceau pas sur le téléphone
 const _screenHeight = 300.0;
 const _rowHeight = 37.0; // padding 9 + une ligne de texte de 15 px
 const _titleHeight = 19.0; // une ligne de 11 px + 6 dessous
@@ -37,29 +41,39 @@ class ClassicMenu extends StatefulWidget {
   State<ClassicMenu> createState() => _ClassicMenuState();
 }
 
-/// Un niveau de menu : sa liste, la ligne choisie et où la liste était défilée.
+/// Un niveau de menu : sa liste, la ligne choisie et où la liste était défilée. Les textes
+/// sont relus à chaque image ([Strings] : la langue peut changer).
 class _Level {
   _Level(this.title, {this.chevron = true, this.empty});
-  final String title;
+  final String Function(Strings s) title;
   final bool chevron; // › : la ligne ouvre une autre liste
-  final String?
-  empty; // texte d'une liste vide (comme le mode normal), sinon rien
+  // texte d'une liste vide (comme le mode normal), sinon rien
+  final String Function(Strings s)? empty;
   int count = 0;
   bool loaded = false;
-  String Function(int i) label = _blank;
-  bool Function(int i) dim = _never; // grisée : rien à jouer (morceau absent)
+  String Function(Strings s, int i) label = _blank;
+  // estompée, sans toucher possible (morceau absent, ligne sans effet), comme le mode normal
+  bool Function(int i) dim = _no;
+  // grisée : pas sur le téléphone, rien à jouer hors ligne (PhoneTrackRow `playable`)
+  bool Function(int i) playable = _yes;
+  Object? Function(int i) key =
+      _none; // l'élément de la ligne, pour le retrouver
   void Function(int i)? choose;
+  final playableCache = <String, bool>{};
   int selected = 0;
   double offset = 0;
   StreamSubscription<Object?>? sub;
 
-  static String _blank(int _) => '';
-  static bool _never(int _) => false;
+  static String _blank(Strings _, int _) => '';
+  static bool _no(int _) => false;
+  static bool _yes(int _) => true;
+  static Object? _none(int _) => null;
 }
 
 class _ClassicMenuState extends State<ClassicMenu> {
   final _levels = <_Level>[];
   var _scroll = ScrollController(keepScrollOffset: false);
+  Listenable? _service;
 
   _Level get _current => _levels.last;
 
@@ -67,10 +81,16 @@ class _ClassicMenuState extends State<ClassicMenu> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_levels.isEmpty) _levels.add(_root());
+    // copies ou comptes changés : « jouable ? » se relit (comme PhoneTrackRows)
+    if (_service == null) {
+      _service = AppScope.of(context).accountService;
+      _service?.addListener(_accountsChanged);
+    }
   }
 
   @override
   void dispose() {
+    _service?.removeListener(_accountsChanged);
     for (final l in _levels) {
       l.sub?.cancel();
     }
@@ -78,120 +98,172 @@ class _ClassicMenuState extends State<ClassicMenu> {
     super.dispose();
   }
 
+  void _accountsChanged() {
+    if (!mounted) return;
+    setState(() {
+      for (final l in _levels) {
+        l.playableCache.clear();
+      }
+    });
+  }
+
   // ---- niveaux
 
   _Level _root() {
     final app = AppScope.of(context);
-    final s = app.strings;
     final lib = app.library;
-    final rows = <(String, VoidCallback?)>[
-      (s.coverFlow, _openCoverflow),
+    String name(Strings s, String n) => n.isEmpty ? s.unknownArtist : n;
+    final rows = <(String Function(Strings), VoidCallback?)>[
+      ((s) => s.coverFlow, _openCoverflow),
       (
-        s.artists,
+        (s) => s.artists,
         () => _push(
           _list<(String, int)>(
-            s.artists,
+            (s) => s.artists,
             lib.artists(),
-            label: (a) => a.$1.isEmpty ? s.unknownArtist : a.$1,
+            label: (s, a) => name(s, a.$1),
+            key: (a) => a.$1,
             choose: (l, i) => _push(
-              _tracks(
-                l[i].$1.isEmpty ? s.unknownArtist : l[i].$1,
-                lib.artistTracks(l[i].$1),
-              ),
+              _tracks((s) => name(s, l[i].$1), lib.artistTracks(l[i].$1)),
             ),
           ),
         ),
       ),
       (
-        s.albumsBack,
+        (s) => s.albumsBack,
         () => _push(
           _list<Album>(
-            s.albumsBack,
+            (s) => s.albumsBack,
             lib.albums(),
-            label: (a) => a.name.isEmpty ? s.unknownArtist : a.name,
+            label: (s, a) => name(s, a.name),
+            key: (a) => a.key,
             choose: (l, i) => _push(_album(l[i])),
           ),
         ),
       ),
-      (s.songs, () => _push(_tracks(s.songs, lib.allTracks()))),
+      ((s) => s.songs, () => _push(_tracks((s) => s.songs, lib.allTracks()))),
       (
-        s.classicPlaylists,
+        (s) => s.classicPlaylists,
         () => _push(
           _list<ServerPlaylist>(
-            s.classicPlaylists,
+            (s) => s.classicPlaylists,
             lib.playlists(),
-            label: (p) => p.name,
+            label: (_, p) => p.name,
+            key: (p) => (p.accountId, p.id),
             choose: (l, i) => _push(_playlist(l[i])),
           ),
         ),
       ),
       (
-        s.top100,
+        (s) => s.top100,
         () => _push(
           _tracks(
-            s.top100,
+            (s) => s.top100,
             lib.top(100).map((l) => [for (final (t, _) in l) t]),
-            empty: s.topEmpty,
+            empty: (s) => s.topEmpty,
           ),
         ),
       ),
       // les copies gardées sur le téléphone (sans téléchargeur : rien à montrer)
       (
-        s.onDevice(defaultTargetPlatform == TargetPlatform.iOS),
+        (s) => s.onDevice(defaultTargetPlatform == TargetPlatform.iOS),
         app.downloader == null
             ? null
             : () => pushPhone(context, const OnDeviceScreen()),
       ),
-      (s.classicNowPlaying, () => openNow(context)),
-      (s.classicSettings, () => pushPhone(context, const AccountsScreen())),
+      ((s) => s.classicNowPlaying, () => openNow(context)),
+      (
+        (s) => s.classicSettings,
+        () => pushPhone(context, const AccountsScreen()),
+      ),
     ];
-    return _Level(s.classicMusic)
+    return _Level((s) => s.classicMusic)
       ..loaded = true
       ..count = rows.length
-      ..label = ((i) => rows[i].$1)
+      ..label = ((s, i) => rows[i].$1(s))
+      ..dim = ((i) => rows[i].$2 == null)
       ..choose = ((i) => rows[i].$2?.call());
   }
 
-  /// Une liste qui suit [stream] (les mêmes flux que le mode normal).
+  /// Une liste qui suit [stream] (les mêmes flux que le mode normal). Quand la liste change,
+  /// la ligne choisie reste sur le même élément ([key]) ; s'il a disparu, au même rang.
   _Level _list<T>(
-    String title,
+    String Function(Strings s) title,
     Stream<List<T>> stream, {
-    required String Function(T) label,
+    required String Function(Strings s, T item) label,
+    required Object? Function(T item) key,
     required void Function(List<T> items, int i) choose,
-    bool Function(T)? dim,
+    bool Function(T item)? dim,
+    bool Function(_Level level, T item)? playable,
     bool chevron = true,
-    String? empty,
+    String Function(Strings s)? empty,
   }) {
     final level = _Level(title, chevron: chevron, empty: empty);
     level.sub = stream.listen((items) {
       if (!mounted) return;
+      final was = level.loaded && level.count > 0
+          ? level.key(level.selected)
+          : null;
       setState(() {
+        var at = math.min(level.selected, math.max(0, items.length - 1));
+        if (was != null) {
+          // le plus proche de l'ancien rang (un morceau peut revenir deux fois dans une playlist)
+          var best = -1;
+          for (var j = 0; j < items.length; j++) {
+            if (key(items[j]) != was) continue;
+            if (best < 0 ||
+                (j - level.selected).abs() < (best - level.selected).abs()) {
+              best = j;
+            }
+          }
+          if (best >= 0) at = best;
+        }
         level
           ..loaded = true
           ..count = items.length
-          ..label = ((i) => label(items[i]))
-          ..dim = dim == null ? ((_) => false) : ((i) => dim(items[i]))
+          ..label = ((s, i) => label(s, items[i]))
+          ..key = ((i) => key(items[i]))
+          ..dim = dim == null ? _Level._no : ((i) => dim(items[i]))
+          ..playable = playable == null
+              ? _Level._yes
+              : ((i) => playable(level, items[i]))
           ..choose = ((i) => choose(items, i))
-          ..selected = math.min(level.selected, math.max(0, items.length - 1));
+          ..selected = at;
+        level.playableCache.clear();
+      });
+      // après la mise en page de la nouvelle liste
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && identical(level, _current)) _reveal();
       });
     });
     return level;
   }
 
+  /// Jouable maintenant ? Lu une fois par morceau et par liste (« jouable ? » lit le disque).
+  bool _playableNow(_Level level, Track t) =>
+      level.playableCache[t.path] ??= context
+          .getInheritedWidgetOfExactType<AppScope>()!
+          .playableNow(t); // appelé pendant la mise en page de la liste
+
   /// Des morceaux : choisir joue la liste à partir de celui-là, comme le mode normal.
-  _Level _tracks(String title, Stream<List<Track>> tracks, {String? empty}) =>
-      _list<Track>(
-        title,
-        tracks,
-        label: (t) => t.title,
-        dim: (t) => t.missing,
-        choose: _playFrom,
-        chevron: false,
-        empty: empty,
-      );
+  _Level _tracks(
+    String Function(Strings s) title,
+    Stream<List<Track>> tracks, {
+    String Function(Strings s)? empty,
+  }) => _list<Track>(
+    title,
+    tracks,
+    label: (_, t) => t.title,
+    key: (t) => t.path,
+    dim: (t) => t.missing,
+    playable: _playableNow,
+    choose: _playFrom,
+    chevron: false,
+    empty: empty,
+  );
 
   _Level _album(Album a) => _tracks(
-    a.name.isEmpty ? AppScope.of(context).strings.unknownArtist : a.name,
+    (s) => a.name.isEmpty ? s.unknownArtist : a.name,
     AppScope.of(context).library.albumTracks(a.key),
   );
 
@@ -199,10 +271,13 @@ class _ClassicMenuState extends State<ClassicMenu> {
   _Level _playlist(ServerPlaylist p) {
     final app = AppScope.of(context);
     return _list<(String, Track?)>(
-      p.name,
+      (_) => p.name,
       app.db.watchPlaylistItems(p.accountId, p.id),
-      label: (item) => item.$2?.title ?? app.strings.missingSong,
+      label: (s, item) => item.$2?.title ?? s.missingSong,
+      key: (item) => item.$1,
       dim: (item) => item.$2 == null || item.$2!.missing,
+      playable: (level, item) =>
+          item.$2 == null || _playableNow(level, item.$2!),
       chevron: false,
       choose: (items, i) {
         if (items[i].$2 == null) return;
@@ -298,7 +373,8 @@ class _ClassicMenuState extends State<ClassicMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final player = AppScope.of(context).player;
+    final app = AppScope.of(context);
+    final player = app.player;
     final level = _current;
     return PopScope(
       // retour d'Android : comme MENU, tant qu'on n'est pas à la racine
@@ -327,6 +403,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
                           child: SizedBox(
                             height: _screenHeight * k,
                             child: _Screen(
+                              strings: app.strings,
                               level: level,
                               scroll: _scroll,
                               onTap: _tap,
@@ -363,10 +440,12 @@ class _ClassicMenuState extends State<ClassicMenu> {
 /// L'écran du haut : le titre, ▶︎ et la pile, les lignes.
 class _Screen extends StatelessWidget {
   const _Screen({
+    required this.strings,
     required this.level,
     required this.scroll,
     required this.onTap,
   });
+  final Strings strings;
   final _Level level;
   final ScrollController scroll;
   final void Function(int i) onTap;
@@ -392,7 +471,7 @@ class _Screen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      l.title.toUpperCase(),
+                      l.title(strings).toUpperCase(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -422,7 +501,7 @@ class _Screen extends StatelessWidget {
                       vertical: 9,
                     ),
                     child: Text(
-                      l.empty!,
+                      l.empty!(strings),
                       style: const TextStyle(color: LafleurColors.sub),
                     ),
                   )
@@ -432,13 +511,18 @@ class _Screen extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     itemExtent: _rowHeight,
                     itemCount: l.count,
-                    itemBuilder: (_, i) => ClassicRow(
-                      label: l.label(i),
-                      selected: i == l.selected,
-                      chevron: l.chevron,
-                      dim: l.dim(i),
-                      onTap: () => onTap(i),
-                    ),
+                    itemBuilder: (_, i) {
+                      final dim = l.dim(i);
+                      return ClassicRow(
+                        label: l.label(strings, i),
+                        selected: i == l.selected,
+                        chevron: l.chevron,
+                        dim: dim,
+                        playable: l.playable(i),
+                        // comme le mode normal : une ligne sans effet ne se touche pas
+                        onTap: dim ? null : () => onTap(i),
+                      );
+                    },
                   ),
           ),
         ],
@@ -455,18 +539,26 @@ class ClassicRow extends StatelessWidget {
     this.selected = false,
     this.chevron = true,
     this.dim = false,
+    this.playable = true,
     this.onTap,
   });
   final String label;
   final bool selected;
   final bool chevron;
-  final bool dim; // morceau absent (comme le mode normal : estompé)
+  final bool
+  dim; // morceau absent, ligne sans effet (comme le mode normal : estompée)
+  final bool
+  playable; // faux : grisée, pas sur le téléphone (comme PhoneTrackRow)
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(
-      color: selected ? LafleurColors.ink : LafleurColors.text,
+      color: selected
+          ? LafleurColors.ink
+          : playable
+          ? LafleurColors.text
+          : _notOnPhone,
       fontSize: 15,
       fontWeight: FontWeight.w700,
     );

@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/demo/demo_offline.dart';
 import 'package:lafleurmusic/ui/classic/classic_shell.dart';
 import 'package:lafleurmusic/ui/classic/click_wheel.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
@@ -17,7 +18,14 @@ void main() {
 
   Future<void> start(WidgetTester tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpPhone(tester, images: true, home: const ClassicShell());
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    // comme sur le téléphone : « Sur mon iPhone » s'ouvre (un téléchargeur)
+    await pumpPhone(
+      tester,
+      images: true,
+      home: const ClassicShell(),
+      downloader: DemoDownloader(),
+    );
   }
 
   Future<void> rotate(WidgetTester tester, int n) async {

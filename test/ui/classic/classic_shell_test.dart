@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
+import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/ui/classic/classic_menu.dart';
 import 'package:lafleurmusic/ui/classic/classic_shell.dart';
@@ -16,6 +18,7 @@ import 'package:lafleurmusic/ui/phone/now_screen.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 
 import '../fonts.dart';
+import '../keep_fixture.dart';
 import '../phone_fixture.dart';
 
 /// La ligne choisie (rose) de la liste affichée.
@@ -23,6 +26,10 @@ String selected(WidgetTester tester) => tester
     .widgetList<ClassicRow>(find.byType(ClassicRow))
     .singleWhere((r) => r.selected)
     .label;
+
+ClassicRow row(WidgetTester tester, String label) => tester
+    .widgetList<ClassicRow>(find.byType(ClassicRow))
+    .singleWhere((r) => r.label == label);
 
 ClickWheel wheel(WidgetTester tester) =>
     tester.widget<ClickWheel>(find.byType(ClickWheel));
@@ -62,12 +69,12 @@ Future<void> rotateTo(WidgetTester tester, String label) async {
   expect(selected(tester), label);
 }
 
-Track _big(int i) => Track(
-  path: 'demo://Big/$i',
+Track _big(int i, {String album = 'Big', String? title}) => Track(
+  path: 'demo://$album/$i',
   folderId: 1,
-  title: 'Song ${i.toString().padLeft(4, '0')}',
+  title: title ?? 'Song ${i.toString().padLeft(4, '0')}',
   artist: 'Big',
-  album: 'Big',
+  album: album,
   trackNo: i + 1,
   durationMs: 200000,
   hasCover: false,
@@ -108,6 +115,7 @@ void main() {
 
   testWidgets('sur iPhone : « Sur mon iPhone »', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     await pumpPhone(tester, home: const ClassicShell());
     expect(find.text('Sur mon iPhone'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
@@ -469,4 +477,117 @@ void main() {
       expect(find.byType(CoverflowScreen), findsOneWidget);
     },
   );
+
+  group('suivis', () {
+    testWidgets('la langue change : le menu et les titres suivent', (
+      tester,
+    ) async {
+      await pumpPhone(tester, home: const ClassicShell());
+      await tester.tap(find.text('Artistes'));
+      await settle(tester);
+      expect(find.text('ARTISTES'), findsOneWidget);
+      final old = tester.widget<AppScope>(find.byType(AppScope));
+      await tester.pumpWidget(
+        AppScope(
+          db: old.db,
+          player: old.player,
+          covers: old.covers,
+          strings: Strings.of(const Locale('en')),
+          equalizer: old.equalizer,
+          settings: old.settings,
+          saveSettings: old.saveSettings,
+          accounts: old.accounts,
+          child: old.child,
+        ),
+      );
+      await settle(tester);
+      expect(find.text('ARTISTS'), findsOneWidget);
+      await press(tester, 'menu');
+      expect(find.text('MUSIC'), findsOneWidget);
+      expect(selected(tester), 'Artists');
+      for (final l in ['Cover Flow', 'Albums', 'Songs', 'On my phone']) {
+        expect(find.text(l), findsOneWidget, reason: l);
+      }
+    });
+
+    testWidgets(
+      '« Sur mon téléphone » sans copies possibles : grisée, sans effet',
+      (tester) async {
+        await pumpPhone(
+          tester,
+          home: const ClassicShell(),
+        ); // sans téléchargeur
+        expect(row(tester, 'Sur mon téléphone').dim, isTrue);
+        expect(row(tester, 'Albums').dim, isFalse);
+        await tester.tap(find.text('Sur mon téléphone'));
+        await settle(tester);
+        expect(find.text('MUSIQUE'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'la liste change pendant qu\'on la parcourt : le même morceau reste choisi et visible',
+      (tester) async {
+        final fx = await pumpPhone(tester, home: const ClassicShell());
+        await tester.tap(find.text('Morceaux'));
+        await settle(tester);
+        await rotateTo(tester, 'Ocean Drive');
+        await tester.runAsync(
+          () => fx.db.upsertTracks([
+            for (var i = 0; i < 20; i++) _big(i, album: 'Aaa', title: 'Aaa $i'),
+          ]),
+        );
+        await settle(tester);
+        expect(selected(tester), 'Ocean Drive');
+        final list = tester.getRect(
+          find.descendant(
+            of: find.byType(ClassicMenu),
+            matching: find.byType(ListView),
+          ),
+        );
+        final r = tester.getRect(
+          find.byWidgetPredicate((w) => w is ClassicRow && w.selected),
+        );
+        expect(r.top, greaterThanOrEqualTo(list.top - .5));
+        expect(r.bottom, lessThanOrEqualTo(list.bottom + .5));
+        // il disparaît : la ligne au même rang (bornée)
+        await tester.runAsync(
+          () => fx.db.deletePaths([DemoLibrary.studio[0].path]),
+        );
+        await settle(tester);
+        expect(selected(tester), isNot('Ocean Drive'));
+      },
+    );
+
+    testWidgets(
+      'pas sur le téléphone : grisé comme en mode normal, et le dire',
+      (tester) async {
+        final fx = await pumpKeep(tester, home: const ClassicShell());
+        await tester.tap(find.text('Albums'));
+        await settle(tester);
+        await rotateTo(tester, 'Studio Lafleur');
+        await press(tester, 'select');
+        expect(row(tester, 'Night Swim').playable, isFalse);
+        expect(row(tester, 'Ocean Drive').playable, isTrue);
+        final grey = tester.widget<Text>(find.text('Night Swim'));
+        expect(grey.style?.color, const Color(0xFF555555));
+        await rotateTo(tester, 'Night Swim');
+        // choisie : rose, comme la ligne choisie du mode normal
+        expect(
+          tester.widget<Text>(find.text('Night Swim')).style?.color,
+          isNot(const Color(0xFF555555)),
+        );
+        await press(tester, 'select');
+        expect(fx.player.calls, isNot(contains('play')));
+        expect(
+          find.text("Pas sur l'iPhone : rien à jouer hors ligne."),
+          findsNothing,
+        ); // Android dans les tests
+        expect(
+          find.text('Pas sur le téléphone : rien à jouer hors ligne.'),
+          findsOneWidget,
+        );
+      },
+    );
+  });
 }
