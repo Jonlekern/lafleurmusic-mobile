@@ -274,7 +274,8 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
             onChanged: (t) => setState(() => _type = t),
           ),
           const SizedBox(height: 6),
-          Text(s.subsonicServers, style: phoneHint),
+          if (_type == AccountType.subsonic)
+            Text(s.subsonicServers, style: phoneHint),
           FieldLabel(s.fieldName),
           _Input(key: const ValueKey('account-name'), controller: _name),
           FieldLabel(s.fieldAddress),

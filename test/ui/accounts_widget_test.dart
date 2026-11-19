@@ -232,8 +232,12 @@ void main() {
           .widget<AccountTypeSegment>(find.byType(AccountTypeSegment))
           .value;
       expect(shown(), AccountType.subsonic);
+      expect(find.textContaining('Navidrome, Airsonic'), findsOneWidget);
       await tapAndSettle(tester, find.text('Jellyfin'));
       expect(shown(), AccountType.jellyfin);
+      expect(find.textContaining('Navidrome, Airsonic'), findsNothing);
+      await tapAndSettle(tester, find.text('Subsonic'));
+      expect(find.textContaining('Navidrome, Airsonic'), findsOneWidget);
     });
   });
 
