@@ -83,4 +83,20 @@ void main() {
     );
     debugDefaultTargetPlatformOverride = null;
   });
+
+  testWidgets('12 Retirer du téléphone : confirmation', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await pumpKeep(tester, images: true);
+    await tester.tap(find.text('Lafleur Surf').first);
+    await done(tester);
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await done(tester);
+    await tester.tap(find.text('Retirer du téléphone'));
+    await done(tester);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/phone-12.png'),
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
 }

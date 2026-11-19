@@ -28,6 +28,7 @@ class AppSettings {
     this.musicFolder,
     this.displayMode = DisplayMode.all,
     this.oneAccount,
+    this.confirmRemove = true,
     List<String>? customAccounts,
   }) : customAccounts = customAccounts ?? [],
        equalizer = equalizer ?? Equalizer.named('flat');
@@ -54,6 +55,7 @@ class AppSettings {
   DisplayMode displayMode; // plusieurs comptes : un, tous ou un choix
   String? oneAccount; // le compte montré quand displayMode = one
   List<String> customAccounts; // les comptes montrés quand displayMode = custom
+  bool confirmRemove; // « Retirer du téléphone » demande d'abord confirmation
 
   static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
 
@@ -104,6 +106,7 @@ class AppSettings {
           oneAccount: j['oneAccount'] is String
               ? j['oneAccount']! as String
               : null,
+          confirmRemove: j['confirmRemove'] != false,
           customAccounts: j['customAccounts'] is List
               ? [
                   for (final a in j['customAccounts']! as List)
@@ -147,6 +150,7 @@ class AppSettings {
         'displayMode': displayMode.name,
         'oneAccount': oneAccount,
         'customAccounts': customAccounts,
+        'confirmRemove': confirmRemove,
       }),
     );
     await tmp.rename(f.path);

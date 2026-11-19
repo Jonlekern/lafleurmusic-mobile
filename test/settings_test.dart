@@ -50,6 +50,15 @@ void main() {
     },
   );
 
+  test('confirmRemove: on by default, saved and read back', () async {
+    final f = File('${dir.path}/confirm.json');
+    expect(AppSettings().confirmRemove, isTrue);
+    await (AppSettings()..confirmRemove = false).save(f);
+    expect((await AppSettings.load(f)).confirmRemove, isFalse);
+    f.writeAsStringSync('{"confirmRemove":"x"}');
+    expect((await AppSettings.load(f)).confirmRemove, isTrue);
+  });
+
   test('fichier absent ou cassé : réglages par défaut', () async {
     expect(
       (await AppSettings.load(File('${dir.path}/rien.json'))).equalizer.enabled,

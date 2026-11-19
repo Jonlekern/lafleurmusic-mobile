@@ -210,7 +210,7 @@ Future<void> showTrackSheet(
     case _Action.keep:
       if (context.mounted) await keepTracks(context, remote);
     case _Action.remove:
-      if (context.mounted) await forgetTracks(context, remote);
+      if (context.mounted) await forgetTracks(context, remote, name: title);
     case _Action.select:
       if (context.mounted) {
         await pushPhone(

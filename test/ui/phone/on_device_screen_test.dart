@@ -16,7 +16,7 @@ import 'package:lafleurmusic/ui/phone/on_device_screen.dart';
 
 import '../fonts.dart';
 import '../keep_fixture.dart';
-import 'keep_screen_test.dart' show done, phoneTest;
+import 'keep_screen_test.dart' show confirmRemoval, done, phoneTest;
 
 const gib = 1024 * 1024 * 1024;
 
@@ -55,11 +55,12 @@ pumpOnDevice(
   WidgetTester tester, {
   DemoDownloader? downloader,
   Future<void> Function(LibraryDb)? also, // données en plus de la démo
+  AppSettings? withSettings,
   bool images = false,
   int? free,
   Object? freeError,
 }) async {
-  final settings = AppSettings();
+  final settings = withSettings ?? AppSettings();
   final device = DemoDevice(settings: settings);
   if (free != null) device.free = free;
   device.freeError = freeError;
@@ -193,6 +194,7 @@ void main() {
         final r = await pumpOnDevice(tester);
         await tester.drag(find.text('Lafleur Surf'), const Offset(-300, 0));
         await done(tester);
+        await confirmRemoval(tester);
         expect(r.f.downloader.forgotten, [pathsOf('Lafleur Surf')]);
       },
     );
@@ -205,6 +207,7 @@ void main() {
       await done(tester);
       await tester.tap(find.text('Retirer du téléphone'));
       await done(tester);
+      await confirmRemoval(tester);
       expect(r.f.downloader.forgotten, [pathsOf('Studio Lafleur')]);
     });
 
@@ -216,6 +219,7 @@ void main() {
       await done(tester);
       await tester.tap(find.text('Retirer du téléphone'));
       await done(tester);
+      await confirmRemoval(tester);
       expect(r.f.downloader.forgotten, [
         [for (var i = 1; i <= 4; i++) 'subsonic://demo/Night Drive/$i'],
       ]);
@@ -640,6 +644,7 @@ void main() {
         await done(tester);
         await tester.tap(find.text('Retirer du téléphone'));
         await done(tester);
+        await confirmRemoval(tester);
         final batch = r.f.downloader.forgotten.single;
         expect(
           batch,

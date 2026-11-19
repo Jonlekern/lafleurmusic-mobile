@@ -465,6 +465,25 @@ class Strings {
     "The folder couldn't be changed. Nothing was moved.",
   );
 
+  // confirmation avant « Retirer du téléphone » (maquette 10)
+  String removeConfirmTitle(bool iphone) => _t(
+    'Retirer du téléphone ?',
+    iphone ? 'Remove from the iPhone?' : 'Remove from the phone?',
+  );
+  String removeConfirmBody(String name, int n, String size, bool iphone) => _t(
+    '« $name » ($n ${n == 1 ? 'morceau' : 'morceaux'}, $size) sera effacé de ton ${iphone ? 'iPhone' : 'téléphone'}. Il reste sur ton serveur : tu pourras le garder à nouveau.',
+    '“$name” ($n ${n == 1 ? 'song' : 'songs'}, $size) will be erased from your ${iphone ? 'iPhone' : 'phone'}. It stays on your server: you can keep it again.',
+  );
+  String get doNotAskAgain => _t('Ne plus me demander', "Don't ask me again");
+  String get removeAction => _t('Retirer', 'Remove');
+  String get confirmationsSection => _t('CONFIRMATIONS', 'CONFIRMATIONS');
+  String get askBeforeRemoving =>
+      _t('Demander avant de retirer', 'Ask before removing');
+  String get askBeforeRemovingHint => _t(
+    'Si tu as coché « Ne plus me demander », rallume-le ici.',
+    'If you ticked “Don’t ask me again”, turn it back on here.',
+  );
+
   /// Taille lisible : Mo en dessous d'un Go, sinon Go à une décimale (virgule en français).
   String size(int bytes) {
     const mb = 1024 * 1024, gb = 1024 * mb;

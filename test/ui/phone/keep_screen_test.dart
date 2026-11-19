@@ -26,6 +26,12 @@ Future<void> done(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// « Retirer » dans la fenêtre de confirmation.
+Future<void> confirmRemoval(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('confirmRemove')));
+  await done(tester);
+}
+
 Future<void> longPress(WidgetTester tester, Finder f) async {
   await tester.ensureVisible(f); // les albums du bas sont sous le mini-lecteur
   await tester.pump();
@@ -77,6 +83,7 @@ void main() {
         expect(find.text('Garder sur mon iPhone'), findsNothing);
         await tester.tap(find.text('Retirer du téléphone'));
         await done(tester);
+        await confirmRemoval(tester);
         expect(f.downloader.forgotten, [pathsOf('Lafleur Surf')]);
         expect(f.downloader.kept, isEmpty);
       },

@@ -422,7 +422,9 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   }
 
   Future<void> _remove(_Kept k) async {
-    await AppScope.of(context).downloader?.forget(k.paths, byUser: true);
+    final app = AppScope.of(context);
+    if (!await confirmRemoval(context, name: k.name, paths: k.paths)) return;
+    await app.downloader?.forget(k.paths, byUser: true);
   }
 
   Future<void> _removeSheet(_Kept k) async {
@@ -616,6 +618,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
             _folderButton(s),
             _hint(s.folderHint(onIphone)),
           ],
+          const SizedBox(height: 10),
+          PhoneSection(s.confirmationsSection),
+          _confirmRow(s, app),
+          _hint(s.askBeforeRemovingHint),
         ],
       ),
     );
@@ -864,6 +870,35 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           ),
         ),
       ],
+    ),
+  );
+
+  Widget _confirmRow(Strings s, AppScope app) => Material(
+    color: LafleurColors.bar,
+    borderRadius: BorderRadius.circular(10),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 10, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              s.askBeforeRemoving,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+          Switch(
+            key: const Key('confirmRemoveSwitch'),
+            value: app.settings?.confirmRemove ?? true,
+            activeThumbColor: Colors.white,
+            activeTrackColor: LafleurColors.pink,
+            onChanged: (v) {
+              app.settings?.confirmRemove = v;
+              app.saveSettings?.call();
+              setState(() {});
+            },
+          ),
+        ],
+      ),
     ),
   );
 
