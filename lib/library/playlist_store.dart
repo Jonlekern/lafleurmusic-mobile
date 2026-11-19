@@ -284,6 +284,40 @@ class PlaylistStore {
     });
   }
 
+  /// Puts the rows in a new order (« Trier »): [order] lists the current positions in the
+  /// order wanted, each once (else an [ArgumentError], nothing changed). A server playlist
+  /// gets it as moves, one at a time ([move]); the first failure stops the rest.
+  Future<void> reorder(PlaylistRef ref, List<int> order) async {
+    if (ref is ServerPlaylistRef) {
+      final count = (await _serverPaths(ref)).length;
+      _checkOrder(order, count);
+      // where each original row is now: moving one shifts the others
+      final now = [for (var i = 0; i < count; i++) i];
+      for (var to = 0; to < order.length; to++) {
+        final from = now.indexOf(order[to]);
+        if (from == to) continue;
+        await move(ref, from, to);
+        now.insert(to, now.removeAt(from));
+      }
+      return;
+    }
+    final id = _phone(ref);
+    await db.transaction(() async {
+      final rows = await _rows(id);
+      _checkOrder(order, rows.length);
+      await _rewrite(id, [for (final i in order) rows[i]]);
+    });
+  }
+
+  static void _checkOrder(List<int> order, int count) {
+    final seen = order.toSet();
+    if (order.length != count ||
+        seen.length != count ||
+        seen.any((i) => i < 0 || i >= count)) {
+      throw ArgumentError.value(order, 'order', 'not the $count rows');
+    }
+  }
+
   Future<void> rename(PlaylistRef ref, String name) async {
     final n = _name(name);
     if (ref is ServerPlaylistRef) {

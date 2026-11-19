@@ -134,10 +134,17 @@ class Downloader extends ChangeNotifier {
   StreamSubscription<void>? _playlistsSub;
   Future<void> _playlistsJob = Future.value();
 
-  /// Suit les playlists des serveurs (synchro, compte retiré) : voir [syncPlaylists].
+  /// Suit les playlists des serveurs (synchro, compte retiré) et celles du téléphone (ajout,
+  /// retrait, ordre, nom, suppression : plan 9) : voir [syncPlaylists].
   void followPlaylists() {
     _playlistsSub ??= db
-        .tableUpdates(TableUpdateQuery.onTable(db.playlists))
+        .tableUpdates(
+          TableUpdateQuery.allOf([
+            TableUpdateQuery.onTable(db.playlists),
+            TableUpdateQuery.onTable(db.phonePlaylists),
+            TableUpdateQuery.onTable(db.phonePlaylistItems),
+          ]),
+        )
         .listen((_) => syncPlaylists());
   }
 
@@ -1027,7 +1034,8 @@ class Downloader extends ChangeNotifier {
       final other = _inside(root, rel);
       if (other == null) continue;
       if (p.equals(other.path, file.path)) return true;
-      if (!fileOrPlaceholderExists(other.path)) continue; // un autre nom, sans fichier
+      // un autre nom, sans fichier
+      if (!fileOrPlaceholderExists(other.path)) continue;
       if (!file.existsSync() || !other.existsSync()) return true;
       try {
         if (FileSystemEntity.identicalSync(file.path, other.path)) return true;

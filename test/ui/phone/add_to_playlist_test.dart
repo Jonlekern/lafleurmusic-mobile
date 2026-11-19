@@ -250,6 +250,30 @@ void main() {
     },
   );
 
+  testWidgets('a new playlist then « Annuler »: nothing is made', (
+    tester,
+  ) async {
+    final s = await _pump(
+      tester,
+      home: _opener([_golden]),
+      withAccounts: false,
+    );
+    await tester.tap(find.text('go'));
+    await settle(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('addNew')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('newPlaylistName')), 'Soirée');
+    await tester.pump();
+    await s.tapKey('newPlaylistCreate');
+    await tester.pumpAndSettle();
+    expect(find.text('Soirée'), findsOneWidget); // the draft, ticked
+    await tester.tap(find.byKey(const Key('addCancel')));
+    await tester.pumpAndSettle();
+    expect(await s.run(() => s.f.db.watchPlaylists().first), isEmpty);
+    expect(find.byKey(const Key('playlistToast')), findsNothing);
+  });
+
   group('with a server', () {
     late FakeNavidrome nav;
     var acc = '';
@@ -381,6 +405,51 @@ void main() {
       await tester.pumpAndSettle();
       expect(nav.lists['pl1']!.songs, ['s1', 's2', 's3']); // not twice
       expect(nav.lists['pl2']!.songs, ['s1']);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('a new server playlist refused while a phone playlist gets the '
+        'song: the message, the draft stays; OK again makes it; the bubble '
+        'counts both rounds', (tester) async {
+      final s = await pumpServer(tester, () => [song()]);
+      final sport = await s.run(() => s.store.create('Sport'));
+      await tester.tap(find.text('go'));
+      await settle(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(Key('pl-phone/${(sport as PhonePlaylistRef).id}')),
+      );
+      await tester.tap(find.byKey(const Key('addNew')));
+      await tester.pumpAndSettle();
+      await settle(tester);
+      await tester.enterText(
+        find.byKey(const Key('newPlaylistName')),
+        'Soirée',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(Key('where-$acc')));
+      await tester.pump();
+      await s.tapKey('newPlaylistCreate');
+      await tester.pumpAndSettle();
+      nav.readOnly = true; // the server refuses to create
+      await s.tapKey('addOk');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Ce serveur ne te laisse pas modifier cette playlist.'),
+        findsOneWidget,
+      );
+      expect(await s.keys(sport), [song().path]);
+      expect(nav.lists.values.map((l) => l.name), isNot(contains('Soirée')));
+      expect(find.textContaining('nouvelle'), findsOneWidget); // still there
+      expect(find.text('Ajouté à 1 playlist'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      nav.readOnly = false;
+      await s.tapKey('addOk');
+      await tester.pumpAndSettle();
+      expect(find.text('Ajouter à une playlist'), findsNothing);
+      expect(nav.lists.values.map((l) => l.name), contains('Soirée'));
+      expect(await s.keys(sport), [song().path]); // not added twice
+      expect(find.text('Ajouté à 2 playlists'), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
     });
   });

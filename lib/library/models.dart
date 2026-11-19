@@ -78,7 +78,6 @@ class Album {
   final String artist;
 }
 
-/// Une playlist d'un serveur telle que l'Accueil la montre : jamais fusionnée entre comptes.
 /// The account id under which phone playlists go wherever a playlist is named by
 /// (account, id): `KeptPlaylists`, keep origins, [ServerPlaylist]. Never a real account id.
 const phonePlaylistAccount = 'phone';
@@ -128,6 +127,7 @@ class ServerPlaylistRef extends PlaylistRef {
   String toString() => 'PlaylistRef.server($accountId, $remoteId)';
 }
 
+/// Une playlist telle que l'Accueil la montre : jamais fusionnée entre comptes.
 /// A playlist as the lists show it: a server's, or one on the phone ([onPhone]: its
 /// [accountId] is [phonePlaylistAccount], its [accountName] empty).
 class ServerPlaylist {

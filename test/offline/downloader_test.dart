@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/models.dart';
+import 'package:lafleurmusic/library/playlist_store.dart';
 import 'package:lafleurmusic/offline/device.dart';
 import 'package:lafleurmusic/offline/downloader.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
@@ -1011,19 +1012,28 @@ void main() {
       await d.whenIdle();
       final row = (await db.offlineOf('plex://acc1/101'))!;
       expect((row.state, row.failures), ('done', 0));
-      expect(pms.paths.where((p) => p == '/library/metadata/101'), hasLength(2));
+      expect(
+        pms.paths.where((p) => p == '/library/metadata/101'),
+        hasLength(2),
+      );
     });
 
-    test('404 on the file again after the second look-up: refused, counted', () async {
-      handler = (r) async => _ok([], code: 404);
-      final d = makePlex(plex());
-      await add(pt('101'));
-      await d.keep([pt('101')]);
-      await d.whenIdle();
-      expect((await db.offlineOf('plex://acc1/101'))!.failures, greaterThan(0));
-      // each try: original + stream, then once more after a new look-up
-      expect(seen.length % 4, 0);
-    });
+    test(
+      '404 on the file again after the second look-up: refused, counted',
+      () async {
+        handler = (r) async => _ok([], code: 404);
+        final d = makePlex(plex());
+        await add(pt('101'));
+        await d.keep([pt('101')]);
+        await d.whenIdle();
+        expect(
+          (await db.offlineOf('plex://acc1/101'))!.failures,
+          greaterThan(0),
+        );
+        // each try: original + stream, then once more after a new look-up
+        expect(seen.length % 4, 0);
+      },
+    );
 
     test('a revoked token is reported to the account at once', () async {
       handler = (r) async => _ok([], code: 401);
@@ -2337,6 +2347,59 @@ void main() {
         '../Art/Alb/02 Song 2.mp3',
         '../Art/Alb/03 Song 3.mp3',
       ]);
+    });
+
+    test('a kept phone playlist: edited, its .m3u8 follows (a new song kept); '
+        'deleted, its .m3u8 goes and its songs stay kept for themselves '
+        '(Q6)', () async {
+      for (var i = 1; i <= 3; i++) {
+        await add(_t('$i', no: i));
+      }
+      final store = PlaylistStore(db);
+      final ref = await store.create(
+        'Road',
+        songs: ['subsonic://acc/1'],
+      ) as PhonePlaylistRef;
+      final d = make()..followPlaylists();
+      await d.keepPlaylist(phonePlaylistAccount, '${ref.id}');
+      await d.whenIdle();
+      final f = m3u(root, 'Road.m3u8');
+      expect(songs(f), ['../Art/Alb/01 Song 1.mp3']);
+      // a song added: kept too, written in the file
+      await store.add(ref, ['subsonic://acc/2']);
+      await settled(d);
+      expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+      expect(songs(f), [
+        '../Art/Alb/01 Song 1.mp3',
+        '../Art/Alb/02 Song 2.mp3',
+      ]);
+      // reordered: the file follows
+      await store.reorder(ref, [1, 0]);
+      await settled(d);
+      expect(songs(f), [
+        '../Art/Alb/02 Song 2.mp3',
+        '../Art/Alb/01 Song 1.mp3',
+      ]);
+      // one taken out of the playlist: no longer in the file
+      await store.remove(ref, [0]);
+      await settled(d);
+      expect(songs(f), ['../Art/Alb/01 Song 1.mp3']);
+      // renamed: the file takes the new name
+      await store.rename(ref, 'Trip');
+      await settled(d);
+      final g = m3u(root, 'Trip.m3u8');
+      expect(f.existsSync(), isFalse);
+      expect(songs(g), ['../Art/Alb/01 Song 1.mp3']);
+      // deleted: the file goes at once, the songs stay, kept for themselves
+      await store.delete(ref);
+      await d.syncPlaylists();
+      expect(g.existsSync(), isFalse);
+      final folder = Directory('${root.path}/Playlists');
+      expect(folder.existsSync() ? folder.listSync() : const [], isEmpty);
+      expect(await db.keptPlaylistRows(), isEmpty);
+      expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
+      expect((await db.offlineOf('subsonic://acc/2'))!.state, 'done');
+      expect(await db.originsOf('subsonic://acc/1'), {KeepOrigin.song});
     });
   });
 

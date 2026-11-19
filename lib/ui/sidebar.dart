@@ -216,8 +216,9 @@ class _Item extends StatelessWidget {
   }
 }
 
-/// « PLAYLISTS DU SERVEUR » (« PLAYLISTS » avec celles du téléphone, plan 9) sous les albums de la tablette (comme l'Accueil du téléphone) : mosaïque et
-/// nom, le compte en petit en mode Tout / Perso. Rien quand aucun compte n'en a.
+/// « PLAYLISTS DU SERVEUR » (« PLAYLISTS » avec celles du téléphone, plan 9) sous les albums
+/// de la tablette (comme l'Accueil du téléphone) : mosaïque et nom, le compte en petit en
+/// mode Tout / Perso. Rien quand aucun compte n'en a.
 class _ServerPlaylists extends StatelessWidget {
   const _ServerPlaylists();
 

@@ -35,6 +35,8 @@
 	<true/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pour choisir la pochette d'une playlist.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>LAFLEURMUSIC connects to your music server on your home network.</string>
 	<key>UIApplicationSceneManifest</key>

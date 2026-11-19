@@ -212,8 +212,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// « PLAYLISTS DU SERVEUR » (« PLAYLISTS » avec celles du téléphone, plan 9) sous les albums (maquette 7, écran 10) : mosaïque, nom, ⬇ rose si
-/// gardée, le compte en petit en mode Tout / Perso. Rien quand aucun compte n'en a.
+/// « PLAYLISTS DU SERVEUR » (« PLAYLISTS » avec celles du téléphone, plan 9) sous les albums
+/// (maquette 7, écran 10) : mosaïque, nom, ⬇ rose si gardée, le compte en petit en mode
+/// Tout / Perso. Rien quand aucun compte n'en a.
 class _ServerPlaylists extends StatelessWidget {
   const _ServerPlaylists();
 

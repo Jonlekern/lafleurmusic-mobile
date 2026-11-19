@@ -121,6 +121,11 @@ class PlaylistFiles {
         continue;
       }
       var fileName = k.fileName;
+      // renamed (on the phone or on its server): the file takes the new name, ours goes
+      final renamedFrom = fileName.isNotEmpty && !_named(fileName, name)
+          ? fileName
+          : null;
+      if (renamedFrom != null) fileName = '';
       if (fileName.isEmpty) {
         fileName = uniquePath(
           '${safeName(name)}.m3u8',
@@ -152,7 +157,21 @@ class PlaylistFiles {
       if (fileName != k.fileName) {
         await db.setKeptPlaylist(k.accountId, k.playlistId, fileName);
       }
+      if (renamedFrom != null) {
+        await _delete(root, renamedFrom);
+        ours.remove(renamedFrom.toLowerCase());
+      }
     }
+  }
+
+  /// [fileName] is the one made for a playlist called [name] (`Name.m3u8`, or `Name (2).m3u8`
+  /// when that was taken), whatever the case.
+  static bool _named(String fileName, String name) {
+    final stem = RegExp.escape(safeName(name));
+    return RegExp(
+      '^$stem( \\(\\d+\\))?\\.m3u8\$',
+      caseSensitive: false,
+    ).hasMatch(fileName);
   }
 
   /// La playlist n'est plus gardée : son fichier (le nôtre) et sa note partent.

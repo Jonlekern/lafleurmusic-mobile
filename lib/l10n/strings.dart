@@ -709,6 +709,55 @@ class Strings {
     ),
   };
 
+  // plan 9 : la playlist, Ajouter · Modifier · Trier (maquette 15, écrans D, E)
+  String get addSongs => _t('Ajouter', 'Add');
+  String get editPlaylist => _t('Modifier', 'Edit');
+  String get sortPlaylist => _t('Trier', 'Sort');
+  String get searchYourMusic =>
+      _t('Chercher dans ta musique', 'Search your music');
+  String addedTo(String name) => _t('Ajouté à « $name »', 'Added to “$name”');
+  String get changeCover => _t('Changer la pochette', 'Change the cover');
+  String get playlistName => _t('Nom de la playlist', 'Playlist name');
+  String get removeFromPlaylist =>
+      _t('Retirer de la playlist', 'Remove from the playlist');
+  String get moveSong => _t('Déplacer', 'Move');
+  String get deletePlaylist => _t('Supprimer la playlist', 'Delete playlist');
+  String deletePlaylistQuestion(String name) =>
+      _t('Supprimer « $name » ?', 'Delete “$name”?');
+
+  /// [account] : le compte d'une playlist de serveur (null : sur le téléphone).
+  String deletePlaylistExplain(
+    String? account,
+    bool iphone, {
+    bool tablet = false,
+  }) {
+    final d = _Dev(iphone, tablet);
+    final where = account == null
+        ? ''
+        : _t(
+            'Elle sera aussi effacée de « $account ». ',
+            'It will be deleted from “$account” too. ',
+          );
+    return where +
+        _t(
+          'Ses morceaux restent dans ta musique, et ceux gardés sur ${d.frYour} y restent.',
+          'Its songs stay in your music, and those kept on your ${d.enName} stay there.',
+        );
+  }
+
+  String get sortBy => _t('Trier par', 'Sort by');
+  String get sortTitle => _t('Titre', 'Title');
+  String get sortArtist => _t('Artiste', 'Artist');
+  String get sortAlbum => _t('Album', 'Album');
+  String get sortReverseAdded =>
+      _t("Ordre d'ajout inverse", 'Reverse order added');
+  String sortServerQuestion(String name) =>
+      _t('Trier « $name » ?', 'Sort “$name”?');
+  String sortServerExplain(String account) => _t(
+    'Le nouvel ordre sera écrit sur « $account ».',
+    'The new order will be written on “$account”.',
+  );
+
   // plan 6 : Mode Classic, zones de la molette (VoiceOver / TalkBack)
   String get wheelMenu => 'MENU';
   String get previousTrack => _t('Morceau précédent', 'Previous track');

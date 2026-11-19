@@ -147,6 +147,50 @@ void main() {
       await expectLater(store.move(ref, 0, 9), throwsRangeError);
     });
 
+    test('remove by position with a song twice: only that row goes', () async {
+      await db.upsertTracks([
+        for (final n in [1, 2]) _t('/m/$n.flac', title: 't$n'),
+      ]);
+      final ref = await store.create('Road');
+      await store.add(ref, [
+        '/m/1.flac',
+        '/m/2.flac',
+        '/m/1.flac',
+      ], allowDuplicates: true);
+      await store.remove(ref, [2]);
+      expect(await keys(ref), ['/m/1.flac', '/m/2.flac']);
+    });
+
+    test(
+      'reorder: the rows in the order given (a sort), duplicates kept',
+      () async {
+        await db.upsertTracks([
+          for (final n in [1, 2, 3]) _t('/m/$n.flac', title: 't$n'),
+        ]);
+        final ref = await store.create('Road');
+        await store.add(ref, [
+          '/m/1.flac',
+          '/m/2.flac',
+          '/m/3.flac',
+          '/m/1.flac',
+        ], allowDuplicates: true);
+        await store.reorder(ref, [3, 2, 0, 1]);
+        expect(await keys(ref), [
+          '/m/1.flac',
+          '/m/3.flac',
+          '/m/1.flac',
+          '/m/2.flac',
+        ]);
+        // not a permutation of the rows: refused, nothing changed
+        await expectLater(store.reorder(ref, [0, 1]), throwsArgumentError);
+        await expectLater(
+          store.reorder(ref, [0, 0, 1, 2]),
+          throwsArgumentError,
+        );
+        expect(await keys(ref), hasLength(4));
+      },
+    );
+
     test('setCover keeps a copy in the app folder; delete takes it all '
         'away', () async {
       final ref = await store.create('Road');
@@ -234,7 +278,8 @@ void main() {
     });
   });
 
-  test('a kept phone playlist reads like a server one (its .m3u8)', () async {
+  test('a phone playlist is named and read like a server one (what the '
+      '.m3u8 files use); deleted, it is no longer named', () async {
     await db.upsertTrack(_t('/m/1.flac'));
     final ref = await store.create('Road') as PhonePlaylistRef;
     await store.add(ref, ['/m/1.flac']);
@@ -360,6 +405,15 @@ void main() {
       nav.down = false;
       expect(await srv.add(ref, [k('s4')]), 1);
       expect(await stored('pl1'), [k('s1'), k('s2'), k('s3'), k('s4')]);
+    });
+
+    test('reorder (a sort): the server gets the new order, the stored '
+        'playlist follows', () async {
+      nav.lists['pl1'] = (name: 'Road', songs: ['s1', 's2', 's3', 's4']);
+      expect(await srv.checkEditable(ref), isTrue); // read again: 4 rows
+      await srv.reorder(ref, [3, 1, 0, 2]);
+      expect(nav.lists['pl1']!.songs, ['s4', 's2', 's1', 's3']);
+      expect(await stored('pl1'), [k('s4'), k('s2'), k('s1'), k('s3')]);
     });
 
     test('review focus 4: quick reorders go one at a time; the final order '
