@@ -4,9 +4,9 @@
 
 **Goal:** créer, renommer, remplir, réordonner et supprimer des playlists depuis le téléphone (n° 6, 7, 8 du comparatif Spotify), **avec ou sans serveur** : une playlist peut vivre seulement sur le téléphone, ou être rangée sur un serveur (Navidrome, Jellyfin, Plex).
 
-**Architecture:** une nouvelle sorte de playlist, « sur le téléphone » (`PhonePlaylists` + `PhonePlaylistItems` en base, schéma v5), à côté des playlists des serveurs (plan 3, tables `Playlists` / `PlaylistItems`). Un `PlaylistStore` unique offre les mêmes actions aux deux sortes ; pour une playlist de serveur, chaque action appelle le serveur puis relit la playlist (le serveur fait foi) ; pour une playlist du téléphone, tout reste en local. Les morceaux sont désignés par leur clé (`subsonic://…`, `jellyfin://…`, `plex://…` ou chemin local).
+**Architecture:** une nouvelle sorte de playlist, « sur le téléphone » (`PhonePlaylists` + `PhonePlaylistItems` en base, schéma v6), à côté des playlists des serveurs (plan 3, tables `Playlists` / `PlaylistItems`). Un `PlaylistStore` unique offre les mêmes actions aux deux sortes ; pour une playlist de serveur, chaque action appelle le serveur puis relit la playlist (le serveur fait foi) ; pour une playlist du téléphone, tout reste en local. Les morceaux sont désignés par leur clé (`subsonic://…`, `jellyfin://…`, `plex://…` ou chemin local).
 
-**Tech Stack:** drift (migration v5), API Subsonic `createPlaylist` / `updatePlaylist` / `deletePlaylist`, Jellyfin `POST /Playlists`, `POST/DELETE /Playlists/{id}/Items`, `POST /Playlists/{id}/Items/{item}/Move/{index}`, Plex `POST /playlists`, `PUT /playlists/{id}/items`, `DELETE /playlists/{id}/items/{item}`, `PUT …/move`.
+**Tech Stack:** drift (migration v6), API Subsonic `createPlaylist` / `updatePlaylist` / `deletePlaylist`, Jellyfin `POST /Playlists`, `POST/DELETE /Playlists/{id}/Items`, `POST /Playlists/{id}/Items/{item}/Move/{index}`, Plex `POST /playlists`, `PUT /playlists/{id}/items`, `DELETE /playlists/{id}/items/{item}`, `PUT …/move`.
 
 **Spec:** spec §8 (plan 9) · Recherche : `docs/conception/recherche/spotify-playlists-file.md` · Maquette validée : `maquettes/15-playlists-modifiables.png` (écrans A à E, version 3 « inspirée de Spotify », oui de Johnny le 19.11.2026).
 
@@ -31,13 +31,13 @@
 2. **Serveur injoignable pendant un ajout** à une playlist de serveur : message, rien d'ajouté en local, rien de perdu ; on peut réessayer — test en tâche 2.
 3. **Playlist du téléphone avec un morceau de serveur dont le compte est supprimé** : la ligne reste, grisée « Morceau absent », comme au plan 3 ; jamais d'effacement silencieux — test en tâche 1.
 4. **Réordonner vite plusieurs fois** une playlist de serveur : l'ordre final est le bon (actions mises en file, une à la fois) — test en tâche 2.
-5. **Mise à jour depuis 0.x** (schéma v4 → v5) : rien de perdu, migration dans une transaction — test en tâche 1.
+5. **Mise à jour depuis 0.x** (schéma v5 → v6) : rien de perdu, migration dans une transaction — test en tâche 1.
 
 ---
 
 ### Task 1: Playlists du téléphone (base et magasin)
 
-**Files:** Modify `lib/library/db.dart` (v5 : `PhonePlaylists`, `PhonePlaylistItems`), `lib/library/library_view.dart` · Create `lib/library/playlist_store.dart` · Test `test/library/playlist_store_test.dart`, `test/library/db_migration_test.dart`
+**Files:** Modify `lib/library/db.dart` (v6 : `PhonePlaylists`, `PhonePlaylistItems`), `lib/library/library_view.dart` · Create `lib/library/playlist_store.dart` · Test `test/library/playlist_store_test.dart`, `test/library/db_migration_test.dart`
 
 **Interfaces:**
 - Produces : `PlaylistRef` (`phone(id)` ou `server(accountId, remoteId)`) ; `PlaylistStore.create(name, {String? accountId}) → PlaylistRef`, `add(ref, List<String> keys, {bool allowDuplicates})`, `duplicatesIn(ref, keys) → List<String>`, `remove(ref, List<int> positions)`, `move(ref, from, to)`, `rename(ref, name)`, `delete(ref)`, `setCover(ref, File)` ; les playlists du téléphone apparaissent avec celles des serveurs à l'Accueil.
