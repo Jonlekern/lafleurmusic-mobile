@@ -111,18 +111,24 @@ class AccountService extends ChangeNotifier {
 
   /// Pause between the quick syncs after a save (a fake clock in tests).
   final Future<void> Function(Duration)? _wait;
-  final _timers = <Timer>{};
+  final _timers = <String, Set<Timer>>{};
 
-  Future<void> _pause(Duration d) {
+  void _stopTimers(String id) {
+    for (final t in _timers.remove(id) ?? const <Timer>{}) {
+      t.cancel();
+    }
+  }
+
+  Future<void> _pause(String id, Duration d) {
     final w = _wait;
     if (w != null) return w(d);
     final c = Completer<void>();
     late final Timer t;
     t = Timer(d, () {
-      _timers.remove(t);
+      _timers[id]?.remove(t);
       c.complete();
     });
-    _timers.add(t);
+    (_timers[id] ??= {}).add(t);
     return c.future;
   }
 
@@ -297,8 +303,8 @@ class AccountService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    for (final t in _timers) {
-      t.cancel();
+    for (final id in _timers.keys.toList()) {
+      _stopTimers(id);
     }
     _keptSub?.cancel();
     _twinsSub?.cancel();
@@ -406,12 +412,13 @@ class AccountService extends ChangeNotifier {
   /// for the local network on the first request). One at a time per account.
   Future<void> _syncAfterSave(String id) async {
     final mine = _chain[id] = (_chain[id] ?? 0) + 1;
+    _stopTimers(id); // the older chain's pending pause
     bool stale() => _disposed || _removed.contains(id) || _chain[id] != mine;
     try {
       for (var n = 1; n <= quickSyncs; n++) {
         if (n == 3 && _lastComplete[id] == true) return;
         if (n > 1) {
-          await _pause(followUpDelay);
+          await _pause(id, followUpDelay);
           if (stale()) return;
         }
         await sync(id, fresh: true);
@@ -429,6 +436,7 @@ class AccountService extends ChangeNotifier {
     _bump(id);
     _rerun.remove(id);
     _chain[id] = (_chain[id] ?? 0) + 1; // no follow-up sync after the removal
+    _stopTimers(id);
     _cancel[id]?.cancelled = true;
     final running = _syncing[id];
     if (running != null) await running.catchError((Object _) {});
@@ -465,7 +473,17 @@ class AccountService extends ChangeNotifier {
     _checking.remove(id);
     _record(id, gen, r);
     notifyListeners();
-    if (r == TestResult.ok) await _flushPending(id);
+    if (r == TestResult.ok) {
+      await _flushPending(id);
+      // The server answers now but the last sync did not finish (the iOS local-network prompt was
+      // answered late, say): drop the source built meanwhile and sync.
+      if (_lastComplete[id] == false &&
+          !_removed.contains(id) &&
+          !_syncing.containsKey(id)) {
+        resolver?.invalidate(id);
+        unawaited(sync(id));
+      }
+    }
   }
 
   final _flushing = <String>{};

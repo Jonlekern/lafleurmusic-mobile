@@ -26,6 +26,14 @@ class LibrarySync {
   /// This many albums failing one after the other: the server is gone, stop the run.
   static const maxFailuresInARow = 5;
 
+  static Future<bool> _answers(MusicSource s) async {
+    try {
+      return await s.test() == TestResult.ok;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<SyncResult> run(MusicSource s) async {
     var added = 0, updated = 0, removed = 0;
     var complete = true;
@@ -43,7 +51,14 @@ class LibrarySync {
             // one album that won't read is skipped; the run is incomplete (nothing is
             // deleted) and tried again later. A server that fails every time stops it.
             complete = false;
-            if (++failedInARow >= maxFailuresInARow) break albums;
+            if (++failedInARow >= maxFailuresInARow) {
+              // bad albums side by side are not a dead server: only stop when it doesn't answer
+              if (await _answers(s)) {
+                failedInARow = 0;
+              } else {
+                break albums;
+              }
+            }
             continue;
           }
           failedInARow = 0;

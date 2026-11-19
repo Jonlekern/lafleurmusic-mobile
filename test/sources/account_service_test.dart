@@ -225,7 +225,7 @@ void main() {
         expect(waits.length, 2);
       });
 
-      test('the 2nd sync runs even after a complete first; the 3rd is skipped when the 2nd is complete', () async {
+      test('a complete 2nd sync (after an incomplete first) ends the chain: no 3rd', () async {
         final src = _CountingSource('x', failAlbums: true);
         final service = AccountService(
           accounts,
@@ -301,6 +301,44 @@ void main() {
         waits[0].complete();
         await settle();
         expect(src.runs, 1);
+      });
+    });
+
+    group('timers and late answers', () {
+      const draft = AccountDraft(address: 'h:1', user: 'u', password: 'pw');
+      Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 20));
+
+      test('remove cancels the pending 30 s pause (default timer)', () async {
+        final src = _CountingSource('x');
+        final service = AccountService(accounts, db: db, sourceOf: (_) async => src);
+        await service.save(draft, editing: a);
+        await settle();
+        expect(src.runs, 1);
+        await service.remove(a.id);
+        service.dispose(); // cancels what is left
+        await settle();
+        expect(src.runs, 1);
+      });
+
+      test('never completed a sync + later successful check: invalidates the source and syncs', () async {
+        final src = _CountingSource('x', failAlbums: true);
+        var built = 0;
+        final resolver = MediaResolver((id) async {
+          built++;
+          return src;
+        });
+        final service = AccountService(accounts, db: db, resolver: resolver, wait: (_) => Completer<void>().future);
+        await service.sync(a.id); // incomplete
+        expect(src.runs, 1);
+        final before = built;
+        src.failAlbums = false;
+        await service.checkAll([a.id]);
+        await settle();
+        expect(src.runs, 2); // the check started a sync
+        expect(built, greaterThan(before)); // fresh source
+        await service.checkAll([a.id]);
+        await settle();
+        expect(src.runs, 2); // complete now: a check doesn't sync again
       });
     });
 
@@ -753,7 +791,6 @@ void main() {
   });
 }
 
-/// Source whose album songs wait for [release] from album 2 on; [reached] waits for album n to be asked.
 /// Counts the sync runs (one `albums()` call each) and how many overlap.
 class _CountingSource implements MusicSource {
   _CountingSource(this.accountId, {this.failAlbums = false, this.gated = false});
@@ -801,6 +838,7 @@ class _CountingSource implements MusicSource {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
+/// Source whose album songs wait for [release] from album 2 on; [reached] waits for album n to be asked.
 class GatedSource implements MusicSource {
   GatedSource(
     this.accountId, {

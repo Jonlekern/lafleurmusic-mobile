@@ -41,13 +41,20 @@ class FakeSource implements MusicSource {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
-class _AlwaysFailing extends FakeSource {
-  _AlwaysFailing(FakeSource o, this.onAsk) : super(o.accountId, o.library);
-  final void Function() onAsk;
+class _BadAlbums extends FakeSource {
+  _BadAlbums(FakeSource o, this.bad, {required this.alive, this.onAsk}) : super(o.accountId, o.library);
+  final Set<String> bad;
+  final bool alive;
+  final void Function()? onAsk;
+  @override
+  Future<TestResult> test() async => alive ? TestResult.ok : TestResult.unreachable;
   @override
   Future<List<SourceSong>> albumSongs(String albumId) async {
-    onAsk();
-    throw const SocketException('down');
+    if (bad.contains(albumId)) {
+      onAsk?.call();
+      throw const SocketException('bad');
+    }
+    return super.albumSongs(albumId);
   }
 }
 
@@ -239,10 +246,18 @@ void main() {
     expect(await count('acc1'), 10);
   });
 
+  test('6 bad albums in a row, server alive: the good ones after them are stored', () async {
+    final lib = {for (var i = 0; i < 10; i++) alb(i): [song('a$i')]};
+    final src = _BadAlbums(FakeSource('acc1', lib), {for (var i = 0; i < 6; i++) 'al$i'}, alive: true);
+    final r = await LibrarySync(db).run(src);
+    expect(r.complete, false);
+    expect(await count('acc1'), 4);
+  });
+
   test('a server failing on every album stops after a few', () async {
     final lib = {for (var i = 0; i < 30; i++) alb(i): [song('a$i')]};
     var asked = 0;
-    final failing = _AlwaysFailing(FakeSource('acc1', lib), () => asked++);
+    final failing = _BadAlbums(FakeSource('acc1', lib), {for (var i = 0; i < 30; i++) 'al$i'}, alive: false, onAsk: () => asked++);
     final r = await LibrarySync(db).run(failing);
     expect(r.complete, false);
     expect(asked, LibrarySync.maxFailuresInARow);
