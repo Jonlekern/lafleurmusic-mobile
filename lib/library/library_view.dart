@@ -122,7 +122,8 @@ class LibraryView {
   Future<List<Track>> search(String q) async =>
       db.search(q, accounts: await _now());
 
-  /// The server playlists of the accounts shown (never merged across accounts).
+  /// The server playlists of the accounts shown (never merged across accounts), then the
+  /// phone's (plan 9), shown whatever the accounts: [LibraryDb.watchPlaylists].
   Stream<List<ServerPlaylist>> playlists() =>
       _follow((a) => db.watchPlaylists(accounts: a));
 

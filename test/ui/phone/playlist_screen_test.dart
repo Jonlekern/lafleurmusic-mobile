@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/demo/demo_offline.dart';
 import 'package:lafleurmusic/library/db.dart';
+import 'package:lafleurmusic/library/playlist_store.dart';
 import 'package:lafleurmusic/settings.dart';
+import 'package:lafleurmusic/ui/phone/home_screen.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 
 import '../fonts.dart';
@@ -334,5 +336,69 @@ void main() {
       await openSoiree(tester);
       expect(find.text('Kavinsky · pas sur le téléphone'), findsOneWidget);
     });
+  });
+
+  group('plan 9 : playlists du téléphone avec celles des serveurs', () {
+    /// A phone playlist « Ma route » : a server song, then a song no library has.
+    Future<void> seedPhone(LibraryDb db) async {
+      final store = PlaylistStore(db);
+      final ref = await store.create('Ma route');
+      await store.add(ref, [
+        'subsonic://demo/Night Drive/2',
+        'subsonic://gone/1',
+      ]);
+    }
+
+    phoneTest(
+      'Tout : « PLAYLISTS », après celles des serveurs, « Sur mon iPhone » en petit',
+      TargetPlatform.iOS,
+      (tester) async {
+        await pumpKeep(
+          tester,
+          addAccount: false,
+          seed: (db) async {
+            await seedPlaylists(db);
+            await seedPhone(db);
+          },
+        );
+        await scrollTo(tester, find.text('Ma route'));
+        expect(find.text('PLAYLISTS'), findsOneWidget);
+        expect(find.text('PLAYLISTS DU SERVEUR'), findsNothing);
+        expect(tagOf('phone', '1', 'Sur mon iPhone'), findsOneWidget);
+        expect(
+          tester.getTopLeft(find.text('Ma route')).dy,
+          greaterThan(tester.getTopLeft(find.text('Chill du dimanche')).dy),
+        );
+        await tester.tap(find.text('Ma route'));
+        await done(tester);
+        expect(find.text('PLAYLIST · SUR MON IPHONE'), findsOneWidget);
+        // the song no library has: greyed « Morceau absent », never dropped
+        expect(find.text('Morceau absent'), findsOneWidget);
+        expect(find.textContaining('2 morceaux · '), findsOneWidget);
+      },
+    );
+
+    phoneTest(
+      'sans aucun compte : la playlist du téléphone est là, sans étiquette',
+      TargetPlatform.android,
+      (tester) async {
+        await pumpKeep(
+          tester,
+          addAccount: false,
+          // the shell asks for an account first on a phone: the Home itself
+          home: const HomeScreen(),
+          seed: (db) async {
+            await seedKeepDemo(db);
+            await seedPhone(db);
+          },
+        );
+        await scrollTo(tester, find.text('Ma route'));
+        expect(find.text('PLAYLISTS'), findsOneWidget);
+        expect(tagOf('phone', '1', 'Sur mon téléphone'), findsNothing);
+        await tester.tap(find.text('Ma route'));
+        await done(tester);
+        expect(find.text('PLAYLIST · SUR MON TÉLÉPHONE'), findsOneWidget);
+      },
+    );
   });
 }

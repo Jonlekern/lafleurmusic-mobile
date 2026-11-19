@@ -212,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// « PLAYLISTS DU SERVEUR » sous les albums (maquette 7, écran 10) : mosaïque, nom, ⬇ rose si
+/// « PLAYLISTS DU SERVEUR » (« PLAYLISTS » avec celles du téléphone, plan 9) sous les albums (maquette 7, écran 10) : mosaïque, nom, ⬇ rose si
 /// gardée, le compte en petit en mode Tout / Perso. Rien quand aucun compte n'en a.
 class _ServerPlaylists extends StatelessWidget {
   const _ServerPlaylists();
@@ -225,16 +225,24 @@ class _ServerPlaylists extends StatelessWidget {
       builder: (context, snap) {
         final lists = snap.data ?? const <ServerPlaylist>[];
         if (lists.isEmpty) return const SizedBox.shrink();
-        final tagged = app.settings?.displayMode != DisplayMode.one;
+        // le compte en mode Tout / Perso ; une playlist du téléphone : « Sur mon iPhone »,
+        // seulement à côté de playlists de serveur
+        final tagged =
+            app.settings?.displayMode != DisplayMode.one &&
+            lists.any((p) => !p.onPhone);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            PhoneSection(app.strings.serverPlaylists),
+            PhoneSection(
+              lists.any((p) => p.onPhone)
+                  ? app.strings.allPlaylists
+                  : app.strings.serverPlaylists,
+            ),
             for (final p in lists)
               PhoneItem(
                 key: ValueKey('playlist-${p.accountId}-${p.id}'),
                 kept: p.kept,
-                tag: tagged ? p.accountName : null,
+                tag: tagged ? playlistPlace(app.strings, p) : null,
                 leading: CoverMosaic(tracks: p.covers, size: 30, radius: 4),
                 label: p.name,
                 onTap: () => openPlaylist(context, p),

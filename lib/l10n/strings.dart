@@ -246,6 +246,9 @@ class Strings {
   /// Accueil, sous les albums (maquette 7, écran 10).
   String get serverPlaylists => _t('PLAYLISTS DU SERVEUR', 'SERVER PLAYLISTS');
 
+  /// Le même titre quand des playlists du téléphone y sont aussi (plan 9).
+  String get allPlaylists => 'PLAYLISTS';
+
   /// En-tête d'une playlist du serveur (maquette 7, écran 11).
   String playlistOf(String account) => 'PLAYLIST · ${account.toUpperCase()}';
 

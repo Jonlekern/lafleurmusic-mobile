@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../l10n/strings.dart';
 import '../../library/db.dart' show OfflineRow;
 import '../../library/models.dart';
 import '../../player/player.dart';
@@ -13,7 +14,12 @@ import '../track_menu.dart';
 import 'album_screen.dart';
 import 'phone_shell.dart';
 
-/// Ouvre une playlist du serveur (depuis l'Accueil : retour « ‹ Accueil »).
+/// Où vit la playlist, là où celles des serveurs montrent leur compte : « Sur mon iPhone »
+/// (Android : « Sur mon téléphone ») pour une playlist du téléphone (plan 9).
+String playlistPlace(Strings s, ServerPlaylist p) =>
+    p.onPhone ? s.onDevice(onIphone, tablet: onTablet) : p.accountName;
+
+/// Ouvre une playlist du serveur ou du téléphone (depuis l'Accueil : retour « ‹ Accueil »).
 Future<void> openPlaylist(BuildContext context, ServerPlaylist p) =>
     pushPhone(context, PlaylistScreen(playlist: p));
 
@@ -112,7 +118,7 @@ class PlaylistScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          s.playlistOf(p.accountName),
+                          s.playlistOf(playlistPlace(s, p)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -173,7 +179,10 @@ class PlaylistScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
-              _Rows(items: items, accountName: p.accountName),
+              _Rows(
+                items: items,
+                accountName: p.onPhone ? null : p.accountName,
+              ),
             ],
           ),
         );
@@ -243,7 +252,9 @@ final _never = ChangeNotifier();
 class _Rows extends StatelessWidget {
   const _Rows({required this.items, required this.accountName});
   final List<(String, Track?)> items;
-  final String accountName;
+
+  /// Le compte de la playlist ; null pour une playlist du téléphone (un absent : sans sous-titre).
+  final String? accountName;
 
   @override
   Widget build(BuildContext context) {
@@ -277,7 +288,9 @@ class _Rows extends StatelessWidget {
                         size: 0,
                         missing: true,
                       ),
-                      sub: s.notOnAccount(accountName),
+                      sub: accountName == null
+                          ? null
+                          : s.notOnAccount(accountName!),
                       menu: false,
                     )
                   else

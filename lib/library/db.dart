@@ -147,6 +147,30 @@ class KeptPlaylists extends Table {
   Set<Column> get primaryKey => {accountId, playlistId};
 }
 
+/// Les playlists qui vivent seulement sur le téléphone (plan 9), sans aucun compte.
+@DataClassName('PhonePlaylistRow')
+class PhonePlaylists extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+
+  /// La pochette choisie : un fichier du dossier de l'appli (nom seul), null = la mosaïque.
+  TextColumn get coverFile => text().nullable()();
+  IntColumn get createdAt => integer()(); // ms
+}
+
+/// Les morceaux d'une playlist du téléphone, dans l'ordre (`position`), désignés par leur clé
+/// (`subsonic://…`, `jellyfin://…`, `plex://…` ou un chemin local). `mergeKey` : la clé de fusion du
+/// morceau quand il a été ajouté, pour retrouver le même morceau ailleurs si son compte s'en va.
+@DataClassName('PhonePlaylistItemRow')
+class PhonePlaylistItems extends Table {
+  IntColumn get playlistId => integer()();
+  IntColumn get position => integer()();
+  TextColumn get trackPath => text()();
+  TextColumn get mergeKey => text().withDefault(const Constant(''))();
+  @override
+  Set<Column> get primaryKey => {playlistId, position};
+}
+
 /// Pourquoi l'utilisateur garde un morceau : `album:<albumMergeKey>`, `playlist:<compte>/<id>`
 /// ou `song` (règle Q13). Retirer un album ou une playlist n'efface que les morceaux qui n'ont
 /// plus aucune raison (jumeaux compris).
@@ -179,6 +203,8 @@ class CopyRoot {
     PlaylistItems,
     KeptPlaylists,
     KeepOrigins,
+    PhonePlaylists,
+    PhonePlaylistItems,
   ],
 )
 class LibraryDb extends _$LibraryDb {
@@ -187,8 +213,9 @@ class LibraryDb extends _$LibraryDb {
   // v2 : copies hors ligne et écoutes en attente. v3 : morceaux retirés du Top 100 par l'utilisateur.
   // v4 : clé de fusion, écoutes importées, playlists des serveurs.
   // v5 : date d'ajout de chaque morceau (tri « Ajout récent »).
+  // v6 : playlists du téléphone (plan 9).
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -245,6 +272,10 @@ class LibraryDb extends _$LibraryDb {
           }
         });
         await _relinkAlbums({for (final r in rows) albumNameKey(r.album)});
+      }
+      if (from < 6) {
+        await m.createTable(phonePlaylists);
+        await m.createTable(phonePlaylistItems);
       }
     }),
   );
@@ -1371,27 +1402,62 @@ class LibraryDb extends _$LibraryDb {
     ];
   }
 
-  /// The song paths of one playlist, in order (absent songs included).
+  /// The song paths of one playlist, in order (absent songs included). A phone playlist's
+  /// songs as they play now ([_phoneShown]: the same song elsewhere when its own row is gone).
   Future<List<String>> playlistPaths(String accountId, String playlistId) =>
-      (select(playlistItems)
-            ..where(
-              (i) =>
-                  i.accountId.equals(accountId) &
-                  i.playlistId.equals(playlistId),
-            )
-            ..orderBy([(i) => OrderingTerm.asc(i.index)]))
-          .map((i) => i.trackPath)
-          .get();
+      accountId == phonePlaylistAccount
+      ? customSelect(
+          'SELECT $_phoneShown AS p FROM phone_playlist_items pi '
+          'WHERE pi.playlist_id = ? ORDER BY pi.position',
+          variables: [Variable.withInt(_phoneId(playlistId))],
+          readsFrom: {phonePlaylistItems, tracks, accountRows},
+        ).map((r) => r.read<String>('p')).get()
+      : (select(playlistItems)
+              ..where(
+                (i) =>
+                    i.accountId.equals(accountId) &
+                    i.playlistId.equals(playlistId),
+              )
+              ..orderBy([(i) => OrderingTerm.asc(i.index)]))
+            .map((i) => i.trackPath)
+            .get();
 
-  /// The name of a playlist, null if the server no longer has it.
-  Future<String?> playlistName(String accountId, String playlistId) async =>
-      (await (select(playlists)..where(
-                (p) =>
-                    p.accountId.equals(accountId) &
-                    p.remoteId.equals(playlistId),
-              ))
-              .getSingleOrNull())
+  /// The name of a playlist, null if the server (or the phone) no longer has it.
+  Future<String?> playlistName(String accountId, String playlistId) async {
+    if (accountId == phonePlaylistAccount) {
+      return (await (select(
+            phonePlaylists,
+          )..where((p) => p.id.equals(_phoneId(playlistId)))).getSingleOrNull())
           ?.name;
+    }
+    return (await (select(playlists)..where(
+              (p) =>
+                  p.accountId.equals(accountId) & p.remoteId.equals(playlistId),
+            ))
+            .getSingleOrNull())
+        ?.name;
+  }
+
+  /// The id of a phone playlist named by text (-1: none, never a row).
+  static int _phoneId(String playlistId) => int.tryParse(playlistId) ?? -1;
+
+  /// SQL: the song a phone playlist item `pi` plays: its own row, else the same song on the
+  /// phone or another account ([twinsOf]'s order: its account was removed), else its key
+  /// (absent). The stored key never changes.
+  static const _phoneShown =
+      'COALESCE((SELECT t0.path FROM tracks t0 WHERE t0.path = pi.track_path), '
+      '(SELECT t1.path FROM tracks t1 LEFT JOIN accounts a1 ON a1.id = t1.account_id '
+      "WHERE pi.merge_key <> '' AND t1.merge_key = pi.merge_key "
+      "AND (t1.account_id = 'local' OR a1.id IS NOT NULL) "
+      "ORDER BY t1.account_id <> 'local', COALESCE(a1.position, 0), t1.path LIMIT 1), "
+      'pi.track_path)';
+
+  /// SQL: every playlist item, the server's and the phone's: `acc`, `pid`, `path`.
+  static const _allItems =
+      '(SELECT account_id AS acc, playlist_id AS pid, track_path AS path '
+      'FROM playlist_items UNION ALL '
+      "SELECT '$phonePlaylistAccount' AS acc, CAST(pi.playlist_id AS TEXT) AS pid, "
+      '$_phoneShown AS path FROM phone_playlist_items pi)';
 
   /// SQL: the row `t` (a track) has a finished copy, its own or a twin's on another account.
   static const _hasDoneCopy =
@@ -1400,8 +1466,8 @@ class LibraryDb extends _$LibraryDb {
       'AND t2.merge_key = t.merge_key AND t2.account_id <> t.account_id)))';
 
   /// The playlists shown (the accounts of [accounts]; null: all), the accounts in the
-  /// order of the accounts screen, each in the server's order. A playlist whose account
-  /// was removed is never shown.
+  /// order of the accounts screen, each in the server's order; then the phone's, by name,
+  /// whatever accounts are shown. A playlist whose account was removed is never shown.
   Stream<List<ServerPlaylist>> watchPlaylists({Set<String>? accounts}) {
     final ids = accounts?.toList() ?? const <String>[];
     final where = accounts == null
@@ -1422,13 +1488,29 @@ class LibraryDb extends _$LibraryDb {
       'WHERE i.account_id = p.account_id AND i.playlist_id = p.remote_id '
       'AND NOT $_hasDoneCopy) AS uncopied, '
       'EXISTS (SELECT 1 FROM kept_playlists k WHERE k.account_id = p.account_id '
-      'AND k.playlist_id = p.remote_id) AS rec '
+      'AND k.playlist_id = p.remote_id) AS rec, '
+      '0 AS grp, a.position AS apos, p.position AS ppos '
       'FROM playlists p JOIN accounts a ON a.id = p.account_id '
-      'WHERE $where ORDER BY a.position, p.position',
-      variables: [done, ...vars],
+      'WHERE $where '
+      'UNION ALL '
+      "SELECT '$phonePlaylistAccount' AS acc, CAST(pp.id AS TEXT) AS id, "
+      "pp.name AS name, '' AS acc_name, "
+      '(SELECT COUNT(*) FROM phone_playlist_items pi WHERE pi.playlist_id = pp.id) AS c, '
+      '(SELECT COUNT(*) FROM phone_playlist_items pi JOIN tracks t '
+      'ON t.path = $_phoneShown WHERE pi.playlist_id = pp.id) AS present, '
+      '(SELECT COUNT(*) FROM phone_playlist_items pi JOIN tracks t '
+      'ON t.path = $_phoneShown WHERE pi.playlist_id = pp.id '
+      'AND NOT $_hasDoneCopy) AS uncopied, '
+      "EXISTS (SELECT 1 FROM kept_playlists k WHERE k.account_id = '$phonePlaylistAccount' "
+      'AND k.playlist_id = CAST(pp.id AS TEXT)) AS rec, '
+      '1 AS grp, 0 AS apos, 0 AS ppos FROM phone_playlists pp '
+      'ORDER BY grp, apos, ppos',
+      variables: [done, ...vars, done],
       readsFrom: {
         playlists,
         playlistItems,
+        phonePlaylists,
+        phonePlaylistItems,
         tracks,
         offline,
         accountRows,
@@ -1436,10 +1518,11 @@ class LibraryDb extends _$LibraryDb {
       },
     ).watch().asyncMap((rows) async {
       final out = <ServerPlaylist>[];
+      final phone = <ServerPlaylist>[];
       for (final r in rows) {
         final acc = r.read<String>('acc'), id = r.read<String>('id');
         final present = r.read<int>('present');
-        out.add(
+        (acc == phonePlaylistAccount ? phone : out).add(
           ServerPlaylist(
             accountId: acc,
             id: id,
@@ -1454,19 +1537,28 @@ class LibraryDb extends _$LibraryDb {
           ),
         );
       }
-      return out;
+      phone.sort((a, b) => sortKey(a.name).compareTo(sortKey(b.name)));
+      return [...out, ...phone];
     });
   }
 
   /// The first songs of a playlist that show 4 different albums (its mosaic).
   Future<List<Track>> _coverTracks(String acc, String id) async {
-    final rows = await customSelect(
-      'SELECT t.* FROM playlist_items i JOIN tracks t ON t.path = i.track_path '
-      'WHERE i.account_id = ? AND i.playlist_id = ? AND t.has_cover = 1 '
-      'ORDER BY i."index" LIMIT 200',
-      variables: [Variable.withString(acc), Variable.withString(id)],
-      readsFrom: {playlistItems, tracks},
-    ).get();
+    final rows = acc == phonePlaylistAccount
+        ? await customSelect(
+            'SELECT t.* FROM phone_playlist_items pi JOIN tracks t '
+            'ON t.path = $_phoneShown WHERE pi.playlist_id = ? AND t.has_cover = 1 '
+            'ORDER BY pi.position LIMIT 200',
+            variables: [Variable.withInt(_phoneId(id))],
+            readsFrom: {phonePlaylistItems, tracks, accountRows},
+          ).get()
+        : await customSelect(
+            'SELECT t.* FROM playlist_items i JOIN tracks t ON t.path = i.track_path '
+            'WHERE i.account_id = ? AND i.playlist_id = ? AND t.has_cover = 1 '
+            'ORDER BY i."index" LIMIT 200',
+            variables: [Variable.withString(acc), Variable.withString(id)],
+            readsFrom: {playlistItems, tracks},
+          ).get();
     final albums = <String>{};
     return [
       for (final r in rows)
@@ -1476,29 +1568,42 @@ class LibraryDb extends _$LibraryDb {
   }
 
   /// The songs of a playlist in order, a song listed twice twice: (its path, its row, or null
-  /// when the song is not in its account's library: absent).
+  /// when the song is not in its account's library: absent). A phone playlist: (its stored
+  /// key, the row it plays: its own, else the same song elsewhere, [_phoneShown]).
   Stream<List<(String, Track?)>> watchPlaylistItems(
     String accountId,
     String playlistId,
   ) =>
-      customSelect(
-        'SELECT i.track_path AS item_path, t.* FROM playlist_items i '
-        'LEFT JOIN tracks t ON t.path = i.track_path '
-        'WHERE i.account_id = ? AND i.playlist_id = ? ORDER BY i."index"',
-        variables: [
-          Variable.withString(accountId),
-          Variable.withString(playlistId),
-        ],
-        readsFrom: {playlistItems, tracks},
-      ).watch().map(
-        (rows) => [
-          for (final r in rows)
-            (
-              r.read<String>('item_path'),
-              r.read<int?>('id') == null ? null : _fromRow(tracks.map(r.data)),
-            ),
-        ],
-      );
+      (accountId == phonePlaylistAccount
+              ? customSelect(
+                  'SELECT pi.track_path AS item_path, t.* FROM phone_playlist_items pi '
+                  'LEFT JOIN tracks t ON t.path = $_phoneShown '
+                  'WHERE pi.playlist_id = ? ORDER BY pi.position',
+                  variables: [Variable.withInt(_phoneId(playlistId))],
+                  readsFrom: {phonePlaylistItems, tracks, accountRows},
+                )
+              : customSelect(
+                  'SELECT i.track_path AS item_path, t.* FROM playlist_items i '
+                  'LEFT JOIN tracks t ON t.path = i.track_path '
+                  'WHERE i.account_id = ? AND i.playlist_id = ? ORDER BY i."index"',
+                  variables: [
+                    Variable.withString(accountId),
+                    Variable.withString(playlistId),
+                  ],
+                  readsFrom: {playlistItems, tracks},
+                ))
+          .watch()
+          .map(
+            (rows) => [
+              for (final r in rows)
+                (
+                  r.read<String>('item_path'),
+                  r.read<int?>('id') == null
+                      ? null
+                      : _fromRow(tracks.map(r.data)),
+                ),
+            ],
+          );
 
   /// For each of [paths] that has one, its finished copy: its own, else a twin's on another account.
   Future<Map<String, OfflineRow>> doneCopies(List<String> paths) async {
@@ -1655,8 +1760,8 @@ class LibraryDb extends _$LibraryDb {
   Future<Map<(String, String), List<Track>>> keptPlaylistsMissing() async {
     final rows = await customSelect(
       'SELECT DISTINCT k.account_id AS k_acc, k.playlist_id AS k_id, t.* '
-      'FROM kept_playlists k JOIN playlist_items i ON i.account_id = k.account_id '
-      'AND i.playlist_id = k.playlist_id JOIN tracks t ON t.path = i.track_path '
+      'FROM kept_playlists k JOIN $_allItems i ON i.acc = k.account_id '
+      'AND i.pid = k.playlist_id JOIN tracks t ON t.path = i.path '
       'WHERE NOT EXISTS (SELECT 1 FROM offline o WHERE o.track_path = t.path) '
       "AND NOT EXISTS (SELECT 1 FROM tracks t2 JOIN offline o2 ON o2.track_path = t2.path "
       "WHERE t.merge_key <> '' AND t2.merge_key = t.merge_key "
@@ -1669,6 +1774,8 @@ class LibraryDb extends _$LibraryDb {
       readsFrom: {
         keptPlaylists,
         playlistItems,
+        phonePlaylistItems,
+        accountRows,
         tracks,
         offline,
         autoKeepBlocks,

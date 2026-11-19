@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/merge.dart';
 import 'package:lafleurmusic/library/models.dart';
+import 'package:lafleurmusic/library/playlist_store.dart';
 import 'package:lafleurmusic/offline/device.dart';
 import 'package:lafleurmusic/offline/downloader.dart';
 import 'package:lafleurmusic/player/media_resolver.dart';
@@ -97,9 +98,22 @@ Future<void> _expectV4(LibraryDb db) async {
   expect((await db.select(db.keptPlaylists).getSingle()).fileName, 'Road.m3u8');
 }
 
+/// Ce que la v6 doit offrir : les playlists du téléphone, vides, qui servent.
+Future<void> _expectV6(LibraryDb db) async {
+  expect(await db.select(db.phonePlaylists).get(), isEmpty);
+  expect(await db.select(db.phonePlaylistItems).get(), isEmpty);
+  final store = PlaylistStore(db);
+  final ref = await store.create('Mine');
+  await store.add(ref, ['/m/x.flac', '/m/y.flac']);
+  expect(
+    [for (final (k, _) in await store.items(ref).first) k],
+    ['/m/x.flac', '/m/y.flac'],
+  );
+}
+
 void main() {
   test(
-    'a v4 database upgrades to v5: added_at backfilled, nothing lost',
+    'a v4 database upgrades to v6: added_at backfilled, nothing lost',
     () async {
       final dir = Directory.systemTemp.createTempSync('mig5');
       addTearDown(() => dir.deleteSync(recursive: true));
@@ -149,10 +163,11 @@ void main() {
       expect((await db.offlineOf('subsonic://acc/1'))!.state, 'done');
       expect((await db.select(db.playlists).getSingle()).name, 'Road');
       expect(await db.select(db.accountRows).get(), hasLength(1));
+      await _expectV6(db);
     },
   );
 
-  test('a v1 database upgrades to v5 and keeps its data', () async {
+  test('a v1 database upgrades to v6 and keeps its data', () async {
     final raw = sqlite3.openInMemory();
     for (final sql in _v1) {
       raw.execute(sql);
@@ -191,9 +206,10 @@ void main() {
     await db.blockAutoKeep(['subsonic://acc/1']);
     expect(await db.autoKeepBlocked(), {'subsonic://acc/1'});
     await _expectV4(db);
+    await _expectV6(db);
   });
 
-  test('a v2 database upgrades to v5 and keeps its offline rows', () async {
+  test('a v2 database upgrades to v6 and keeps its offline rows', () async {
     final raw = sqlite3.openInMemory();
     for (final sql in [..._v1, ..._v2]) {
       raw.execute(sql);
@@ -215,9 +231,10 @@ void main() {
     await db.unblockAutoKeep(['subsonic://acc/1']);
     expect(await db.autoKeepBlocked(), isEmpty);
     await _expectV4(db);
+    await _expectV6(db);
   });
 
-  test('a v3 database (0.2.0) upgrades to v5 and keeps everything', () async {
+  test('a v3 database (0.2.0) upgrades to v6 and keeps everything', () async {
     final raw = sqlite3.openInMemory();
     for (final sql in [..._v1, ..._v2, ..._v3]) {
       raw.execute(sql);
@@ -269,6 +286,7 @@ void main() {
     // a user copy from 0.2.0: its reason is unknown (an album or the song itself)
     expect(await db.originsOf('subsonic://acc/1'), {KeepOrigin.legacy});
     await _expectV4(db);
+    await _expectV6(db);
   });
 
   test('a 0.2.0 album kept whole can be removed by album after the upgrade, '
@@ -357,6 +375,68 @@ void main() {
     expect((plays.imported, plays.count, plays.lastPlayed), (2, 0, 50));
     expect(await db.originsOf('subsonic://acc/1'), {KeepOrigin.legacy});
     await _expectV4(db);
+    await _expectV6(db);
+  });
+
+  test('a v5 database (0.7.0) upgrades to v6 and loses nothing', () async {
+    final dir = Directory.systemTemp.createTempSync('mig6');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/lib.db');
+    // a fresh database, then taken back to what 0.7.0 wrote (no phone playlists, version 5)
+    final first = LibraryDb(NativeDatabase(file));
+    await first.customSelect('SELECT 1').get();
+    await first.close();
+    final raw = sqlite3.open(file.path);
+    raw.execute('DROP TABLE phone_playlist_items');
+    raw.execute('DROP TABLE phone_playlists');
+    raw.execute(
+      "INSERT INTO accounts VALUES ('acc', 'subsonic', 'Home', 'http://h', 'u', 0)",
+    );
+    raw.execute(
+      "INSERT INTO tracks (path, account_id, remote_id, title, artist, album, album_key, duration_ms, has_cover, mtime, added_at, size, search_key, merge_key, album_merge_key) "
+      "VALUES ('subsonic://acc/1', 'acc', '1', 'T', 'a', 'A', 'a', 1000, 1, 0, 42, 5, 'k', 'm1', 'g1')",
+    );
+    raw.execute(
+      "INSERT INTO play_counts VALUES ('subsonic://acc/1', 2, 3, 99)",
+    );
+    raw.execute(
+      "INSERT INTO offline VALUES ('subsonic://acc/1', 'A/a.mp3', 5, 1, 'user', 'done', 0)",
+    );
+    raw.execute("INSERT INTO pending_scrobbles VALUES (1, 'acc', '1', 9)");
+    raw.execute("INSERT INTO auto_keep_blocks VALUES ('subsonic://acc/2')");
+    raw.execute(
+      "INSERT INTO playlists (account_id, remote_id, name, position) VALUES ('acc', 'pl1', 'Road', 0)",
+    );
+    raw.execute(
+      "INSERT INTO playlist_items VALUES ('acc', 'pl1', 0, 'subsonic://acc/1')",
+    );
+    raw.execute(
+      "INSERT INTO kept_playlists VALUES ('acc', 'pl1', 'Road.m3u8')",
+    );
+    raw.execute(
+      "INSERT INTO keep_origins VALUES ('subsonic://acc/1', 'playlist:acc/pl1')",
+    );
+    raw.execute("INSERT INTO loudness VALUES ('subsonic://acc/1', -9.5, 0)");
+    raw.execute('PRAGMA user_version = 5');
+    raw.close();
+
+    final db = LibraryDb(NativeDatabase(file));
+    addTearDown(db.close);
+    final t = (await db.select(db.tracks).get()).single;
+    expect((t.path, t.addedAt, t.mergeKey), ('subsonic://acc/1', 42, 'm1'));
+    final plays = (await db.select(db.playCounts).get()).single;
+    expect((plays.count, plays.imported, plays.lastPlayed), (2, 3, 99));
+    expect((await db.offlineOf('subsonic://acc/1'))!.filePath, 'A/a.mp3');
+    expect((await db.pending('acc')).single.remoteId, '1');
+    expect(await db.autoKeepBlocked(), {'subsonic://acc/2'});
+    expect(await db.playlistPaths('acc', 'pl1'), ['subsonic://acc/1']);
+    expect((await db.keptPlaylistRows()).single.fileName, 'Road.m3u8');
+    expect(await db.originsOf('subsonic://acc/1'), {'playlist:acc/pl1'});
+    expect(await db.loudnessOf('subsonic://acc/1', 0), -9.5);
+    expect([for (final p in await db.watchPlaylists().first) p.name], ['Road']);
+    await _expectV6(db);
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.single, 6);
   });
 }
 

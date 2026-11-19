@@ -216,7 +216,7 @@ class _Item extends StatelessWidget {
   }
 }
 
-/// « PLAYLISTS DU SERVEUR » sous les albums de la tablette (comme l'Accueil du téléphone) : mosaïque et
+/// « PLAYLISTS DU SERVEUR » (« PLAYLISTS » avec celles du téléphone, plan 9) sous les albums de la tablette (comme l'Accueil du téléphone) : mosaïque et
 /// nom, le compte en petit en mode Tout / Perso. Rien quand aucun compte n'en a.
 class _ServerPlaylists extends StatelessWidget {
   const _ServerPlaylists();
@@ -229,17 +229,25 @@ class _ServerPlaylists extends StatelessWidget {
       builder: (context, snap) {
         final lists = snap.data ?? const <ServerPlaylist>[];
         if (lists.isEmpty) return const SizedBox.shrink();
-        final tagged = app.settings?.displayMode != DisplayMode.one;
+        // le compte en mode Tout / Perso ; une playlist du téléphone : « Sur mon iPhone »,
+        // seulement à côté de playlists de serveur
+        final tagged =
+            app.settings?.displayMode != DisplayMode.one &&
+            lists.any((p) => !p.onPhone);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Head(app.strings.serverPlaylists),
+            _Head(
+              lists.any((p) => p.onPhone)
+                  ? app.strings.allPlaylists
+                  : app.strings.serverPlaylists,
+            ),
             for (final p in lists)
               _Item(
                 key: ValueKey('playlist-${p.accountId}-${p.id}'),
                 leading: CoverMosaic(tracks: p.covers, size: 26, radius: 4),
                 label: p.name,
-                tag: tagged ? p.accountName : null,
+                tag: tagged ? playlistPlace(app.strings, p) : null,
                 onTap: () => openPlaylist(context, p),
                 onLongPress: app.downloader == null
                     ? null

@@ -79,6 +79,57 @@ class Album {
 }
 
 /// Une playlist d'un serveur telle que l'Accueil la montre : jamais fusionnée entre comptes.
+/// The account id under which phone playlists go wherever a playlist is named by
+/// (account, id): `KeptPlaylists`, keep origins, [ServerPlaylist]. Never a real account id.
+const phonePlaylistAccount = 'phone';
+
+/// A playlist, wherever it lives: on the phone ([PlaylistRef.phone]) or on a server.
+sealed class PlaylistRef {
+  const PlaylistRef();
+  const factory PlaylistRef.phone(int id) = PhonePlaylistRef;
+  const factory PlaylistRef.server(String accountId, String remoteId) =
+      ServerPlaylistRef;
+
+  /// (account, id) as the tables of kept playlists name it.
+  String get accountId;
+  String get playlistId;
+}
+
+class PhonePlaylistRef extends PlaylistRef {
+  const PhonePlaylistRef(this.id);
+  final int id;
+  @override
+  String get accountId => phonePlaylistAccount;
+  @override
+  String get playlistId => '$id';
+  @override
+  bool operator ==(Object other) => other is PhonePlaylistRef && other.id == id;
+  @override
+  int get hashCode => id.hashCode;
+  @override
+  String toString() => 'PlaylistRef.phone($id)';
+}
+
+class ServerPlaylistRef extends PlaylistRef {
+  const ServerPlaylistRef(this.accountId, this.remoteId);
+  @override
+  final String accountId;
+  final String remoteId;
+  @override
+  String get playlistId => remoteId;
+  @override
+  bool operator ==(Object other) =>
+      other is ServerPlaylistRef &&
+      other.accountId == accountId &&
+      other.remoteId == remoteId;
+  @override
+  int get hashCode => Object.hash(accountId, remoteId);
+  @override
+  String toString() => 'PlaylistRef.server($accountId, $remoteId)';
+}
+
+/// A playlist as the lists show it: a server's, or one on the phone ([onPhone]: its
+/// [accountId] is [phonePlaylistAccount], its [accountName] empty).
 class ServerPlaylist {
   const ServerPlaylist({
     required this.accountId,
@@ -92,6 +143,13 @@ class ServerPlaylist {
 
   final String accountId, id, name, accountName;
   final int songCount;
+
+  /// It lives on the phone only (no account).
+  bool get onPhone => accountId == phonePlaylistAccount;
+
+  PlaylistRef get ref => onPhone
+      ? PlaylistRef.phone(int.parse(id))
+      : PlaylistRef.server(accountId, id);
 
   /// Gardée (« Garder » la playlist) et chacun de ses morceaux présents a une copie finie
   /// (la sienne ou celle d'un jumeau).
