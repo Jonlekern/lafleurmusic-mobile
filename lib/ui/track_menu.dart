@@ -283,7 +283,7 @@ class _NotFromEdge extends HorizontalDragGestureRecognizer {
 
 /// Téléphone : glisser une ligne vers la gauche → « Lire ensuite », vers la droite → « Ajouter à la file »
 /// (bandeau rose, maquettes 1 écran 2 et 13 écran A). Ajouter à la file dit « Ajouté » dans une bulle.
-/// [playable] faux (morceau grisé) : rien n'est ajouté à la file, un petit message le dit.
+/// [playable] faux (morceau grisé) : rien n'est ajouté à la file, dans les deux sens, un petit message le dit.
 class SwipeToQueue extends StatefulWidget {
   const SwipeToQueue({
     super.key,
@@ -318,16 +318,19 @@ class _SwipeToQueueState extends State<SwipeToQueue>
 
   void _end() {
     final app = AppScope.of(context);
-    if (_dx <= -SwipeToQueue.trigger) {
-      app.player.playNext([widget.track]);
-    } else if (_dx >= SwipeToQueue.trigger) {
-      if (widget.playable && !widget.track.missing) {
-        enqueueWithToast(context, [widget.track]);
-      } else {
+    final left = _dx <= -SwipeToQueue.trigger;
+    final right = _dx >= SwipeToQueue.trigger;
+    if (left || right) {
+      if (!widget.playable || widget.track.missing) {
+        // grisé (absent de son compte, pas de copie) : rien n'entre dans la file, dans les deux sens
         say(
           ScaffoldMessenger.of(context),
           app.strings.nothingOffline(onIphone, tablet: onTablet),
         );
+      } else if (left) {
+        app.player.playNext([widget.track]);
+      } else {
+        enqueueWithToast(context, [widget.track]);
       }
     }
     _from = _dx;

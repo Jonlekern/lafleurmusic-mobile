@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/demo/demo_library.dart';
+import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/ui/phone/album_screen.dart';
 import 'package:lafleurmusic/ui/phone/now_screen.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
@@ -28,6 +29,14 @@ Future<void> release(WidgetTester tester, TestGesture g) async {
 }
 
 const _bubble = Key('queueToast');
+const _nothing = "Pas sur l'iPhone : rien à jouer hors ligne.";
+
+/// Le vrai « jouable ? » du service, avec tous les comptes absents (serveur injoignable, compte coupé).
+class _AllAbsent extends AccountService {
+  _AllAbsent(super.accounts, {required super.db});
+  @override
+  AccountState? stateOf(String id) => AccountState.absent;
+}
 
 void main() {
   setUpAll(loadFonts);
@@ -36,12 +45,14 @@ void main() {
     WidgetTester tester, {
     Set<String>? notOnPhone,
     bool local = false,
+    bool accountOff = false,
   }) async {
     // local : aucun compte, seulement des fichiers sur le téléphone
     final f = await pumpKeep(
       tester,
       notOnPhone: notOnPhone ?? const {},
       addAccount: !local,
+      makeService: accountOff ? (a, db) => _AllAbsent(a, db: db) : null,
       seed: local ? (db) => db.upsertTracks(DemoLibrary.studio) : null,
       // sans compte l'Accueil demande d'en ajouter un : on va droit à l'album qui joue
       home: local ? const PhoneShell(debugStart: 'album') : const PhoneShell(),
@@ -199,6 +210,44 @@ void main() {
       expect(f.player.calls, contains('removeAdded'));
       expect(f.player.queue!.added.map((t) => t.title), ['Nightcall']);
     });
+  });
+
+  group('une ligne grisée n’entre pas dans la file, dans les deux sens', () {
+    for (final (name, dx, call) in [
+      ('à droite', 175.0, 'enqueue'),
+      ('à gauche', -175.0, 'playNext'),
+    ]) {
+      phoneTest('pas sur le téléphone, $name', TargetPlatform.iOS, (
+        tester,
+      ) async {
+        final f = await open(
+          tester,
+          notOnPhone: DemoLibrary.notOnPhonePaths.toSet(),
+        );
+        final g = await pull(tester, 'Night Swim', dx);
+        await g.up();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(f.player.calls, isNot(contains(call)));
+        expect(find.byKey(_bubble), findsNothing);
+        expect(find.text(_nothing), findsOneWidget);
+        await tester.pumpAndSettle(const Duration(seconds: 5));
+      });
+
+      phoneTest('compte coupé et pas de copie, $name', TargetPlatform.iOS, (
+        tester,
+      ) async {
+        final f = await open(tester, accountOff: true);
+        final g = await pull(tester, 'Night Swim', dx);
+        await g.up();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(f.player.calls, isNot(contains(call)));
+        expect(find.byKey(_bubble), findsNothing);
+        expect(find.text(_nothing), findsOneWidget);
+        await tester.pumpAndSettle(const Duration(seconds: 5));
+      });
+    }
   });
 
   group('feuille « Ajouter à la file » (appui long)', () {
