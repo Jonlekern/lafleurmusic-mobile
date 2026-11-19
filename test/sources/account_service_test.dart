@@ -708,6 +708,35 @@ void main() {
       expect(built, 2);
     });
 
+    test('a check asked during a sync is not lost: the server cut meanwhile '
+        'is seen once the sync ends, even if the sync finished', () async {
+      final runs = <Completer<SyncResult>>[];
+      final src = _CountingSource(a.id);
+      final service = AccountService(
+        accounts,
+        db: db,
+        sourceOf: (_) async => src,
+        sync: (_) {
+          final c = Completer<SyncResult>();
+          runs.add(c);
+          return c.future;
+        },
+      );
+      final syncing = service.sync(a.id);
+      await pumpEventQueue();
+      // the network changes while the sync stores what it already read
+      src.answer = TestResult.unreachable;
+      await service.checkAccounts();
+      expect(service.stateOf(a.id), AccountState.syncing);
+      runs.single.complete(
+        const SyncResult(added: 0, updated: 0, removed: 0, complete: true),
+      );
+      await syncing;
+      await pumpEventQueue();
+      expect(service.stateOf(a.id), AccountState.absent);
+      service.dispose();
+    });
+
     test(
       'an edit during a sync runs one more sync with the new settings',
       () async {

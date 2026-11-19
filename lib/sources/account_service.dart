@@ -470,11 +470,25 @@ class AccountService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Light test() of each account (accounts screen opening); syncing ones are skipped.
+  /// Light test() of each account (accounts screen opening); a syncing one is checked when
+  /// its sync ends.
   Future<void> checkAll(Iterable<String> ids) => Future.wait([
     for (final id in ids)
-      if (!_syncing.containsKey(id) && _checking.add(id)) _check(id),
+      if (_syncing.containsKey(id))
+        _checkAfterSync(id)
+      else if (_checking.add(id))
+        _check(id),
   ]).then((_) {});
+
+  /// Accounts asked to be checked while they synced: checked once the sync ends. A sync that
+  /// already read everything says "ok" even if the network changed while it stored it (the
+  /// server cut, the phone out of the house).
+  final _recheck = <String>{};
+
+  Future<void> _checkAfterSync(String id) {
+    _recheck.add(id);
+    return Future.value();
+  }
 
   /// [checkAll] on every account (the network changed: who answers from here?).
   Future<void> checkAccounts() async =>
@@ -559,6 +573,9 @@ class AccountService extends ChangeNotifier {
       _syncing.remove(id);
       _cancel.remove(id);
       notifyListeners();
+      if (_recheck.remove(id) && !_removed.contains(id)) {
+        unawaited(checkAll([id]));
+      }
     });
   }
 
