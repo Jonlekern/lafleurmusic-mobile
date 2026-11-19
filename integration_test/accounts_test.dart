@@ -1,11 +1,17 @@
-// End-to-end run of plan 3 (several accounts merged): the real app against TWO fake Subsonic
-// servers at once (fake_subsonic.dart), which carry the same album.
+// End-to-end run of plans 3 and 4 (several accounts merged): the real app against TWO fake
+// Subsonic servers (fake_subsonic.dart, both "Navidrome") and then a fake Jellyfin
+// (fake_jellyfin.dart), all three carrying the same album.
 //
 //   flutter test integration_test/accounts_test.dart -d <phone>
 //
 // Two accounts → the album shows once (its songs once) → the first server is cut → the song
 // plays from the second one and the listen goes to the second one → the first comes back →
 // a server playlist is kept → its `.m3u8` file is under Playlists/ of the LAFLEURMUSIC folder.
+// Plan 4: a Jellyfin account is added → the album still shows once (same album artist) → both
+// Navidrome servers are cut → the song plays from Jellyfin, the best source left, and the
+// listen goes to the Jellyfin account, none to Navidrome.
+//
+// One test, one app: a second app in the same process would need a second OS media session.
 //
 // Same clean start as the other runs (own library folder, own keychain namespace) and the
 // same safe cleanup (`mountGuarded`): the copies and the `.m3u8` the run made are removed,
@@ -18,11 +24,13 @@ import 'package:integration_test/integration_test.dart';
 import 'package:lafleurmusic/library/db.dart' show TrackRow;
 import 'package:lafleurmusic/main.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
+import 'package:lafleurmusic/sources/accounts.dart' show AccountType;
 import 'package:lafleurmusic/sources/secret_store.dart';
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' show MpvAudioKit;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'fake_jellyfin.dart';
 import 'fake_subsonic.dart';
 import 'offline_test.dart' show waitFor;
 import 'ui_helpers.dart';
@@ -32,6 +40,7 @@ void main() {
   MpvAudioKit.ensureInitialized();
 
   late FakeSubsonic first, second;
+  late FakeJellyfin jellyfin;
   late Directory support;
 
   setUpAll(() async {
@@ -44,6 +53,7 @@ void main() {
       },
     );
     second = await FakeSubsonic.start(topPlays: false, password: 'second-e2e');
+    jellyfin = await FakeJellyfin.start();
     support = Directory(
       '${(await getTemporaryDirectory()).path}/lafleurmusic-e2e-accounts',
     );
@@ -56,10 +66,11 @@ void main() {
     await testStorage.deleteAll();
     await first.close();
     await second.close();
+    await jellyfin.close();
   });
 
   testWidgets('two accounts: album once → first cut → plays and listens on the second → '
-      'kept playlist → .m3u8', (tester) async {
+      'kept playlist → .m3u8 → Jellyfin', (tester) async {
     final app = await mountGuarded(
       () => buildLafleurApp(
         support: support,
@@ -210,5 +221,97 @@ void main() {
     // clean up what we made (mountGuarded also does it if anything above failed)
     await app.downloader.forgetPlaylist(id1, 'pl-1');
     expect(files(), isEmpty);
+
+    // ---- plan 4: a Jellyfin account with the same album ----
+    final idJf = (await app.accountService.save(
+      AccountDraft(
+        type: AccountType.jellyfin,
+        name: 'Jellyfin',
+        address: jellyfin.address,
+        user: jellyfin.user,
+        password: jellyfin.password,
+        headers: const {fakeHeader: fakeHeaderValue},
+      ),
+    )).id;
+    Future<List<TrackRow>> jfRows() async =>
+        (await rows()).where((t) => t.accountId == idJf).toList();
+    await waitFor(
+      tester,
+      () async => (await jfRows()).length >= 2,
+      'Jellyfin library synced',
+      why: () async => 'jellyfin: ${jellyfin.requests}',
+    );
+    expect(
+      (await jfRows()).every((t) => t.path.startsWith('jellyfin://')),
+      isTrue,
+    );
+
+    // still one album (same name, same album artist), its songs once
+    final albumsJf = await app.library.albums().first;
+    expect(albumsJf.where((a) => a.name == 'Studio Lafleur'), hasLength(1));
+    final albumJf = albumsJf.firstWhere((a) => a.name == 'Studio Lafleur');
+    final songsJf = await app.library.albumTracks(albumJf.key).first;
+    expect(songsJf.map((t) => t.title), ['Night Drive', 'Surf Break']);
+    debugPrint(
+      'PREUVE fusion Jellyfin : ${(await rows()).length} lignes, '
+      '${albumsJf.where((a) => a.name == 'Studio Lafleur').length} album, '
+      '${songsJf.length} morceaux',
+    );
+
+    // both Navidrome servers cut: Jellyfin is the best source left
+    first.down = true;
+    second.down = true;
+    await app.accountService.checkAccounts();
+    await waitFor(
+      tester,
+      () async =>
+          app.accountService.stateOf(id1) == AccountState.absent &&
+          app.accountService.stateOf(id2) == AccountState.absent,
+      'both Navidrome accounts unreachable',
+    );
+    expect(app.accountService.stateOf(idJf), isNot(AccountState.absent));
+    int navidromeCalls(String method) => [
+      ...first.requests,
+      ...second.requests,
+    ].where((r) => r.method == method).length;
+    final ndStreams = navidromeCalls('stream');
+    final ndScrobbles = navidromeCalls('scrobble');
+    await app.player.playTracks(songsJf, 0);
+    await waitFor(
+      tester,
+      () async =>
+          jellyfin.requests.any(
+            (r) => r.method == 'stream' && r.params['id'] == 'jf-s-1',
+          ) &&
+          player.current.track?.title == 'Night Drive' &&
+          player.current.playing &&
+          player.current.position > const Duration(milliseconds: 500),
+      'plays from Jellyfin',
+      timeout: const Duration(seconds: 30),
+      why: () async =>
+          'at ${player.current.position}, jellyfin: ${jellyfin.requests}',
+    );
+    expect(
+      navidromeCalls('stream'),
+      ndStreams,
+      reason: 'nothing streamed from the cut servers',
+    );
+
+    // the listen goes to the Jellyfin account, none to Navidrome
+    await waitFor(
+      tester,
+      () async => jellyfin.playCount('jf-s-1') > 0,
+      'listen sent to Jellyfin',
+      timeout: const Duration(seconds: 60),
+      why: () async => 'jellyfin: ${jellyfin.requests}',
+    );
+    expect(navidromeCalls('scrobble'), ndScrobbles);
+    debugPrint(
+      'PREUVE écoute Jellyfin : Night Drive lu depuis Jellyfin, écoute reçue '
+      'par lui (${jellyfin.playCount('jf-s-1')}), aucune par Navidrome',
+    );
+    if (player.current.playing) await player.toggle();
+    first.down = false;
+    second.down = false;
   });
 }

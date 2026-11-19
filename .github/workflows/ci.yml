@@ -165,7 +165,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           # sound proof, then the end-to-end runs against a fake Subsonic server:
-          # first launch (plan 1), offline (plan 2) and two accounts (plan 3)
+          # first launch (plan 1), offline (plan 2), accounts (plans 3 and 4: Navidrome + Jellyfin)
           script: |
             flutter test integration_test/sound_proof_test.dart
             flutter test integration_test/app_test.dart
@@ -253,3 +253,29 @@ jobs:
       - name: Navidrome log
         if: failure()
         run: docker logs navidrome-ci
+
+  # Contract with a real Jellyfin (plan 4, task 4): a throw-away server whose music library is
+  # two tagged FLAC files made from our own test tone, its startup wizard (admin, library) done
+  # through the API, then our Jellyfin client is run against it.
+  jellyfin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JELLYFIN_URL: http://localhost:8096
+      JELLYFIN_USER: ci-admin
+      JELLYFIN_PASSWORD: ci-throwaway-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Jellyfin on generated test tones
+        run: tool/jellyfin-ci.sh
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter test test/sources/jellyfin_contract_test.dart
+      - name: Jellyfin log
+        if: failure()
+        run: docker logs jellyfin-ci
