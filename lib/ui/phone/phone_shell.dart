@@ -217,10 +217,10 @@ class _PhoneShellState extends State<PhoneShell> {
           p.basename(path);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: LafleurColors.bar,
+          backgroundColor: context.colors.bar,
           content: Text(
             app.strings.unreadableSkipped(title),
-            style: const TextStyle(color: LafleurColors.text),
+            style: TextStyle(color: context.colors.text),
           ),
         ),
       );
@@ -398,7 +398,7 @@ class _StartState extends State<_Start> {
       stream: stream,
       builder: (_, snap) {
         final list = snap.data;
-        if (list == null) return const ColoredBox(color: LafleurColors.bg);
+        if (list == null) return ColoredBox(color: context.colors.bg);
         final app = AppScope.of(context);
         // sans compte : le formulaire une fois, puis « juste la musique du téléphone » est un choix gardé
         return list.isEmpty && !(app.settings?.localOnly ?? false)
@@ -438,9 +438,9 @@ class PhoneHeader extends StatelessWidget {
     return Container(
       height: 50,
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: LafleurColors.bar,
-        border: Border(bottom: BorderSide(color: Colors.black)),
+      decoration: BoxDecoration(
+        color: context.colors.bar,
+        border: Border(bottom: BorderSide(color: context.colors.hairline)),
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -464,8 +464,8 @@ class PhoneHeader extends StatelessWidget {
                   padding: const EdgeInsets.only(left: 14, right: 8),
                   child: Row(
                     children: [
-                      const Text('‹ ', style: _backStyle),
-                      Text(back!, style: _backStyle),
+                      Text('‹ ', style: _backStyle(context)),
+                      Text(back!, style: _backStyle(context)),
                     ],
                   ),
                 ),
@@ -487,8 +487,8 @@ class PhoneHeader extends StatelessWidget {
     );
   }
 
-  static const _backStyle = TextStyle(
-    color: LafleurColors.pink,
+  static TextStyle _backStyle(BuildContext context) => TextStyle(
+    color: context.colors.pink,
     fontSize: 15,
     fontWeight: FontWeight.w700,
   );
@@ -500,18 +500,18 @@ class HeaderButton extends StatelessWidget {
     super.key,
     required this.icon,
     this.onTap,
-    this.color = const Color(0xFFBBBBBB),
+    this.color,
     this.size = 20,
   });
   final IconData icon;
   final VoidCallback? onTap;
-  final Color color;
+  final Color? color; // gris des libellés par défaut
   final double size;
 
   @override
   Widget build(BuildContext context) => IconButton(
     onPressed: onTap,
-    icon: Icon(icon, size: size, color: color),
+    icon: Icon(icon, size: size, color: color ?? context.colors.textLabel),
   );
 }
 
@@ -531,7 +531,7 @@ class PhoneScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
-      backgroundColor: LafleurColors.bg,
+      backgroundColor: context.colors.bg,
       body: SafeArea(
         bottom: false,
         child: Column(

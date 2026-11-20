@@ -48,9 +48,9 @@ class NowPlayingScreen extends StatelessWidget {
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
-                            boxShadow: const [
+                            boxShadow: [
                               BoxShadow(
-                                color: Colors.black,
+                                color: context.colors.coverBack,
                                 blurRadius: 60,
                                 offset: Offset(0, 20),
                               ),
@@ -75,8 +75,8 @@ class NowPlayingScreen extends StatelessWidget {
                                     q.order.length,
                                     t.album,
                                   ),
-                                  style: const TextStyle(
-                                    color: LafleurColors.sub,
+                                  style: TextStyle(
+                                    color: context.colors.sub,
                                     fontSize: 14,
                                   ),
                                 ),

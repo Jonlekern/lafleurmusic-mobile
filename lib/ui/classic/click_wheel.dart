@@ -60,7 +60,6 @@ const _hubRadius = 50.0;
 /// Près du centre exact, l'angle du doigt n'a plus de sens : on n'y compte rien.
 const _deadRadius = 20.0;
 
-const _ring = LafleurColors.bar;
 const _edge = Color(0xFF2A2A2A);
 const _label = Color(0xFFDDDDDD);
 
@@ -200,7 +199,11 @@ class _ClickWheelState extends State<ClickWheel> {
           onPointerUp: _onUp,
           onPointerCancel: _onCancel,
           child: CustomPaint(
-            painter: const _WheelPainter(),
+            painter: _WheelPainter(
+              ring: context.colors.bar,
+              hub: context.colors.bg,
+              pink: context.colors.pink,
+            ),
             size: const Size.square(ClickWheel.size),
             child: SizedBox.square(
               dimension: ClickWheel.size,
@@ -264,7 +267,12 @@ class _ClickWheelState extends State<ClickWheel> {
 
 /// L'anneau, le rond du milieu, l'arc rose (décor, de 11 h 40 à 2 h 40) et ⏮ ⏭ ▶︎❙❙.
 class _WheelPainter extends CustomPainter {
-  const _WheelPainter();
+  const _WheelPainter({
+    required this.ring,
+    required this.hub,
+    required this.pink,
+  });
+  final Color ring, hub, pink;
 
   static const _c = Offset(_radius, _radius);
 
@@ -275,9 +283,9 @@ class _WheelPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     canvas
-      ..drawCircle(_c, _radius, Paint()..color = _ring)
+      ..drawCircle(_c, _radius, Paint()..color = ring)
       ..drawCircle(_c, _radius - .5, edge)
-      ..drawCircle(_c, _hubRadius, Paint()..color = LafleurColors.bg)
+      ..drawCircle(_c, _hubRadius, Paint()..color = hub)
       ..drawCircle(_c, _hubRadius - .5, edge);
 
     // CSS : bordure haute de 3 px tournée de 35°, soit de -10° à 80° depuis midi
@@ -288,7 +296,7 @@ class _WheelPainter extends CustomPainter {
       90 * deg,
       false,
       Paint()
-        ..color = LafleurColors.pink
+        ..color = pink
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3,
     );
@@ -337,5 +345,6 @@ class _WheelPainter extends CustomPainter {
   bool hitTest(Offset position) => (position - _c).distance <= _radius;
 
   @override
-  bool shouldRepaint(_WheelPainter old) => false;
+  bool shouldRepaint(_WheelPainter old) =>
+      old.ring != ring || old.hub != hub || old.pink != pink;
 }

@@ -136,8 +136,8 @@ class _KeepScreenState extends State<KeepScreen> {
             child: Center(
               child: Text(
                 s.cancel,
-                style: const TextStyle(
-                  color: LafleurColors.pink,
+                style: TextStyle(
+                  color: context.colors.pink,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                 ),
@@ -165,13 +165,13 @@ class _KeepScreenState extends State<KeepScreen> {
                         if (need > 0)
                           TextSpan(
                             text: ' · + ${s.size(need)}',
-                            style: const TextStyle(color: LafleurColors.pink),
+                            style: TextStyle(color: context.colors.pink),
                           ),
                       ],
                     ),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFFCCCCCC),
+                      color: context.colors.textBody,
                     ),
                   ),
                 ),
@@ -182,8 +182,8 @@ class _KeepScreenState extends State<KeepScreen> {
                     child: LinearProgressIndicator(
                       value: gauge,
                       minHeight: 8,
-                      color: LafleurColors.pink,
-                      backgroundColor: const Color(0xFF2A2A2A),
+                      color: context.colors.pink,
+                      backgroundColor: context.colors.raised,
                     ),
                   ),
                 ),
@@ -191,8 +191,8 @@ class _KeepScreenState extends State<KeepScreen> {
                   padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
                   child: Text(
                     s.filesHint(onIphone, tablet: onTablet),
-                    style: const TextStyle(
-                      color: LafleurColors.sub,
+                    style: TextStyle(
+                      color: context.colors.sub,
                       fontSize: 12,
                       height: 1.5,
                     ),
@@ -258,10 +258,10 @@ class _KeepScreenState extends State<KeepScreen> {
                     ),
                     if (done) ...[
                       const SizedBox(width: 6),
-                      const Icon(
+                      Icon(
                         Icons.arrow_downward_rounded,
                         size: 14,
-                        color: LafleurColors.pink,
+                        color: context.colors.pink,
                       ),
                     ],
                   ],
@@ -270,7 +270,7 @@ class _KeepScreenState extends State<KeepScreen> {
               const SizedBox(width: 8),
               Text(
                 done ? s.alreadyKept : info,
-                style: const TextStyle(color: Color(0xFF999999), fontSize: 12),
+                style: TextStyle(color: context.colors.textMuted, fontSize: 12),
               ),
             ],
           ),
@@ -289,15 +289,15 @@ class _Check extends StatelessWidget {
     width: 22,
     height: 22,
     decoration: BoxDecoration(
-      color: on ? LafleurColors.pink : null,
+      color: on ? context.colors.pink : null,
       border: Border.all(
-        color: on ? LafleurColors.pink : const Color(0xFF555555),
+        color: on ? context.colors.pink : context.colors.outlineDim,
         width: 2,
       ),
       borderRadius: BorderRadius.circular(6),
     ),
     child: on
-        ? const Icon(Icons.check_rounded, size: 15, color: LafleurColors.ink)
+        ? Icon(Icons.check_rounded, size: 15, color: context.colors.ink)
         : null,
   );
 }
@@ -312,7 +312,7 @@ class _KeepButton extends StatelessWidget {
   Widget build(BuildContext context) => Opacity(
     opacity: onTap == null ? 0.4 : 1,
     child: Material(
-      color: LafleurColors.pink,
+      color: context.colors.pink,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -322,10 +322,10 @@ class _KeepButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.arrow_downward_rounded,
                 size: 16,
-                color: LafleurColors.ink,
+                color: context.colors.ink,
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -333,8 +333,8 @@ class _KeepButton extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: LafleurColors.ink,
+                  style: TextStyle(
+                    color: context.colors.ink,
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),

@@ -171,8 +171,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                               s.playlistOf(playlistPlace(s, p)),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFF999999),
+                              style: TextStyle(
+                                color: context.colors.textMuted,
                                 fontSize: 11,
                                 letterSpacing: 0.9,
                                 fontWeight: FontWeight.w700,
@@ -192,8 +192,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                             const SizedBox(height: 4),
                             Text(
                               '${s.nSongs(items.length)} · ${s.minutes(minutes)}',
-                              style: const TextStyle(
-                                color: Color(0xFF999999),
+                              style: TextStyle(
+                                color: context.colors.textMuted,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -347,13 +347,13 @@ class _EditActions extends StatelessWidget {
                 width: 40,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: LafleurColors.pink,
+                  color: context.colors.pink,
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.play_arrow_rounded,
                   size: 20,
-                  color: Color(0xFF111111),
+                  color: context.colors.onPink,
                 ),
               ),
             ),
@@ -384,13 +384,13 @@ class _Chip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFF444444)),
+          border: Border.all(color: context.colors.border),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: LafleurColors.text),
+            Icon(icon, size: 14, color: context.colors.text),
             const SizedBox(width: 5),
             Text(
               label,
@@ -491,11 +491,11 @@ Future<void> sortPlaylist(
   final by = await showModalBottomSheet<PlaylistSort>(
     context: context,
     useRootNavigator: true,
-    backgroundColor: const Color(0xFF232323),
-    barrierColor: Colors.black.withValues(alpha: 0.5),
-    shape: const RoundedRectangleBorder(
+    backgroundColor: context.colors.sheet,
+    barrierColor: context.colors.scrim,
+    shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      side: BorderSide(color: Color(0xFF3A3A3A)),
+      side: BorderSide(color: context.colors.borderSoft),
     ),
     builder: (ctx) => SafeArea(
       top: false,
@@ -511,7 +511,7 @@ Future<void> sortPlaylist(
                 height: 5,
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF555555),
+                  color: context.colors.outlineDim,
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
@@ -667,22 +667,19 @@ class _AddSongsScreenState extends State<AddSongsScreen> {
             key: const Key('addSongsSearch'),
             autofocus: true,
             onChanged: (v) => setState(() => _query = v),
-            cursorColor: LafleurColors.pink,
+            cursorColor: context.colors.pink,
             style: const TextStyle(fontSize: 14),
             decoration: InputDecoration(
               hintText: s.searchYourMusic,
-              hintStyle: const TextStyle(
-                color: Color(0xFF888888),
-                fontSize: 14,
-              ),
-              prefixIcon: const Icon(
+              hintStyle: TextStyle(color: context.colors.textDim, fontSize: 14),
+              prefixIcon: Icon(
                 Icons.search_rounded,
                 size: 18,
-                color: Color(0xFF888888),
+                color: context.colors.textDim,
               ),
               isDense: true,
               filled: true,
-              fillColor: LafleurColors.bar,
+              fillColor: context.colors.bar,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 11,
@@ -712,9 +709,9 @@ class _AddSongsScreenState extends State<AddSongsScreen> {
                               horizontal: 8,
                               vertical: 11,
                             ),
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               border: Border(
-                                bottom: BorderSide(color: Color(0xFF1E1E1E)),
+                                bottom: BorderSide(color: context.colors.rule),
                               ),
                             ),
                             child: Row(
@@ -743,8 +740,8 @@ class _AddSongsScreenState extends State<AddSongsScreen> {
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Color(0xFF999999),
+                                        style: TextStyle(
+                                          color: context.colors.textMuted,
                                           fontSize: 12,
                                         ),
                                       ),
@@ -752,10 +749,10 @@ class _AddSongsScreenState extends State<AddSongsScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-                                const Icon(
+                                Icon(
                                   Icons.add_circle_outline_rounded,
                                   size: 22,
-                                  color: LafleurColors.pink,
+                                  color: context.colors.pink,
                                 ),
                               ],
                             ),
@@ -808,7 +805,7 @@ class _KeepPlaylistPill extends StatelessWidget {
               recorded && remote.every((t) => isKept(t, snap.data ?? const {}));
           return PillButton(
             icon: Icons.arrow_downward_rounded,
-            iconColor: kept ? LafleurColors.pink : null,
+            iconColor: kept ? context.colors.pink : null,
             tooltip: kept
                 ? null
                 : app.strings.keepOnDevice(onIphone, tablet: onTablet),

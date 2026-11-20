@@ -98,7 +98,8 @@ class ArtistBrowser extends StatelessWidget {
 }
 
 const _name = TextStyle(fontWeight: FontWeight.w700, fontSize: 15);
-const _count = TextStyle(color: LafleurColors.sub, fontSize: 13);
+TextStyle _count(BuildContext context) =>
+    TextStyle(color: context.colors.sub, fontSize: 13);
 
 class _Cell extends StatelessWidget {
   const _Cell({required this.name, required this.count, required this.onTap});
@@ -121,7 +122,7 @@ class _Cell extends StatelessWidget {
           style: _name,
         ),
         const SizedBox(height: 4),
-        Text(count, style: _count),
+        Text(count, style: _count(context)),
       ],
     ),
   );
@@ -149,7 +150,7 @@ class _Line extends StatelessWidget {
               style: _name,
             ),
           ),
-          Text(count, style: _count.copyWith(fontSize: 14)),
+          Text(count, style: _count(context).copyWith(fontSize: 14)),
         ],
       ),
     ),
@@ -168,21 +169,31 @@ class _Toggle extends StatelessWidget {
   final bool leftOn;
   final void Function(bool left) onChanged;
 
-  Widget _part(String label, IconData icon, bool on, bool isLeft) => InkWell(
+  Widget _part(
+    BuildContext context,
+    String label,
+    IconData icon,
+    bool on,
+    bool isLeft,
+  ) => InkWell(
     onTap: () => onChanged(isLeft),
     child: Container(
-      color: on ? LafleurColors.pink : null,
+      color: on ? context.colors.pink : null,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 15, color: on ? Colors.black : LafleurColors.text),
+          Icon(
+            icon,
+            size: 15,
+            color: on ? context.colors.onPinkBlack : context.colors.text,
+          ),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: on ? Colors.black : LafleurColors.text,
+              color: on ? context.colors.onPinkBlack : context.colors.text,
             ),
           ),
         ],
@@ -193,15 +204,15 @@ class _Toggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(
-      border: Border.all(color: const Color(0xFF444444)),
+      border: Border.all(color: context.colors.border),
       borderRadius: BorderRadius.circular(20),
     ),
     clipBehavior: Clip.antiAlias,
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _part(left, Icons.grid_view_rounded, leftOn, true),
-        _part(right, Icons.view_list_rounded, !leftOn, false),
+        _part(context, left, Icons.grid_view_rounded, leftOn, true),
+        _part(context, right, Icons.view_list_rounded, !leftOn, false),
       ],
     ),
   );

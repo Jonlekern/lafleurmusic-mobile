@@ -25,13 +25,15 @@ bool isKept(Track t, Map<String, OfflineRow> rows) {
 }
 
 /// Une barre de message du téléphone, aux couleurs de l'appli.
-void say(ScaffoldMessengerState messenger, String text) =>
-    messenger.showSnackBar(
-      SnackBar(
-        backgroundColor: LafleurColors.bar,
-        content: Text(text, style: const TextStyle(color: LafleurColors.text)),
-      ),
-    );
+void say(ScaffoldMessengerState messenger, String text) {
+  final c = messenger.context.colors;
+  messenger.showSnackBar(
+    SnackBar(
+      backgroundColor: c.bar,
+      content: Text(text, style: TextStyle(color: c.text)),
+    ),
+  );
+}
 
 /// Garde [tracks] (ceux d'un serveur) : dit pourquoi si c'est refusé. Vrai si c'est en file.
 /// [origin] : pourquoi (pour lui-même par défaut, ou avec son album : [KeepOrigin]).
@@ -216,16 +218,16 @@ class _RemoveDialogState extends State<_RemoveDialog> {
   Widget build(BuildContext context) {
     final s = AppScope.of(context).strings;
     return AlertDialog(
-      backgroundColor: const Color(0xFF232323),
+      backgroundColor: context.colors.sheet,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: Color(0xFF3A3A3A)),
+        side: BorderSide(color: context.colors.borderSoft),
       ),
       title: Text(
         widget.title,
-        style: const TextStyle(
-          color: LafleurColors.text,
+        style: TextStyle(
+          color: context.colors.text,
           fontSize: 18,
           fontWeight: FontWeight.w700,
         ),
@@ -236,8 +238,8 @@ class _RemoveDialogState extends State<_RemoveDialog> {
         children: [
           Text(
             widget.body,
-            style: const TextStyle(
-              color: Color(0xFFCCCCCC),
+            style: TextStyle(
+              color: context.colors.textBody,
               fontSize: 14,
               height: 1.5,
             ),
@@ -255,9 +257,9 @@ class _RemoveDialogState extends State<_RemoveDialog> {
                   child: Checkbox(
                     value: _dontAsk,
                     onChanged: (v) => setState(() => _dontAsk = v ?? false),
-                    activeColor: LafleurColors.pink,
-                    checkColor: LafleurColors.ink,
-                    side: const BorderSide(color: Color(0xFF666666), width: 2),
+                    activeColor: context.colors.pink,
+                    checkColor: context.colors.ink,
+                    side: BorderSide(color: context.colors.textFaint, width: 2),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(5),
                     ),
@@ -268,8 +270,8 @@ class _RemoveDialogState extends State<_RemoveDialog> {
                 const SizedBox(width: 10),
                 Text(
                   s.doNotAskAgain,
-                  style: const TextStyle(
-                    color: LafleurColors.text,
+                  style: TextStyle(
+                    color: context.colors.text,
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
@@ -284,8 +286,8 @@ class _RemoveDialogState extends State<_RemoveDialog> {
         OutlinedButton(
           onPressed: () => Navigator.of(context).pop(),
           style: OutlinedButton.styleFrom(
-            foregroundColor: LafleurColors.text,
-            side: const BorderSide(color: Color(0xFF444444)),
+            foregroundColor: context.colors.text,
+            side: BorderSide(color: context.colors.border),
             shape: const StadiumBorder(),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           ),
@@ -298,8 +300,8 @@ class _RemoveDialogState extends State<_RemoveDialog> {
           key: const Key('confirmRemove'),
           onPressed: () => Navigator.of(context).pop(_RemoveAnswer(_dontAsk)),
           style: FilledButton.styleFrom(
-            backgroundColor: LafleurColors.pink,
-            foregroundColor: LafleurColors.ink,
+            backgroundColor: context.colors.pink,
+            foregroundColor: context.colors.ink,
             shape: const StadiumBorder(),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           ),

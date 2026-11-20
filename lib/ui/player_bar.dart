@@ -29,9 +29,9 @@ class _PlayerBarState extends State<PlayerBar> {
     final narrow = MediaQuery.sizeOf(context).width < 900;
     return Container(
       height: 84,
-      decoration: const BoxDecoration(
-        color: LafleurColors.bar,
-        border: Border(top: BorderSide(color: LafleurColors.line)),
+      decoration: BoxDecoration(
+        color: context.colors.bar,
+        border: Border(top: BorderSide(color: context.colors.line)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: StreamBuilder<PlayerState>(
@@ -81,8 +81,8 @@ class _PlayerBarState extends State<PlayerBar> {
                                       : t.artist),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: LafleurColors.sub,
+                            style: TextStyle(
+                              color: context.colors.sub,
                               fontSize: 13,
                             ),
                           ),
@@ -117,15 +117,15 @@ class _PlayerBarState extends State<PlayerBar> {
                             child: Container(
                               width: 40,
                               height: 40,
-                              decoration: const BoxDecoration(
-                                color: LafleurColors.text,
+                              decoration: BoxDecoration(
+                                color: context.colors.text,
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
                                 st.playing
                                     ? Icons.pause_rounded
                                     : Icons.play_arrow_rounded,
-                                color: LafleurColors.ink,
+                                color: context.colors.ink,
                               ),
                             ),
                           ),
@@ -147,8 +147,8 @@ class _PlayerBarState extends State<PlayerBar> {
                         children: [
                           Text(
                             clock(st.position),
-                            style: const TextStyle(
-                              color: LafleurColors.sub,
+                            style: TextStyle(
+                              color: context.colors.sub,
                               fontSize: 12,
                             ),
                           ),
@@ -175,7 +175,7 @@ class _PlayerBarState extends State<PlayerBar> {
                                       Container(
                                         height: 5,
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF3D3D3D),
+                                          color: context.colors.trackBar,
                                           borderRadius: BorderRadius.circular(
                                             3,
                                           ),
@@ -185,7 +185,7 @@ class _PlayerBarState extends State<PlayerBar> {
                                         height: 5,
                                         width: c.maxWidth * f,
                                         decoration: BoxDecoration(
-                                          color: LafleurColors.pink,
+                                          color: context.colors.pink,
                                           borderRadius: BorderRadius.circular(
                                             3,
                                           ),
@@ -199,8 +199,8 @@ class _PlayerBarState extends State<PlayerBar> {
                                         child: Container(
                                           width: 13,
                                           height: 13,
-                                          decoration: const BoxDecoration(
-                                            color: LafleurColors.text,
+                                          decoration: BoxDecoration(
+                                            color: context.colors.text,
                                             shape: BoxShape.circle,
                                           ),
                                         ),
@@ -214,8 +214,8 @@ class _PlayerBarState extends State<PlayerBar> {
                           const SizedBox(width: 10),
                           Text(
                             '-${clock(st.duration - st.position)}',
-                            style: const TextStyle(
-                              color: LafleurColors.sub,
+                            style: TextStyle(
+                              color: context.colors.sub,
                               fontSize: 12,
                             ),
                           ),
@@ -250,10 +250,10 @@ class _PlayerBarState extends State<PlayerBar> {
                       ),
                       const SizedBox(width: 12),
                     ],
-                    const Icon(
+                    Icon(
                       Icons.volume_up_rounded,
                       size: 18,
-                      color: LafleurColors.sub,
+                      color: context.colors.sub,
                     ),
                     SizedBox(
                       width: narrow ? 70 : 90,
@@ -270,8 +270,8 @@ class _PlayerBarState extends State<PlayerBar> {
                         child: Slider(
                           value: _volume,
                           max: 100,
-                          activeColor: LafleurColors.text,
-                          inactiveColor: const Color(0xFF3D3D3D),
+                          activeColor: context.colors.text,
+                          inactiveColor: context.colors.trackBar,
                           onChanged: (v) {
                             setState(() => _volume = v);
                             app.player.setVolume(v);
@@ -301,7 +301,7 @@ class _Btn extends StatelessWidget {
     icon: Icon(
       icon,
       size: 20,
-      color: on ? LafleurColors.pink : LafleurColors.text,
+      color: on ? context.colors.pink : context.colors.text,
     ),
   );
 }

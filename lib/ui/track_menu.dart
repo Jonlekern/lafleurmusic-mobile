@@ -38,10 +38,10 @@ Future<void> showTrackMenu(BuildContext context, Offset at, Track track) async {
   final a = await showMenu<_Action>(
     context: context,
     position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
-    color: const Color(0xFF232323),
+    color: context.colors.sheet,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(10),
-      side: const BorderSide(color: Color(0xFF3A3A3A)),
+      side: BorderSide(color: context.colors.borderSoft),
     ),
     items: [
       _item(_Action.playNext, s.playNextAction),
@@ -75,7 +75,7 @@ Future<void> showTracksMenu(
   final a = await showMenu<_Action>(
     context: context,
     position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
-    color: const Color(0xFF232323),
+    color: context.colors.sheet,
     items: [
       _item(_Action.playNext, s.playNextAction),
       _item(_Action.enqueue, s.addToQueue),
@@ -156,14 +156,14 @@ Future<void> showTrackSheet(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: hl ? LafleurColors.pink : null,
+              color: hl ? context.colors.pink : null,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               label,
               style: TextStyle(
                 fontSize: 16,
-                color: hl ? LafleurColors.ink : LafleurColors.text,
+                color: hl ? context.colors.ink : context.colors.text,
                 fontWeight: hl ? FontWeight.w700 : FontWeight.w400,
               ),
             ),
@@ -173,11 +173,11 @@ Future<void> showTrackSheet(
   final a = await showModalBottomSheet<_Action>(
     context: context,
     useRootNavigator: true, // par-dessus le mini-lecteur
-    backgroundColor: const Color(0xFF232323),
-    barrierColor: Colors.black.withValues(alpha: 0.5),
-    shape: const RoundedRectangleBorder(
+    backgroundColor: context.colors.sheet,
+    barrierColor: context.colors.scrim,
+    shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      side: BorderSide(color: Color(0xFF3A3A3A)),
+      side: BorderSide(color: context.colors.borderSoft),
     ),
     builder: (ctx) => SafeArea(
       top: false,
@@ -193,7 +193,7 @@ Future<void> showTrackSheet(
                 height: 5,
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF555555),
+                  color: context.colors.outlineDim,
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
@@ -211,8 +211,8 @@ Future<void> showTrackSheet(
                     if (sub != null && sub.isNotEmpty)
                       TextSpan(
                         text: ' · $sub',
-                        style: const TextStyle(
-                          color: LafleurColors.sub,
+                        style: TextStyle(
+                          color: context.colors.sub,
                           fontSize: 13,
                           fontWeight: FontWeight.w400,
                         ),
@@ -233,8 +233,8 @@ Future<void> showTrackSheet(
                 hl: onGoAlbum == null,
               ),
             if (onGoAlbum != null || onGoArtist != null)
-              const Divider(
-                color: Color(0xFF3A3A3A),
+              Divider(
+                color: context.colors.borderSoft,
                 height: 11,
                 thickness: 1,
                 indent: 4,
@@ -249,8 +249,8 @@ Future<void> showTrackSheet(
             option(ctx, _Action.enqueue, s.addToQueue),
             option(ctx, _Action.toPlaylist, s.addToPlaylist),
             if (canKeep) ...[
-              const Divider(
-                color: Color(0xFF3A3A3A),
+              Divider(
+                color: context.colors.borderSoft,
                 height: 11,
                 thickness: 1,
                 indent: 4,
@@ -410,7 +410,7 @@ class _SwipeToQueueState extends State<SwipeToQueue>
         children: [
           Container(
             decoration: BoxDecoration(
-              color: w > 0 ? const Color(0xFF262626) : null,
+              color: w > 0 ? context.colors.rowHover : null,
               borderRadius: BorderRadius.circular(8),
             ),
             // à droite, la ligne suit le doigt et découvre le bandeau (maquette 13) ; à gauche le bandeau la couvre
@@ -429,15 +429,15 @@ class _SwipeToQueueState extends State<SwipeToQueue>
               child: Container(
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: LafleurColors.pink,
+                  color: context.colors.pink,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: w >= (toRight ? 130 : 110)
                     ? Text(
                         toRight ? s.swipeEnqueue : s.swipePlayNext,
                         maxLines: 1,
-                        style: const TextStyle(
-                          color: LafleurColors.ink,
+                        style: TextStyle(
+                          color: context.colors.ink,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),

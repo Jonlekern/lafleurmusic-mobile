@@ -120,8 +120,8 @@ class AlbumScreen extends StatelessWidget {
                       children: [
                         Text(
                           label,
-                          style: const TextStyle(
-                            color: Color(0xFF999999),
+                          style: TextStyle(
+                            color: context.colors.textMuted,
                             fontSize: 11,
                             letterSpacing: 0.9,
                             fontWeight: FontWeight.w700,
@@ -141,8 +141,8 @@ class AlbumScreen extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           '${s.nSongs(list.length)} · ${s.minutes(minutes)}',
-                          style: const TextStyle(
-                            color: Color(0xFF999999),
+                          style: TextStyle(
+                            color: context.colors.textMuted,
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                           ),
@@ -181,7 +181,7 @@ class AlbumScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   child: Text(
                     empty!,
-                    style: const TextStyle(color: LafleurColors.sub),
+                    style: TextStyle(color: context.colors.sub),
                   ),
                 ),
               PhoneTrackRows(tracks: list),
@@ -223,7 +223,7 @@ class _KeepPill extends StatelessWidget {
         final kept = remote.every((t) => isKept(t, snap.data ?? const {}));
         return PillButton(
           icon: Icons.arrow_downward_rounded,
-          iconColor: kept ? LafleurColors.pink : null,
+          iconColor: kept ? context.colors.pink : null,
           tooltip: kept
               ? null
               : app.strings.keepOnDevice(onIphone, tablet: onTablet),
@@ -324,24 +324,24 @@ class PhoneTrackRow extends StatelessWidget {
     final t = track;
     final grey = !playable && !selected;
     final fg = selected
-        ? LafleurColors.ink
+        ? context.colors.ink
         : grey
-        ? const Color(0xFF555555)
-        : LafleurColors.text;
+        ? context.colors.outlineDim
+        : context.colors.text;
     final dim = selected
-        ? LafleurColors.ink
+        ? context.colors.ink
         : grey
-        ? const Color(0xFF444444)
-        : const Color(0xFFBBBBBB);
+        ? context.colors.border
+        : context.colors.textLabel;
     final artist = t.artist.isEmpty ? s.unknownArtist : t.artist;
     final row = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
       decoration: BoxDecoration(
-        color: selected ? LafleurColors.pink : null,
+        color: selected ? context.colors.pink : null,
         borderRadius: selected ? BorderRadius.circular(8) : null,
         border: selected
             ? null
-            : const Border(bottom: BorderSide(color: Color(0xFF1E1E1E))),
+            : Border(bottom: BorderSide(color: context.colors.rule)),
       ),
       child: Row(
         children: [
@@ -380,10 +380,10 @@ class PhoneTrackRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: selected
-                        ? LafleurColors.ink
+                        ? context.colors.ink
                         : grey
-                        ? const Color(0xFF444444)
-                        : const Color(0xFF999999),
+                        ? context.colors.border
+                        : context.colors.textMuted,
                     fontSize: 12,
                   ),
                 ),

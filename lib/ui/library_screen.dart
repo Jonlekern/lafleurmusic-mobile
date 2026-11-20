@@ -55,10 +55,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
           p.basename(path);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: LafleurColors.bar,
+          backgroundColor: context.colors.bar,
           content: Text(
             app.strings.unreadableSkipped(title),
-            style: const TextStyle(color: LafleurColors.text),
+            style: TextStyle(color: context.colors.text),
           ),
         ),
       );
@@ -195,26 +195,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     onSubmitted: (_) => _keys.requestFocus(),
                     decoration: InputDecoration(
                       hintText: s.search,
-                      hintStyle: const TextStyle(
-                        color: LafleurColors.sub,
+                      hintStyle: TextStyle(
+                        color: context.colors.sub,
                         fontSize: 13,
                       ),
-                      prefixIcon: const Icon(
+                      prefixIcon: Icon(
                         Icons.search_rounded,
                         size: 16,
-                        color: LafleurColors.sub,
+                        color: context.colors.sub,
                       ),
                       isDense: true,
                       filled: true,
-                      fillColor: const Color(0xFF0F0F0F),
+                      fillColor: context.colors.inputFill,
                       contentPadding: EdgeInsets.zero,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: LafleurColors.line),
+                        borderSide: BorderSide(color: context.colors.line),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: LafleurColors.line),
+                        borderSide: BorderSide(color: context.colors.line),
                       ),
                     ),
                   ),
@@ -225,15 +225,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 builder: (_, snap) => snap.data == true
                     ? Container(
                         width: double.infinity,
-                        color: const Color(0xFF2A1A2A),
+                        color: context.colors.pinkWash,
                         padding: const EdgeInsets.symmetric(
                           vertical: 8,
                           horizontal: 18,
                         ),
                         child: Text(
                           s.nasMissing,
-                          style: const TextStyle(
-                            color: LafleurColors.pink,
+                          style: TextStyle(
+                            color: context.colors.pink,
                             fontSize: 13,
                           ),
                         ),

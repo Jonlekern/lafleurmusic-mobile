@@ -30,8 +30,8 @@ class TopScreen extends StatelessWidget {
             children: [
               Text(
                 s.topLabel,
-                style: const TextStyle(
-                  color: LafleurColors.sub,
+                style: TextStyle(
+                  color: context.colors.sub,
                   fontSize: 12,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w700,
@@ -73,7 +73,7 @@ class TopScreen extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 s.playRule,
-                style: const TextStyle(color: LafleurColors.sub, fontSize: 13),
+                style: TextStyle(color: context.colors.sub, fontSize: 13),
               ),
               const SizedBox(height: 22),
               const _Line(head: true),
@@ -83,8 +83,8 @@ class TopScreen extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 30),
                         child: Text(
                           s.topEmpty,
-                          style: const TextStyle(
-                            color: LafleurColors.sub,
+                          style: TextStyle(
+                            color: context.colors.sub,
                             fontSize: 15,
                           ),
                         ),
@@ -139,8 +139,8 @@ class _Line extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.of(context).strings;
     final fg = selected
-        ? LafleurColors.ink
-        : (head ? LafleurColors.sub : LafleurColors.text);
+        ? context.colors.ink
+        : (head ? context.colors.sub : context.colors.text);
     TextStyle st({bool bold = true, Color? color, double size = 14}) =>
         TextStyle(
           color: color ?? fg,
@@ -153,7 +153,7 @@ class _Line extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 14, vertical: head ? 0 : 7),
       margin: EdgeInsets.only(bottom: head ? 10 : 0),
       decoration: BoxDecoration(
-        color: selected ? LafleurColors.pink : null,
+        color: selected ? context.colors.pink : null,
         borderRadius: head ? null : BorderRadius.circular(8),
       ),
       child: SizedBox(
@@ -197,7 +197,7 @@ class _Line extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: st(
-                  color: selected || head ? null : const Color(0xFFBBBBBB),
+                  color: selected || head ? null : context.colors.textLabel,
                 ),
               ),
             ),
@@ -212,8 +212,8 @@ class _Line extends StatelessWidget {
                           height: 6,
                           decoration: BoxDecoration(
                             color: selected
-                                ? const Color(0xFF111111)
-                                : LafleurColors.pink,
+                                ? context.colors.onPink
+                                : context.colors.pink,
                             borderRadius: BorderRadius.circular(3),
                           ),
                         ),

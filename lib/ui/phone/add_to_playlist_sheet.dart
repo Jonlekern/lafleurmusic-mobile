@@ -58,13 +58,13 @@ Future<bool> askQuestion(
   final r = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    barrierColor: Colors.black.withValues(alpha: 0.5),
+    barrierColor: context.colors.scrim,
     builder: (ctx) => Dialog(
-      backgroundColor: const Color(0xFF232323),
+      backgroundColor: context.colors.sheet,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Color(0xFF3A3A3A)),
+        side: BorderSide(color: context.colors.borderSoft),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -79,8 +79,8 @@ Future<bool> askQuestion(
             const SizedBox(height: 8),
             Text(
               body,
-              style: const TextStyle(
-                color: Color(0xFFBBBBBB),
+              style: TextStyle(
+                color: context.colors.textLabel,
                 fontSize: 13,
                 height: 1.5,
               ),
@@ -229,7 +229,7 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
     final store = app.playlistStore;
     final q = sortKey(_search.text.trim());
     return Scaffold(
-      backgroundColor: LafleurColors.bg,
+      backgroundColor: context.colors.bg,
       body: SafeArea(
         child: StreamBuilder<List<ServerPlaylist>>(
           stream: app.db.watchPlaylists(),
@@ -256,9 +256,11 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
                     Container(
                       height: 50,
                       width: double.infinity,
-                      decoration: const BoxDecoration(
-                        color: LafleurColors.bar,
-                        border: Border(bottom: BorderSide(color: Colors.black)),
+                      decoration: BoxDecoration(
+                        color: context.colors.bar,
+                        border: Border(
+                          bottom: BorderSide(color: context.colors.hairline),
+                        ),
                       ),
                       child: Stack(
                         alignment: Alignment.center,
@@ -285,8 +287,8 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
                                 child: Center(
                                   child: Text(
                                     s.cancel,
-                                    style: const TextStyle(
-                                      color: LafleurColors.pink,
+                                    style: TextStyle(
+                                      color: context.colors.pink,
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -320,7 +322,7 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
                             const SizedBox(height: 10),
                             Container(
                               decoration: BoxDecoration(
-                                color: LafleurColors.bar,
+                                color: context.colors.bar,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               padding: const EdgeInsets.symmetric(
@@ -330,7 +332,7 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
                                 key: const Key('addSearch'),
                                 controller: _search,
                                 onChanged: (_) => setState(() {}),
-                                cursorColor: LafleurColors.pink,
+                                cursorColor: context.colors.pink,
                                 style: const TextStyle(fontSize: 14),
                                 decoration: InputDecoration(
                                   border: InputBorder.none,
@@ -338,14 +340,14 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
                                   contentPadding: const EdgeInsets.symmetric(
                                     vertical: 12,
                                   ),
-                                  icon: const Icon(
+                                  icon: Icon(
                                     Icons.search_rounded,
                                     size: 18,
-                                    color: Color(0xFF888888),
+                                    color: context.colors.textDim,
                                   ),
                                   hintText: s.searchPlaylist,
-                                  hintStyle: const TextStyle(
-                                    color: Color(0xFF888888),
+                                  hintStyle: TextStyle(
+                                    color: context.colors.textDim,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -403,8 +405,8 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
                           _error!,
                           key: const Key('addError'),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Color(0xFFFF6B6B),
+                          style: TextStyle(
+                            color: context.colors.danger,
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                           ),
@@ -457,7 +459,7 @@ class _Row extends StatelessWidget {
             height: 44,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
-              child: cover ?? const ColoredBox(color: Color(0xFF3A2240)),
+              child: cover ?? ColoredBox(color: context.colors.pinkTint),
             ),
           ),
           const SizedBox(width: 12),
@@ -479,8 +481,8 @@ class _Row extends StatelessWidget {
                   sub,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF999999),
+                  style: TextStyle(
+                    color: context.colors.textMuted,
                     fontSize: 12,
                   ),
                 ),
@@ -494,18 +496,18 @@ class _Row extends StatelessWidget {
             height: 22,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: on ? LafleurColors.pink : null,
+              color: on ? context.colors.pink : null,
               border: Border.all(
-                color: on ? LafleurColors.pink : const Color(0xFF555555),
+                color: on ? context.colors.pink : context.colors.outlineDim,
                 width: 2,
               ),
               borderRadius: BorderRadius.circular(6),
             ),
             child: on
-                ? const Text(
+                ? Text(
                     '✓',
                     style: TextStyle(
-                      color: Color(0xFF111111),
+                      color: context.colors.onPink,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -537,9 +539,9 @@ class _DialogButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 11),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: primary ? LafleurColors.pink : null,
+        color: primary ? context.colors.pink : null,
         border: Border.all(
-          color: primary ? LafleurColors.pink : const Color(0xFF444444),
+          color: primary ? context.colors.pink : context.colors.border,
         ),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -550,7 +552,7 @@ class _DialogButton extends StatelessWidget {
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w700,
-          color: primary ? const Color(0xFF111111) : LafleurColors.text,
+          color: primary ? context.colors.onPink : context.colors.text,
         ),
       ),
     ),

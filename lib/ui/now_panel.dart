@@ -13,14 +13,14 @@ class NowPanel extends StatelessWidget {
   const NowPanel({super.key, this.extra});
   final Widget? extra; // sous « À suivre » (ex. résumé de l'artiste affiché)
 
-  static const head = TextStyle(
-    color: LafleurColors.sub,
+  static TextStyle head(BuildContext context) => TextStyle(
+    color: context.colors.sub,
     fontSize: 11,
     letterSpacing: 0.9,
     fontWeight: FontWeight.w700,
   );
-  static const _section = TextStyle(
-    color: Color(0xFF777777),
+  static TextStyle _section(BuildContext context) => TextStyle(
+    color: context.colors.textDimmer,
     fontSize: 10,
     letterSpacing: 0.9,
     fontWeight: FontWeight.w700,
@@ -33,9 +33,9 @@ class NowPanel extends StatelessWidget {
     return Container(
       width: 300,
       alignment: Alignment.topCenter, // toute la hauteur, contenu en haut
-      decoration: const BoxDecoration(
-        color: LafleurColors.panel,
-        border: Border(left: BorderSide(color: LafleurColors.line)),
+      decoration: BoxDecoration(
+        color: context.colors.panel,
+        border: Border(left: BorderSide(color: context.colors.line)),
       ),
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
       child: StreamBuilder<void>(
@@ -49,7 +49,7 @@ class NowPanel extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(s.nowPlaying, style: head),
+                  Text(s.nowPlaying, style: head(context)),
                   const SizedBox(height: 14),
                   GestureDetector(
                     onTap: () => openNowPlaying(context),
@@ -72,10 +72,7 @@ class NowPanel extends StatelessWidget {
                         : '${t.artist.isEmpty ? s.unknownArtist : t.artist} · ${t.album}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: LafleurColors.sub,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: context.colors.sub, fontSize: 13),
                   ),
                   const SizedBox(height: 24),
                   const UpNextSection(),
@@ -112,7 +109,7 @@ class UpNextSection extends StatelessWidget {
         cancel: s.cancel,
         confirm: s.clearQueue,
         onConfirm: () => Navigator.pop(ctx, true),
-        children: [Text(s.clearAddedBody(n), style: DialogFrame.body)],
+        children: [Text(s.clearAddedBody(n), style: DialogFrame.body(context))],
       ),
     );
     if (yes == true) await app.player.clearAdded();
@@ -122,13 +119,13 @@ class UpNextSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final s = app.strings;
-    final section = title ? NowPanel._section : NowPanel.head;
+    final section = title ? NowPanel._section(context) : NowPanel.head(context);
     final clear = GestureDetector(
       onTap: () => _confirmClear(context),
       child: Text(
         s.clearQueue,
-        style: const TextStyle(
-          color: LafleurColors.pink,
+        style: TextStyle(
+          color: context.colors.pink,
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
@@ -152,7 +149,9 @@ class UpNextSection extends StatelessWidget {
               if (title && q != null && (added > 0 || next.isNotEmpty))
                 Row(
                   children: [
-                    Expanded(child: Text(s.upNext, style: NowPanel.head)),
+                    Expanded(
+                      child: Text(s.upNext, style: NowPanel.head(context)),
+                    ),
                     if (added > 0) clear,
                   ],
                 ),
@@ -221,12 +220,12 @@ class _UpNextRow extends StatelessWidget {
                 ),
               ),
             ),
-            child: const MouseRegion(
+            child: MouseRegion(
               cursor: SystemMouseCursors.grab,
               child: Icon(
                 Icons.drag_indicator_rounded,
                 size: 16,
-                color: Color(0xFF666666),
+                color: context.colors.textFaint,
               ),
             ),
           ),
@@ -251,10 +250,7 @@ class _UpNextRow extends StatelessWidget {
                   track.artist.isEmpty ? s.unknownArtist : track.artist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: LafleurColors.sub,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: context.colors.sub, fontSize: 12),
                 ),
               ],
             ),
@@ -263,7 +259,7 @@ class _UpNextRow extends StatelessWidget {
             key: Key('upnext-remove-$index'),
             onPressed: () => app.player.removeAt(index),
             icon: const Icon(Icons.close_rounded, size: 16),
-            color: const Color(0xFF777777),
+            color: context.colors.textDimmer,
             visualDensity: VisualDensity.compact,
           ),
         ],
@@ -278,7 +274,7 @@ class _UpNextRow extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             top: BorderSide(
-              color: cand.isEmpty ? Colors.transparent : LafleurColors.pink,
+              color: cand.isEmpty ? Colors.transparent : context.colors.pink,
               width: 2,
             ),
           ),

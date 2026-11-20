@@ -547,7 +547,7 @@ class _Screen extends StatelessWidget {
                     ),
                     child: Text(
                       l.empty!(strings),
-                      style: const TextStyle(color: LafleurColors.sub),
+                      style: TextStyle(color: context.colors.sub),
                     ),
                   )
                 : ListView.builder(
@@ -613,9 +613,9 @@ class ClassicRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = TextStyle(
       color: selected
-          ? LafleurColors.ink
+          ? context.colors.ink
           : playable
-          ? LafleurColors.text
+          ? context.colors.text
           : _notOnPhone,
       fontSize: 15,
       fontWeight: FontWeight.w700,
@@ -631,7 +631,7 @@ class ClassicRow extends StatelessWidget {
         child: Opacity(
           opacity: dim ? 0.35 : 1,
           child: Container(
-            color: selected ? LafleurColors.pink : null,
+            color: selected ? context.colors.pink : null,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             alignment: Alignment.centerLeft,
             child: Row(

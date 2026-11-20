@@ -9,10 +9,6 @@ import '../../sources/plex_link.dart';
 import '../../theme/colors.dart';
 import 'phone_shell.dart';
 
-const _red = Color(0xFFFF6B6B);
-const _grey = Color(0xFF999999);
-const _plexOrange = Color(0xFFE5A00D);
-
 /// plex.tv/link, ouvert par « Ouvrir plex.tv/link ».
 final plexLinkPage = Uri.parse('https://plex.tv/link');
 
@@ -296,8 +292,8 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
         Text(
           found ? s.plexDone : s.plexYourCode,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: LafleurColors.text,
+          style: TextStyle(
+            color: context.colors.text,
             fontSize: 20,
             fontWeight: FontWeight.w700,
           ),
@@ -314,8 +310,8 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
                 TextSpan(text: s.plexGoTo),
                 TextSpan(
                   text: s.plexLinkSite,
-                  style: const TextStyle(
-                    color: Color(0xFFF2F2F2),
+                  style: TextStyle(
+                    color: context.colors.textHighlight,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -323,7 +319,11 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
               ],
             ),
             textAlign: TextAlign.center,
-            style: const TextStyle(color: _grey, fontSize: 14, height: 1.6),
+            style: TextStyle(
+              color: context.colors.textMuted,
+              fontSize: 14,
+              height: 1.6,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 24, 10, 0),
@@ -344,8 +344,8 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
           Text(
             _step == _Step.expired ? s.plexCodeExpired : (_error ?? ''),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _red,
+            style: TextStyle(
+              color: context.colors.danger,
               fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
@@ -359,19 +359,19 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
                   strokeWidth: 3,
-                  color: LafleurColors.pink,
-                  backgroundColor: Color(0xFF333333),
+                  color: context.colors.pink,
+                  backgroundColor: context.colors.divider,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 found ? s.plexSearching : s.plexWaiting,
-                style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 14),
+                style: TextStyle(color: context.colors.textLabel, fontSize: 14),
               ),
             ],
           ),
@@ -380,7 +380,7 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
             Text(
               s.plexCodeLasts,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _grey, fontSize: 12),
+              style: TextStyle(color: context.colors.textMuted, fontSize: 12),
             ),
           ],
         ],
@@ -398,8 +398,8 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
           padding: const EdgeInsets.fromLTRB(4, 16, 4, 4),
           child: Text(
             s.plexDone,
-            style: const TextStyle(
-              color: LafleurColors.text,
+            style: TextStyle(
+              color: context.colors.text,
               fontSize: 20,
               fontWeight: FontWeight.w700,
             ),
@@ -409,7 +409,7 @@ class _PlexLinkScreenState extends State<PlexLinkScreen> {
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
           child: Text(
             s.plexWhichServer(_servers.length),
-            style: const TextStyle(color: _grey, fontSize: 12),
+            style: TextStyle(color: context.colors.textMuted, fontSize: 12),
           ),
         ),
         for (final (i, (server, probe)) in _servers.indexed)
@@ -460,14 +460,14 @@ class _CodeBoxes extends StatelessWidget {
           height: 78,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: LafleurColors.bar,
-            border: Border.all(color: const Color(0xFF333333)),
+            color: context.colors.bar,
+            border: Border.all(color: context.colors.divider),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             ch,
             style: TextStyle(
-              color: dim ? const Color(0xFF555555) : LafleurColors.pink,
+              color: dim ? context.colors.outlineDim : context.colors.pink,
               fontSize: 40,
               fontWeight: FontWeight.w700,
             ),
@@ -500,15 +500,17 @@ class _ServerRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF161616),
+          color: context.colors.field,
           border: Border.all(
-            color: on ? LafleurColors.pink : const Color(0x00000000),
+            color: on ? context.colors.pink : Colors.transparent,
           ),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
-            PlexInitial(color: on ? _plexOrange : const Color(0xFF555555)),
+            PlexInitial(
+              color: on ? context.colors.plex : context.colors.outlineDim,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -518,14 +520,20 @@ class _ServerRow extends StatelessWidget {
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: LafleurColors.text,
+                    style: TextStyle(
+                      color: context.colors.text,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(sub, style: const TextStyle(color: _grey, fontSize: 12)),
+                  Text(
+                    sub,
+                    style: TextStyle(
+                      color: context.colors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -535,18 +543,18 @@ class _ServerRow extends StatelessWidget {
               height: 22,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: on ? LafleurColors.pink : null,
+                color: on ? context.colors.pink : null,
                 border: Border.all(
-                  color: on ? LafleurColors.pink : const Color(0xFF555555),
+                  color: on ? context.colors.pink : context.colors.outlineDim,
                   width: 2,
                 ),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: on
-                  ? const Icon(
+                  ? Icon(
                       Icons.check_rounded,
                       size: 15,
-                      color: Color(0xFF111111),
+                      color: context.colors.onPink,
                     )
                   : null,
             ),
@@ -559,8 +567,8 @@ class _ServerRow extends StatelessWidget {
 
 /// Le « P » de Plex dans son carré arrondi.
 class PlexInitial extends StatelessWidget {
-  const PlexInitial({super.key, this.color = _plexOrange});
-  final Color color;
+  const PlexInitial({super.key, this.color});
+  final Color? color; // orange Plex par défaut
 
   @override
   Widget build(BuildContext context) => Container(
@@ -568,13 +576,13 @@ class PlexInitial extends StatelessWidget {
     height: 36,
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      color: color,
+      color: color ?? context.colors.plex,
       borderRadius: BorderRadius.circular(8),
     ),
-    child: const Text(
+    child: Text(
       'P',
       style: TextStyle(
-        color: Color(0xFF111111),
+        color: context.colors.onPink,
         fontSize: 15,
         fontWeight: FontWeight.w700,
       ),
@@ -604,14 +612,14 @@ class BigButton extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: outline ? null : LafleurColors.pink,
-          border: Border.all(color: LafleurColors.pink),
+          color: outline ? null : context.colors.pink,
+          border: Border.all(color: context.colors.pink),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: outline ? LafleurColors.pink : const Color(0xFF111111),
+            color: outline ? context.colors.pink : context.colors.onPink,
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),

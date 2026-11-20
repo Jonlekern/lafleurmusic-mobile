@@ -52,9 +52,9 @@ class TrackList extends StatelessWidget {
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      boxShadow: const [
+                      boxShadow: [
                         BoxShadow(
-                          color: Colors.black,
+                          color: context.colors.coverBack,
                           blurRadius: 40,
                           offset: Offset(0, 12),
                         ),
@@ -85,8 +85,8 @@ class TrackList extends StatelessWidget {
                       children: [
                         Text(
                           label ?? s.playlistLabel,
-                          style: const TextStyle(
-                            color: LafleurColors.sub,
+                          style: TextStyle(
+                            color: context.colors.sub,
                             fontSize: 12,
                             letterSpacing: 1,
                             fontWeight: FontWeight.w700,
@@ -105,8 +105,8 @@ class TrackList extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           '${s.nSongs(tracks.length)} · ${s.minutes(minutes)}',
-                          style: const TextStyle(
-                            color: LafleurColors.sub,
+                          style: TextStyle(
+                            color: context.colors.sub,
                             fontSize: 14,
                           ),
                         ),
@@ -209,8 +209,8 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = selected
-        ? LafleurColors.ink
-        : (head ? LafleurColors.sub : const Color(0xFFDDDDDD));
+        ? context.colors.ink
+        : (head ? context.colors.sub : context.colors.textBright);
     TextStyle st(bool bold) => TextStyle(
       color: fg,
       fontSize: head ? 12 : 14,
@@ -246,10 +246,10 @@ class _Row extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           decoration: BoxDecoration(
-            color: selected ? LafleurColors.pink : null,
+            color: selected ? context.colors.pink : null,
             borderRadius: head ? null : BorderRadius.circular(8),
             border: head
-                ? const Border(bottom: BorderSide(color: LafleurColors.line))
+                ? Border(bottom: BorderSide(color: context.colors.line))
                 : null,
           ),
           child: Row(

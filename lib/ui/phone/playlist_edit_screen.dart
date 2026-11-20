@@ -195,7 +195,7 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
     final p = widget.playlist;
     final present = [for (final r in _rows) ?r.track];
     return Scaffold(
-      backgroundColor: LafleurColors.bg,
+      backgroundColor: context.colors.bg,
       body: SafeArea(
         child: Column(
           children: [
@@ -211,10 +211,10 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                 buildDefaultDragHandles: false,
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                 proxyDecorator: (child, _, _) => Material(
-                  color: const Color(0xFF1C1C1C),
+                  color: context.colors.bar,
                   borderRadius: BorderRadius.circular(8),
                   elevation: 8,
-                  shadowColor: Colors.black,
+                  shadowColor: context.colors.shadow,
                   child: child,
                 ),
                 onReorderItem: (from, to) =>
@@ -247,8 +247,8 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                             const SizedBox(height: 6),
                             Text(
                               s.changeCover,
-                              style: const TextStyle(
-                                color: Color(0xFF999999),
+                              style: TextStyle(
+                                color: context.colors.textMuted,
                                 fontSize: 12,
                               ),
                             ),
@@ -266,7 +266,7 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                           if (_noName) setState(() => _noName = false);
                         },
                         textAlign: TextAlign.center,
-                        cursorColor: LafleurColors.pink,
+                        cursorColor: context.colors.pink,
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -275,11 +275,11 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                           isDense: true,
                           contentPadding: const EdgeInsets.only(bottom: 4),
                           hintText: s.playlistName,
-                          enabledBorder: const UnderlineInputBorder(
-                            borderSide: BorderSide(color: LafleurColors.pink),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: context.colors.pink),
                           ),
-                          focusedBorder: const UnderlineInputBorder(
-                            borderSide: BorderSide(color: LafleurColors.pink),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: context.colors.pink),
                           ),
                         ),
                       ),
@@ -289,8 +289,8 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           s.nameNeeded,
-                          style: const TextStyle(
-                            color: Color(0xFFFF6B6B),
+                          style: TextStyle(
+                            color: context.colors.danger,
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                           ),
@@ -310,8 +310,8 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                         padding: const EdgeInsets.all(6),
                         child: Text(
                           s.deletePlaylist,
-                          style: const TextStyle(
-                            color: Color(0xFFFF6B6B),
+                          style: TextStyle(
+                            color: context.colors.danger,
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                           ),
@@ -356,7 +356,12 @@ class _Bar extends StatelessWidget {
   final String cancel, ok;
   final VoidCallback onCancel, onOk;
 
-  Widget _button(Key key, String label, VoidCallback onTap) => GestureDetector(
+  Widget _button(
+    BuildContext context,
+    Key key,
+    String label,
+    VoidCallback onTap,
+  ) => GestureDetector(
     key: key,
     behavior: HitTestBehavior.opaque,
     onTap: onTap,
@@ -365,8 +370,8 @@ class _Bar extends StatelessWidget {
       child: Center(
         child: Text(
           label,
-          style: const TextStyle(
-            color: LafleurColors.pink,
+          style: TextStyle(
+            color: context.colors.pink,
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),
@@ -379,9 +384,9 @@ class _Bar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 50,
     width: double.infinity,
-    decoration: const BoxDecoration(
-      color: LafleurColors.bar,
-      border: Border(bottom: BorderSide(color: Colors.black)),
+    decoration: BoxDecoration(
+      color: context.colors.bar,
+      border: Border(bottom: BorderSide(color: context.colors.hairline)),
     ),
     child: Stack(
       alignment: Alignment.center,
@@ -394,13 +399,13 @@ class _Bar extends StatelessWidget {
           left: 0,
           top: 0,
           bottom: 0,
-          child: _button(const Key('editCancel'), cancel, onCancel),
+          child: _button(context, const Key('editCancel'), cancel, onCancel),
         ),
         Positioned(
           right: 0,
           top: 0,
           bottom: 0,
-          child: _button(const Key('editOk'), ok, onOk),
+          child: _button(context, const Key('editOk'), ok, onOk),
         ),
       ],
     ),
@@ -438,14 +443,14 @@ class _EditRow extends StatelessWidget {
               width: 22,
               height: 22,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: LafleurColors.pink,
+              decoration: BoxDecoration(
+                color: context.colors.pink,
                 shape: BoxShape.circle,
               ),
-              child: const Text(
+              child: Text(
                 '−',
                 style: TextStyle(
-                  color: Color(0xFF111111),
+                  color: context.colors.onPink,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   height: 1,
@@ -474,8 +479,8 @@ class _EditRow extends StatelessWidget {
                   sub,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF999999),
+                  style: TextStyle(
+                    color: context.colors.textMuted,
                     fontSize: 12,
                   ),
                 ),
@@ -491,10 +496,10 @@ class _EditRow extends StatelessWidget {
             child: Padding(
               key: Key('editMove-$index'),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: const Icon(
+              child: Icon(
                 Icons.drag_handle_rounded,
                 size: 18,
-                color: Color(0xFF777777),
+                color: context.colors.textDimmer,
               ),
             ),
           ),

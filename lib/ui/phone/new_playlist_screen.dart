@@ -89,11 +89,11 @@ class _NewPlaylistScreenState extends State<NewPlaylistScreen> {
     final s = AppScope.of(context).strings;
     final ready = _name.text.trim().isNotEmpty;
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF3A2240), LafleurColors.bg],
+          colors: [context.colors.pinkTint, context.colors.bg],
           stops: [0, 0.6],
         ),
       ),
@@ -117,9 +117,12 @@ class _NewPlaylistScreenState extends State<NewPlaylistScreen> {
                   const SizedBox(height: 34),
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 26),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(color: LafleurColors.pink, width: 2),
+                        bottom: BorderSide(
+                          color: context.colors.pink,
+                          width: 2,
+                        ),
                       ),
                     ),
                     child: TextField(
@@ -130,7 +133,7 @@ class _NewPlaylistScreenState extends State<NewPlaylistScreen> {
                       textInputAction: TextInputAction.done,
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => _create(),
-                      cursorColor: LafleurColors.pink,
+                      cursorColor: context.colors.pink,
                       style: const TextStyle(
                         fontSize: 30,
                         fontWeight: FontWeight.w700,
@@ -146,8 +149,8 @@ class _NewPlaylistScreenState extends State<NewPlaylistScreen> {
                     const SizedBox(height: 22),
                     Text(
                       s.whereToKeep,
-                      style: const TextStyle(
-                        color: Color(0xFF999999),
+                      style: TextStyle(
+                        color: context.colors.textMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -208,7 +211,7 @@ class _Seg extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: on ? LafleurColors.pink : null,
+            color: on ? context.colors.pink : null,
             borderRadius: BorderRadius.circular(7),
           ),
           child: Text(
@@ -218,7 +221,7 @@ class _Seg extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: on ? LafleurColors.ink : const Color(0xFFBBBBBB),
+              color: on ? context.colors.ink : context.colors.textLabel,
             ),
           ),
         ),
@@ -230,7 +233,7 @@ class _Seg extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 0),
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFF161616),
+        color: context.colors.field,
         borderRadius: BorderRadius.circular(9),
       ),
       child: few
@@ -270,8 +273,10 @@ class PillButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
         decoration: BoxDecoration(
-          color: outlined ? Colors.transparent : LafleurColors.pink,
-          border: outlined ? Border.all(color: const Color(0xFF555555)) : null,
+          color: outlined ? Colors.transparent : context.colors.pink,
+          border: outlined
+              ? Border.all(color: context.colors.outlineDim)
+              : null,
           borderRadius: BorderRadius.circular(24),
         ),
         child: Text(
@@ -279,7 +284,7 @@ class PillButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
-            color: outlined ? const Color(0xFFDDDDDD) : const Color(0xFF111111),
+            color: outlined ? context.colors.textBright : context.colors.onPink,
           ),
         ),
       ),

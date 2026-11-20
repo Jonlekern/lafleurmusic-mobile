@@ -14,11 +14,6 @@ import 'no_music.dart' show PinkOutlineButton;
 import 'phone_shell.dart';
 import 'plex_link_screen.dart';
 
-/// Fond des champs et des segments de la maquette 2.
-const _fieldBg = Color(0xFF161616);
-const _red = Color(0xFFFF6B6B);
-const _green = Color(0xFF5FD16F);
-
 /// Ajouter un compte (maquette 2, écran 7) ; avec [editing], le modifier ou le supprimer.
 /// [first] : premier lancement, sans retour ; l'Accueil prend la place une fois le compte enregistré.
 class AccountFormScreen extends StatefulWidget {
@@ -282,8 +277,8 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           padding: const EdgeInsets.fromLTRB(4, 22, 4, 0),
           child: Text(
             s.plexHint,
-            style: const TextStyle(
-              color: Color(0xFF999999),
+            style: TextStyle(
+              color: context.colors.textMuted,
               fontSize: 13,
               height: 1.6,
             ),
@@ -328,32 +323,32 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF232323),
+        backgroundColor: context.colors.sheet,
         title: Text(
           s.deleteAccountQuestion(a.name),
-          style: const TextStyle(
-            color: LafleurColors.text,
+          style: TextStyle(
+            color: context.colors.text,
             fontSize: 17,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: Text(
           s.deleteAccountExplain,
-          style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 14),
+          style: TextStyle(color: context.colors.textLabel, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(
-              s.cancel,
-              style: const TextStyle(color: LafleurColors.text),
-            ),
+            child: Text(s.cancel, style: TextStyle(color: context.colors.text)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               s.deleteAction,
-              style: const TextStyle(color: _red, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: context.colors.danger,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -372,20 +367,20 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
       children: [
         Row(
           children: [
-            const Expanded(child: Divider(color: Color(0xFF333333))),
+            Expanded(child: Divider(color: context.colors.divider)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(
                 s.orLine,
-                style: const TextStyle(
-                  color: Color(0xFF999999),
+                style: TextStyle(
+                  color: context.colors.textMuted,
                   fontSize: 11,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
-            const Expanded(child: Divider(color: Color(0xFF333333))),
+            Expanded(child: Divider(color: context.colors.divider)),
           ],
         ),
         const SizedBox(height: 18),
@@ -396,7 +391,11 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           onTap: _locked ? () {} : widget.onLocalOnly!,
         ),
         const SizedBox(height: 12),
-        Text(s.noServerReassure, textAlign: TextAlign.center, style: phoneHint),
+        Text(
+          s.noServerReassure,
+          textAlign: TextAlign.center,
+          style: phoneHint(context),
+        ),
       ],
     ),
   );
@@ -415,7 +414,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
               padding: const EdgeInsets.only(bottom: 10),
               child: Text(
                 s.firstAccount,
-                style: const TextStyle(color: Color(0xFFCCCCCC), fontSize: 13),
+                style: TextStyle(color: context.colors.textBody, fontSize: 13),
               ),
             ),
           FieldLabel(s.serverType, top: 2),
@@ -428,7 +427,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           ),
           const SizedBox(height: 6),
           if (_type == AccountType.subsonic)
-            Text(s.subsonicServers, style: phoneHint),
+            Text(s.subsonicServers, style: phoneHint(context)),
           if (_type == AccountType.plex) ..._plexFields(context),
           if (_type != AccountType.plex) ...[
             FieldLabel(s.fieldName),
@@ -477,12 +476,12 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                       behavior: HitTestBehavior.opaque,
                       onTap: () =>
                           setState(() => _headers.removeAt(i).dispose()),
-                      child: const Padding(
+                      child: Padding(
                         padding: EdgeInsets.fromLTRB(8, 8, 2, 8),
                         child: Icon(
                           Icons.close_rounded,
                           size: 18,
-                          color: Color(0xFF777777),
+                          color: context.colors.textDimmer,
                         ),
                       ),
                     ),
@@ -498,8 +497,8 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                   padding: const EdgeInsets.only(top: 2, bottom: 4),
                   child: Text(
                     s.addHeader,
-                    style: const TextStyle(
-                      color: LafleurColors.pink,
+                    style: TextStyle(
+                      color: context.colors.pink,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -531,7 +530,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                 _message!,
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                  color: _ok ? _green : _red,
+                  color: _ok ? context.colors.ok : context.colors.danger,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
@@ -546,8 +545,8 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                   onPressed: _busy ? null : _delete,
                   child: Text(
                     s.deleteAccount,
-                    style: const TextStyle(
-                      color: _red,
+                    style: TextStyle(
+                      color: context.colors.danger,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -562,11 +561,8 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
 }
 
 /// Petit texte gris sous un champ ou en bas d'un écran.
-const phoneHint = TextStyle(
-  color: Color(0xFF999999),
-  fontSize: 12,
-  height: 1.5,
-);
+TextStyle phoneHint(BuildContext context) =>
+    TextStyle(color: context.colors.textMuted, fontSize: 12, height: 1.5);
 
 /// Étiquette de champ en capitales grises (NOM, ADRESSE…).
 class FieldLabel extends StatelessWidget {
@@ -579,8 +575,8 @@ class FieldLabel extends StatelessWidget {
     padding: EdgeInsets.only(top: top, bottom: 6),
     child: Text(
       text,
-      style: const TextStyle(
-        color: Color(0xFF999999),
+      style: TextStyle(
+        color: context.colors.textMuted,
         fontSize: 11,
         letterSpacing: 1,
         fontWeight: FontWeight.w700,
@@ -617,20 +613,20 @@ class _Input extends StatelessWidget {
       autocorrect: false,
       enableSuggestions: !obscure && !small, // ni mot de passe ni en-tête
       keyboardType: keyboard,
-      cursorColor: LafleurColors.pink,
-      style: TextStyle(color: LafleurColors.text, fontSize: size),
+      cursorColor: context.colors.pink,
+      style: TextStyle(color: context.colors.text, fontSize: size),
       decoration: InputDecoration(
         isDense: true,
         hintText: hint,
-        hintStyle: TextStyle(color: const Color(0xFF666666), fontSize: size),
+        hintStyle: TextStyle(color: context.colors.textFaint, fontSize: size),
         filled: true,
-        fillColor: _fieldBg,
+        fillColor: context.colors.field,
         contentPadding: small
             ? const EdgeInsets.symmetric(horizontal: 10, vertical: 10)
             : const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        enabledBorder: border(const Color(0xFF333333)),
-        focusedBorder: border(LafleurColors.pink),
-        border: border(const Color(0xFF333333)),
+        enabledBorder: border(context.colors.divider),
+        focusedBorder: border(context.colors.pink),
+        border: border(context.colors.divider),
       ),
     );
   }
@@ -662,7 +658,7 @@ class PhoneSegment<T> extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: _fieldBg,
+        color: context.colors.field,
         borderRadius: BorderRadius.circular(9),
       ),
       child: Row(
@@ -677,7 +673,7 @@ class PhoneSegment<T> extends StatelessWidget {
                   height: 34,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: o.value == value ? LafleurColors.pink : null,
+                    color: o.value == value ? context.colors.pink : null,
                     borderRadius: BorderRadius.circular(7),
                   ),
                   child: Builder(
@@ -686,10 +682,10 @@ class PhoneSegment<T> extends StatelessWidget {
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: o.value == value
-                            ? const Color(0xFF111111)
+                            ? context.colors.onPink
                             : o.enabled
-                            ? const Color(0xFFBBBBBB)
-                            : const Color(0xFF555555),
+                            ? context.colors.textLabel
+                            : context.colors.outlineDim,
                       );
                       return Row(
                         mainAxisSize: MainAxisSize.min,

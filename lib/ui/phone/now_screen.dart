@@ -81,14 +81,14 @@ class _NowScreenState extends State<NowScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               border: Border.all(
-                color: _tab == k ? LafleurColors.pink : const Color(0xFF444444),
+                color: _tab == k ? context.colors.pink : context.colors.border,
               ),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
               label,
               style: TextStyle(
-                color: _tab == k ? LafleurColors.pink : LafleurColors.text,
+                color: _tab == k ? context.colors.pink : context.colors.text,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -101,7 +101,7 @@ class _NowScreenState extends State<NowScreen> {
               icon: Icon(
                 icon,
                 size: 28,
-                color: on ? LafleurColors.pink : LafleurColors.text,
+                color: on ? context.colors.pink : context.colors.text,
               ),
             );
         return PhoneScaffold(
@@ -109,7 +109,7 @@ class _NowScreenState extends State<NowScreen> {
           header: PhoneHeader(
             leading: HeaderButton(
               icon: Icons.keyboard_arrow_down_rounded,
-              color: LafleurColors.pink,
+              color: context.colors.pink,
               size: 26,
               onTap: () => Navigator.of(context).maybePop(),
             ),
@@ -165,8 +165,8 @@ class _NowScreenState extends State<NowScreen> {
                               : '${t.artist.isEmpty ? s.unknownArtist : t.artist} · ${t.album}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF999999),
+                          style: TextStyle(
+                            color: context.colors.textMuted,
                             fontSize: 14,
                           ),
                         ),
@@ -190,14 +190,14 @@ class _NowScreenState extends State<NowScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: const Color(0xFFDDDDDD),
+                              color: context.colors.textBright,
                               width: 2,
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.add_rounded,
                             size: 20,
-                            color: Color(0xFFDDDDDD),
+                            color: context.colors.textBright,
                           ),
                         ),
                       ),
@@ -224,7 +224,7 @@ class _NowScreenState extends State<NowScreen> {
                     child: Container(
                       height: 4,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF333333),
+                        color: context.colors.divider,
                         borderRadius: BorderRadius.circular(2),
                       ),
                       alignment: Alignment.centerLeft,
@@ -232,7 +232,7 @@ class _NowScreenState extends State<NowScreen> {
                         widthFactor: f,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: LafleurColors.pink,
+                            color: context.colors.pink,
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -244,9 +244,12 @@ class _NowScreenState extends State<NowScreen> {
               const SizedBox(height: 2),
               Row(
                 children: [
-                  Text(clock(st.position), style: _time),
+                  Text(clock(st.position), style: _time(context)),
                   const Spacer(),
-                  Text('−${clock(st.duration - st.position)}', style: _time),
+                  Text(
+                    '−${clock(st.duration - st.position)}',
+                    style: _time(context),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -268,8 +271,8 @@ class _NowScreenState extends State<NowScreen> {
                       child: Container(
                         width: 64,
                         height: 64,
-                        decoration: const BoxDecoration(
-                          color: LafleurColors.pink,
+                        decoration: BoxDecoration(
+                          color: context.colors.pink,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -277,7 +280,7 @@ class _NowScreenState extends State<NowScreen> {
                               ? Icons.pause_rounded
                               : Icons.play_arrow_rounded,
                           size: 30,
-                          color: LafleurColors.ink,
+                          color: context.colors.ink,
                         ),
                       ),
                     ),
@@ -331,5 +334,6 @@ class _NowScreenState extends State<NowScreen> {
     await open(nav.context);
   }
 
-  static const _time = TextStyle(color: Color(0xFF999999), fontSize: 12);
+  static TextStyle _time(BuildContext context) =>
+      TextStyle(color: context.colors.textMuted, fontSize: 12);
 }

@@ -6,8 +6,8 @@ import '../theme/colors.dart';
 void showMessage(BuildContext context, String text) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      backgroundColor: LafleurColors.bar,
-      content: Text(text, style: const TextStyle(color: LafleurColors.text)),
+      backgroundColor: context.colors.bar,
+      content: Text(text, style: TextStyle(color: context.colors.text)),
     ),
   );
 }

@@ -94,26 +94,25 @@ class _AccountsScreenState extends State<AccountsScreen> {
                   padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
                   child: Row(
                     children: [
-                      Text(s.myAccounts, style: _secStyle),
+                      Text(s.myAccounts, style: _secStyle(context)),
                       const Spacer(),
                       Text.rich(
                         TextSpan(
                           children: [
                             TextSpan(text: '${s.dragHint} '),
-                            const WidgetSpan(
+                            WidgetSpan(
                               alignment: PlaceholderAlignment.middle,
                               child: Icon(
                                 Icons.drag_indicator_rounded,
                                 size: 12,
-                                color: Color(0xFF666666),
+                                color: context.colors.textFaint,
                               ),
                             ),
                             TextSpan(text: ' ${s.toReorder}'),
                           ],
                         ),
-                        style: _secStyle.copyWith(
-                          color: const Color(0xFF666666),
-                        ),
+                        style: _secStyle(context)
+                            .copyWith(color: context.colors.textFaint),
                       ),
                     ],
                   ),
@@ -154,8 +153,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
                       padding: const EdgeInsets.fromLTRB(4, 6, 4, 14),
                       child: Text(
                         s.plexKeptStillPlays,
-                        style: const TextStyle(
-                          color: Color(0xFF999999),
+                        style: TextStyle(
+                          color: context.colors.textMuted,
                           fontSize: 12,
                           height: 1.6,
                         ),
@@ -167,7 +166,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(4, 22, 4, 8),
-                    child: Text(s.display, style: _secStyle),
+                    child: Text(s.display, style: _secStyle(context)),
                   ),
                   // Mode normal / Mode Classic (maquette 12 C) : le téléphone seulement
                   if (app.classicMode case final classic?
@@ -201,7 +200,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                       defaultTargetPlatform == TargetPlatform.iOS,
                       tablet: onTablet,
                     ),
-                    style: phoneHint,
+                    style: phoneHint(context),
                   ),
                 ],
               ),
@@ -213,8 +212,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
   }
 }
 
-const _secStyle = TextStyle(
-  color: Color(0xFF999999),
+TextStyle _secStyle(BuildContext context) => TextStyle(
+  color: context.colors.textMuted,
   fontSize: 11,
   letterSpacing: 1,
   fontWeight: FontWeight.w700,
@@ -248,10 +247,10 @@ class _AccountRow extends StatelessWidget {
   /// « Nouveau code » d'un compte « À reconnecter ».
   final VoidCallback? onRelink;
 
-  static Color colorOf(AccountType t) => switch (t) {
-    AccountType.subsonic => LafleurColors.pink,
-    AccountType.jellyfin => const Color(0xFF7AA7FF),
-    AccountType.plex => const Color(0xFFE5A00D),
+  static Color colorOf(BuildContext context, AccountType t) => switch (t) {
+    AccountType.subsonic => context.colors.pink,
+    AccountType.jellyfin => context.colors.jellyfin,
+    AccountType.plex => context.colors.plex,
   };
 
   @override
@@ -267,11 +266,11 @@ class _AccountRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: const Color(0xFF161616),
+        color: context.colors.field,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
           side: relink
-              ? const BorderSide(color: LafleurColors.pink)
+              ? BorderSide(color: context.colors.pink)
               : BorderSide.none,
         ),
         child: InkWell(
@@ -287,10 +286,10 @@ class _AccountRow extends StatelessWidget {
                     key: ValueKey('grip-${a.id}'),
                     color: Colors.transparent,
                     padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                    child: const Icon(
+                    child: Icon(
                       Icons.drag_indicator_rounded,
                       size: 18,
-                      color: Color(0xFF666666),
+                      color: context.colors.textFaint,
                     ),
                   ),
                 ),
@@ -299,15 +298,15 @@ class _AccountRow extends StatelessWidget {
                   height: 36,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: colorOf(a.type),
+                    color: colorOf(context, a.type),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     a.name.isEmpty
                         ? '?'
                         : a.name.characters.first.toUpperCase(),
-                    style: const TextStyle(
-                      color: Color(0xFF111111),
+                    style: TextStyle(
+                      color: context.colors.onPink,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
@@ -322,8 +321,8 @@ class _AccountRow extends StatelessWidget {
                         a.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: LafleurColors.text,
+                        style: TextStyle(
+                          color: context.colors.text,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
@@ -334,13 +333,13 @@ class _AccountRow extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: relink
-                            ? const TextStyle(
-                                color: LafleurColors.pink,
+                            ? TextStyle(
+                                color: context.colors.pink,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                               )
-                            : const TextStyle(
-                                color: Color(0xFF999999),
+                            : TextStyle(
+                                color: context.colors.textMuted,
                                 fontSize: 12,
                               ),
                       ),
@@ -355,16 +354,19 @@ class _AccountRow extends StatelessWidget {
                     s.accountState(st),
                     style: TextStyle(
                       color: st == AccountState.connected
-                          ? const Color(0xFF5FD16F)
-                          : const Color(0xFF666666),
+                          ? context.colors.ok
+                          : context.colors.textFaint,
                       fontSize: 12,
                     ),
                   ),
                 if (!relink) ...[
                   const SizedBox(width: 10),
-                  const Text(
+                  Text(
                     '›',
-                    style: TextStyle(color: Color(0xFF666666), fontSize: 16),
+                    style: TextStyle(
+                      color: context.colors.textFaint,
+                      fontSize: 16,
+                    ),
                   ),
                 ],
               ],
@@ -389,13 +391,13 @@ class _Chip extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        border: Border.all(color: LafleurColors.pink),
+        border: Border.all(color: context.colors.pink),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: LafleurColors.pink,
+        style: TextStyle(
+          color: context.colors.pink,
           fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
@@ -420,13 +422,13 @@ class _WidePill extends StatelessWidget {
         height: 40,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFF444444)),
+          border: Border.all(color: context.colors.border),
           borderRadius: BorderRadius.circular(22),
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: LafleurColors.text,
+          style: TextStyle(
+            color: context.colors.text,
             fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
@@ -461,18 +463,18 @@ class _Check extends StatelessWidget {
             height: 22,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: on ? LafleurColors.pink : null,
+              color: on ? context.colors.pink : null,
               border: Border.all(
-                color: on ? LafleurColors.pink : const Color(0xFF555555),
+                color: on ? context.colors.pink : context.colors.outlineDim,
                 width: 2,
               ),
               borderRadius: BorderRadius.circular(6),
             ),
             child: on
-                ? const Icon(
+                ? Icon(
                     Icons.check_rounded,
                     size: 15,
-                    color: Color(0xFF111111),
+                    color: context.colors.onPink,
                   )
                 : null,
           ),
@@ -483,7 +485,7 @@ class _Check extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: on ? LafleurColors.text : const Color(0xFF999999),
+                color: on ? context.colors.text : context.colors.textMuted,
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
               ),
@@ -547,7 +549,7 @@ class ClassicModeChoice extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
-            child: Text(s.classicModeNote, style: phoneHint),
+            child: Text(s.classicModeNote, style: phoneHint(context)),
           ),
         ],
       ),

@@ -25,8 +25,6 @@ import 'phone_shell.dart';
 enum _Missing { cancel, find, adopt }
 
 const _gib = 1024 * 1024 * 1024;
-const _red = Color(0xFFFF6B6B);
-const _dim = Color(0xFF666666);
 
 /// Un album gardé (ou en partie) : ce qui est fini, ce que ça pèse.
 class _Kept {
@@ -291,40 +289,37 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     final yes = await showDialog<_Missing>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF232323),
+        backgroundColor: context.colors.sheet,
         title: Text(
           s.oldFolderMissing,
-          style: const TextStyle(
-            color: LafleurColors.text,
+          style: TextStyle(
+            color: context.colors.text,
             fontSize: 17,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: Text(
           s.oldFolderMissingExplain,
-          style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 14),
+          style: TextStyle(color: context.colors.textLabel, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(_Missing.cancel),
-            child: Text(
-              s.cancel,
-              style: const TextStyle(color: LafleurColors.text),
-            ),
+            child: Text(s.cancel, style: TextStyle(color: context.colors.text)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(_Missing.find),
             child: Text(
               s.findOldFolder,
-              style: const TextStyle(color: LafleurColors.text),
+              style: TextStyle(color: context.colors.text),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(_Missing.adopt),
             child: Text(
               s.useThisFolder,
-              style: const TextStyle(
-                color: LafleurColors.pink,
+              style: TextStyle(
+                color: context.colors.pink,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -440,11 +435,11 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     final remove = await showModalBottomSheet<bool>(
       context: context,
       useRootNavigator: true,
-      backgroundColor: const Color(0xFF232323),
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: context.colors.sheet,
+      barrierColor: context.colors.scrim,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-        side: BorderSide(color: Color(0xFF3A3A3A)),
+        side: BorderSide(color: context.colors.borderSoft),
       ),
       builder: (ctx) => SafeArea(
         top: false,
@@ -460,7 +455,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                   height: 5,
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF555555),
+                    color: context.colors.outlineDim,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -486,7 +481,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                     padding: const EdgeInsets.all(12),
                     child: Text(
                       s.removeFromDevice(onIphone, tablet: onTablet),
-                      style: const TextStyle(fontSize: 16, color: _red),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: context.colors.danger,
+                      ),
                     ),
                   ),
                 ),
@@ -547,7 +545,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
               s.usedOf(s.size(d.used), s.size(limit)),
-              style: const TextStyle(fontSize: 13, color: Color(0xFFCCCCCC)),
+              style: TextStyle(fontSize: 13, color: context.colors.textBody),
             ),
           ),
           Padding(
@@ -558,8 +556,8 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                 key: const Key('gauge'),
                 value: gauge,
                 minHeight: 8,
-                color: LafleurColors.pink,
-                backgroundColor: const Color(0xFF2A2A2A),
+                color: context.colors.pink,
+                backgroundColor: context.colors.raised,
               ),
             ),
           ),
@@ -576,9 +574,9 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 4,
-              activeTrackColor: LafleurColors.pink,
-              inactiveTrackColor: const Color(0xFF333333),
-              thumbColor: Colors.white,
+              activeTrackColor: context.colors.pink,
+              inactiveTrackColor: context.colors.divider,
+              thumbColor: context.colors.thumb,
               thumbShape: const RoundSliderThumbShape(
                 enabledThumbRadius: 11,
                 elevation: 0,
@@ -610,10 +608,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(s.size(_gib), style: _lt),
+                Text(s.size(_gib), style: _lt(context)),
                 Text(
                   '${s.allTheFreeSpace} · ${s.size(maxGb * _gib)}',
-                  style: _lt,
+                  style: _lt(context),
                 ),
               ],
             ),
@@ -635,11 +633,12 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     );
   }
 
-  static const _lt = TextStyle(color: Color(0xFF999999), fontSize: 12);
+  static TextStyle _lt(BuildContext context) =>
+      TextStyle(color: context.colors.textMuted, fontSize: 12);
 
   Widget _hint(String text, {double top = 10}) => Padding(
     padding: EdgeInsets.fromLTRB(4, top, 4, 0),
-    child: Text(text, style: _lt.copyWith(height: 1.5)),
+    child: Text(text, style: _lt(context).copyWith(height: 1.5)),
   );
 
   Widget _current(_Data d, Strings s) {
@@ -660,7 +659,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: LafleurColors.bar,
+            color: context.colors.bar,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
@@ -685,7 +684,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                       '${t.album} · ${active ? s.mbOf((total * shown).round(), total) : s.size(total)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _lt,
+                      style: _lt(context),
                     ),
                     const SizedBox(height: 8),
                     ClipRRect(
@@ -694,8 +693,8 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                         key: const Key('downloadProgress'),
                         value: shown,
                         minHeight: 4,
-                        color: LafleurColors.pink,
-                        backgroundColor: const Color(0xFF333333),
+                        color: context.colors.pink,
+                        backgroundColor: context.colors.divider,
                       ),
                     ),
                     if (downloader != null && downloader.accessDenied)
@@ -703,7 +702,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           s.storageDenied,
-                          style: const TextStyle(color: _red, fontSize: 12),
+                          style: TextStyle(
+                            color: context.colors.danger,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                   ],
@@ -723,7 +725,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                     child: Icon(
                       active ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       size: 22,
-                      color: const Color(0xFFBBBBBB),
+                      color: context.colors.textLabel,
                     ),
                   ),
                 ),
@@ -751,13 +753,13 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 16),
         decoration: BoxDecoration(
-          color: LafleurColors.pink,
+          color: context.colors.pink,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           s.removeFromDevice(onIphone, tablet: onTablet),
-          style: const TextStyle(
-            color: LafleurColors.ink,
+          style: TextStyle(
+            color: context.colors.ink,
             fontSize: 13,
             fontWeight: FontWeight.w700,
           ),
@@ -796,13 +798,13 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: LafleurColors.pink,
+                            color: context.colors.pink,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             s.top100Tag,
-                            style: const TextStyle(
-                              color: LafleurColors.ink,
+                            style: TextStyle(
+                              color: context.colors.ink,
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                             ),
@@ -810,10 +812,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                         ),
                       ] else if (k.full) ...[
                         const SizedBox(width: 6),
-                        const Icon(
+                        Icon(
                           Icons.arrow_downward_rounded,
                           size: 14,
-                          color: LafleurColors.pink,
+                          color: context.colors.pink,
                         ),
                       ],
                     ],
@@ -822,7 +824,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                 Text(
                   info,
                   maxLines: 1,
-                  style: const TextStyle(color: _dim, fontSize: 12),
+                  style: TextStyle(
+                    color: context.colors.textFaint,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -846,13 +851,13 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                 f.name.isEmpty ? s.unknownArtist : f.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _red,
+                style: TextStyle(
+                  color: context.colors.danger,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              Text(s.notFoundOnServer, style: _lt),
+              Text(s.notFoundOnServer, style: _lt(context)),
             ],
           ),
         ),
@@ -864,13 +869,13 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              border: Border.all(color: LafleurColors.pink),
+              border: Border.all(color: context.colors.pink),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
               s.retry,
-              style: const TextStyle(
-                color: LafleurColors.pink,
+              style: TextStyle(
+                color: context.colors.pink,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -882,7 +887,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   );
 
   Widget _confirmRow(Strings s, AppScope app) => Material(
-    color: LafleurColors.bar,
+    color: context.colors.bar,
     borderRadius: BorderRadius.circular(10),
     child: Padding(
       padding: const EdgeInsets.fromLTRB(14, 6, 10, 6),
@@ -897,8 +902,8 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           Switch(
             key: const Key('confirmRemoveSwitch'),
             value: app.settings?.confirmRemove ?? true,
-            activeThumbColor: Colors.white,
-            activeTrackColor: LafleurColors.pink,
+            activeThumbColor: context.colors.thumb,
+            activeTrackColor: context.colors.pink,
             onChanged: (v) {
               app.settings?.confirmRemove = v;
               app.saveSettings?.call();
@@ -911,7 +916,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   );
 
   Widget _folderRow(Strings s) => Material(
-    color: LafleurColors.bar,
+    color: context.colors.bar,
     borderRadius: BorderRadius.circular(10),
     child: InkWell(
       borderRadius: BorderRadius.circular(10),
@@ -932,7 +937,11 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
                 ),
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: _dim),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: context.colors.textFaint,
+            ),
           ],
         ),
       ),
@@ -953,7 +962,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
             alignment: Alignment.center,
             padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF444444)),
+              border: Border.all(color: context.colors.border),
               borderRadius: BorderRadius.circular(22),
             ),
             child: Text(

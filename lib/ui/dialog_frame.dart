@@ -13,20 +13,17 @@ class DialogFrame extends StatelessWidget {
     required this.onConfirm,
     this.width = 520,
     this.inset = const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-    this.confirmColor = LafleurColors.pink,
+    this.confirmColor,
   });
   final String title, cancel, confirm;
   final List<Widget> children;
   final VoidCallback onConfirm;
   final double width;
   final EdgeInsets inset; // marge autour de la fenêtre (étroite sur téléphone)
-  final Color confirmColor;
+  final Color? confirmColor; // le rose du mode, par défaut
 
-  static const body = TextStyle(
-    color: Color(0xFFBBBBBB),
-    fontSize: 14,
-    height: 1.5,
-  );
+  static TextStyle body(BuildContext context) =>
+      TextStyle(color: context.colors.textLabel, fontSize: 14, height: 1.5);
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +32,10 @@ class DialogFrame extends StatelessWidget {
     );
     return Dialog(
       insetPadding: inset,
-      backgroundColor: const Color(0xFF1F1F1F),
+      backgroundColor: context.colors.dialog,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFF3A3A3A)),
+        side: BorderSide(color: context.colors.borderSoft),
       ),
       child: SizedBox(
         width: width,
@@ -64,8 +61,8 @@ class DialogFrame extends StatelessWidget {
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       shape: pill,
-                      foregroundColor: LafleurColors.text,
-                      side: const BorderSide(color: Color(0xFF444444)),
+                      foregroundColor: context.colors.text,
+                      side: BorderSide(color: context.colors.border),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 22,
                         vertical: 14,
@@ -81,8 +78,8 @@ class DialogFrame extends StatelessWidget {
                   FilledButton(
                     style: FilledButton.styleFrom(
                       shape: pill,
-                      backgroundColor: confirmColor,
-                      foregroundColor: const Color(0xFF111111),
+                      backgroundColor: confirmColor ?? context.colors.pink,
+                      foregroundColor: context.colors.onPink,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 22,
                         vertical: 14,
@@ -114,12 +111,12 @@ class NoteBox extends StatelessWidget {
     margin: const EdgeInsets.only(top: 14),
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
-      color: LafleurColors.panel,
+      color: context.colors.panel,
       borderRadius: BorderRadius.circular(8),
     ),
     child: DefaultTextStyle.merge(
-      style: const TextStyle(
-        color: Color(0xFFCCCCCC),
+      style: TextStyle(
+        color: context.colors.textBody,
         fontSize: 13,
         height: 1.8,
       ),

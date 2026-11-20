@@ -37,9 +37,9 @@ class Sidebar extends StatelessWidget {
     final s = app.strings;
     return Container(
       width: 240,
-      decoration: const BoxDecoration(
-        color: LafleurColors.panel,
-        border: Border(right: BorderSide(color: LafleurColors.line)),
+      decoration: BoxDecoration(
+        color: context.colors.panel,
+        border: Border(right: BorderSide(color: context.colors.line)),
       ),
       padding: const EdgeInsets.fromLTRB(12, 18, 12, 12),
       child: StreamBuilder<List<Album>>(
@@ -135,8 +135,8 @@ class _Head extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
     child: Text(
       text,
-      style: const TextStyle(
-        color: LafleurColors.sub,
+      style: TextStyle(
+        color: context.colors.sub,
         fontSize: 11,
         letterSpacing: 0.9,
         fontWeight: FontWeight.w700,
@@ -166,7 +166,7 @@ class _Item extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? LafleurColors.ink : LafleurColors.text;
+    final fg = selected ? context.colors.ink : context.colors.text;
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
@@ -176,7 +176,7 @@ class _Item extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: selected ? LafleurColors.pink : null,
+            color: selected ? context.colors.pink : null,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -202,7 +202,7 @@ class _Item extends StatelessWidget {
                 Text(
                   tag!,
                   style: TextStyle(
-                    color: selected ? LafleurColors.ink : LafleurColors.sub,
+                    color: selected ? context.colors.ink : context.colors.sub,
                     fontSize: 11,
                   ),
                 ),

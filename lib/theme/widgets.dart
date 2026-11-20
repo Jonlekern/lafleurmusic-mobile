@@ -22,7 +22,7 @@ class PillButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = primary ? LafleurColors.ink : LafleurColors.text;
+    final fg = primary ? context.colors.ink : context.colors.text;
     final button = Opacity(
       opacity: onPressed == null ? 0.4 : 1,
       child: InkWell(
@@ -31,8 +31,8 @@ class PillButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
-            color: primary ? LafleurColors.pink : null,
-            border: primary ? null : Border.all(color: const Color(0xFF444444)),
+            color: primary ? context.colors.pink : null,
+            border: primary ? null : Border.all(color: context.colors.border),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -77,14 +77,16 @@ class LafleurChip extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        border: Border.all(color: on ? LafleurColors.pink : LafleurColors.line),
+        border: Border.all(
+          color: on ? context.colors.pink : context.colors.line,
+        ),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
         label,
         style: TextStyle(
           fontSize: 13,
-          color: on ? LafleurColors.pink : LafleurColors.text,
+          color: on ? context.colors.pink : context.colors.text,
         ),
       ),
     ),
@@ -105,9 +107,9 @@ class TitleBar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 52,
     width: double.infinity,
-    decoration: const BoxDecoration(
-      color: LafleurColors.bar,
-      border: Border(bottom: BorderSide(color: LafleurColors.line)),
+    decoration: BoxDecoration(
+      color: context.colors.bar,
+      border: Border(bottom: BorderSide(color: context.colors.line)),
     ),
     padding: const EdgeInsets.symmetric(horizontal: 18),
     child: Stack(

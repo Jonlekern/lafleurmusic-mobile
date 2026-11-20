@@ -24,7 +24,7 @@ class ClassicFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: LafleurColors.bg,
+    backgroundColor: context.colors.bg,
     body: SafeArea(
       child: Column(
         children: [

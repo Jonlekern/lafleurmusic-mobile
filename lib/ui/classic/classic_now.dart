@@ -307,10 +307,10 @@ class _Card extends StatelessWidget {
                   children: [
                     _line(
                       t?.title ?? '',
-                      const TextStyle(
+                      TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        color: LafleurColors.text,
+                        color: context.colors.text,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -341,7 +341,7 @@ class _Card extends StatelessWidget {
             value: '${clock(position)} / ${clock(total)}',
             child: _Bar(
               fraction: f,
-              color: LafleurColors.pink,
+              color: context.colors.pink,
               diamond: scrub,
               fillKey: const Key('classic-now-progress'),
             ),
@@ -361,8 +361,8 @@ class _Card extends StatelessWidget {
               // le losange se voit, il ne se lit pas
               semanticsLabel: s.classicScrub.replaceFirst('◆', '').trim(),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: LafleurColors.pink,
+              style: TextStyle(
+                color: context.colors.pink,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -371,7 +371,11 @@ class _Card extends StatelessWidget {
             Row(
               children: [
                 const ExcludeSemantics(
-                  child: Icon(Icons.volume_mute_rounded, size: 14, color: _grey),
+                  child: Icon(
+                    Icons.volume_mute_rounded,
+                    size: 14,
+                    color: _grey,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -457,7 +461,7 @@ class _Bar extends StatelessWidget {
                   width: 16,
                   height: 16,
                   decoration: BoxDecoration(
-                    color: LafleurColors.pink,
+                    color: context.colors.pink,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

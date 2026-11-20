@@ -97,9 +97,13 @@ class _NoMusicBodyState extends State<NoMusicBody> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final s = app.strings;
-    const grey = TextStyle(color: Color(0xFF999999), fontSize: 13, height: 1.5);
-    const bold = TextStyle(
-      color: Color(0xFFCCCCCC),
+    final grey = TextStyle(
+      color: context.colors.textMuted,
+      fontSize: 13,
+      height: 1.5,
+    );
+    final bold = TextStyle(
+      color: context.colors.textBody,
       fontWeight: FontWeight.w700,
     );
     // iPhone : le chemin de Fichiers tant que le dossier est celui de l'appli ; sinon le dossier choisi
@@ -123,7 +127,11 @@ class _NoMusicBodyState extends State<NoMusicBody> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.music_note_rounded, size: 52, color: Colors.white),
+            Icon(
+              Icons.music_note_rounded,
+              size: 52,
+              color: context.colors.text,
+            ),
             const SizedBox(height: 14),
             Text(
               s.noMusicYet,
@@ -186,13 +194,13 @@ class PinkOutlineButton extends StatelessWidget {
       alignment: wide ? Alignment.center : null,
       padding: EdgeInsets.symmetric(horizontal: wide ? 20 : 28, vertical: 13),
       decoration: BoxDecoration(
-        border: Border.all(color: LafleurColors.pink),
+        border: Border.all(color: context.colors.pink),
         borderRadius: BorderRadius.circular(24),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: LafleurColors.pink,
+        style: TextStyle(
+          color: context.colors.pink,
           fontSize: 15,
           fontWeight: FontWeight.w700,
         ),

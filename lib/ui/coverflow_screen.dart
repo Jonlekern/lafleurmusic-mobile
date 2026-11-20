@@ -190,11 +190,14 @@ class _CoverflowScreenState extends State<CoverflowScreen>
             onHorizontalDragEnd: widget.phone ? (_) => _endScroll() : null,
             onHorizontalDragCancel: widget.phone ? _endScroll : null,
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: RadialGradient(
                   center: Alignment(0, -0.2),
                   radius: 0.9,
-                  colors: [Color(0xFF1D1D1D), Color(0xFF050505)],
+                  colors: [
+                    context.colors.coverGradTop,
+                    context.colors.coverGradBottom,
+                  ],
                 ),
               ),
               child: widget.phone
@@ -239,7 +242,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
         right: 30,
         child: Text(
           s.escToQuit,
-          style: const TextStyle(color: LafleurColors.sub, fontSize: 13),
+          style: TextStyle(color: context.colors.sub, fontSize: 13),
         ),
       ),
       _stage(size, cover, k, size.height * 0.17),
@@ -260,7 +263,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
               const SizedBox(height: 8),
               Text(
                 s.playlistN(album.trackCount),
-                style: const TextStyle(color: LafleurColors.sub, fontSize: 17),
+                style: TextStyle(color: context.colors.sub, fontSize: 17),
               ),
               const SizedBox(height: 22),
               Row(
@@ -285,7 +288,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
               const SizedBox(height: 26),
               Text(
                 s.coverFlowHelp,
-                style: const TextStyle(color: Color(0xFF666666), fontSize: 13),
+                style: TextStyle(color: context.colors.textFaint, fontSize: 13),
               ),
             ],
           ),
@@ -341,12 +344,12 @@ class _CoverflowScreenState extends State<CoverflowScreen>
                       children: [
                         if (kept.data?.contains(album.key) ?? false) ...[
                           const TextSpan(text: ' · '),
-                          const WidgetSpan(
+                          WidgetSpan(
                             alignment: PlaceholderAlignment.middle,
                             child: Icon(
                               Icons.arrow_downward_rounded,
                               size: 13,
-                              color: LafleurColors.pink,
+                              color: context.colors.pink,
                             ),
                           ),
                           TextSpan(
@@ -356,10 +359,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
                         ],
                       ],
                     ),
-                    style: const TextStyle(
-                      color: LafleurColors.sub,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: context.colors.sub, fontSize: 12),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -389,7 +389,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
           child: Text(
             s.coverFlowHelpPhone,
             textAlign: TextAlign.right,
-            style: const TextStyle(color: Color(0xFF888888), fontSize: 11),
+            style: TextStyle(color: context.colors.textDim, fontSize: 11),
           ),
         ),
       ],
@@ -457,10 +457,10 @@ class _CoverflowScreenState extends State<CoverflowScreen>
                   alignment: Alignment.topCenter,
                   heightFactor: widget.phone ? 0.2 : 0.42,
                   child: ShaderMask(
-                    shaderCallback: (r) => const LinearGradient(
+                    shaderCallback: (r) => LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0x47FFFFFF), Color(0x00FFFFFF)],
+                      colors: [context.colors.shine, context.colors.shineFade],
                       stops: [0, 0.9],
                     ).createShader(r),
                     blendMode: BlendMode.dstIn,

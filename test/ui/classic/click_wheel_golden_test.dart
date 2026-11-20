@@ -17,7 +17,7 @@ void main() {
         debugShowCheckedModeBanner: false,
         theme: lafleurTheme(),
         home: Scaffold(
-          backgroundColor: LafleurColors.bg,
+          backgroundColor: LafleurColors.dark.bg,
           body: Center(child: ClickWheel(onRotate: (_) {})),
         ),
       ),

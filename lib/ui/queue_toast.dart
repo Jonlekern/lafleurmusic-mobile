@@ -85,12 +85,12 @@ void showBubble(
               key: key,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF2A2A2A),
-                border: Border.all(color: const Color(0xFF3A3A3A)),
+                color: context.colors.raised,
+                border: Border.all(color: context.colors.borderSoft),
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
-                    color: Color(0x99000000),
+                    color: context.colors.toastShade,
                     blurRadius: 30,
                     offset: Offset(0, 8),
                   ),
@@ -103,8 +103,8 @@ void showBubble(
                       text,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: LafleurColors.text,
+                      style: TextStyle(
+                        color: context.colors.text,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
@@ -166,8 +166,8 @@ class _Action extends StatelessWidget {
     onTap: onTap,
     child: Text(
       label,
-      style: const TextStyle(
-        color: LafleurColors.pink,
+      style: TextStyle(
+        color: context.colors.pink,
         fontSize: 14,
         fontWeight: FontWeight.w700,
       ),

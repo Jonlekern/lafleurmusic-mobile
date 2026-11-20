@@ -42,7 +42,7 @@ class _PlaybackCardState extends State<PlaybackCard> {
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: top
-            ? const Border(top: BorderSide(color: Color(0xFF222222)))
+            ? Border(top: BorderSide(color: context.colors.ruleTop))
             : null,
       ),
       child: Row(
@@ -51,10 +51,10 @@ class _PlaybackCardState extends State<PlaybackCard> {
             key: key,
             value: on,
             onChanged: onChanged,
-            activeThumbColor: Colors.white,
-            activeTrackColor: LafleurColors.pink,
-            inactiveThumbColor: Colors.white,
-            inactiveTrackColor: const Color(0xFF444444),
+            activeThumbColor: context.colors.thumb,
+            activeTrackColor: context.colors.pink,
+            inactiveThumbColor: context.colors.thumb,
+            inactiveTrackColor: context.colors.border,
             trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
           ),
           const SizedBox(width: 16),
@@ -69,10 +69,7 @@ class _PlaybackCardState extends State<PlaybackCard> {
                 const SizedBox(height: 3),
                 Text(
                   hint,
-                  style: const TextStyle(
-                    color: LafleurColors.sub,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: context.colors.sub, fontSize: 13),
                 ),
               ],
             ),
@@ -109,8 +106,8 @@ class _PlaybackCardState extends State<PlaybackCard> {
     return Container(
       padding: const EdgeInsets.fromLTRB(26, 22, 26, 12),
       decoration: BoxDecoration(
-        color: LafleurColors.panel,
-        border: Border.all(color: LafleurColors.line),
+        color: context.colors.panel,
+        border: Border.all(color: context.colors.line),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -151,11 +148,11 @@ class _PlaybackCardState extends State<PlaybackCard> {
                   SizedBox(
                     width: 170,
                     child: SliderTheme(
-                      data: const SliderThemeData(
+                      data: SliderThemeData(
                         trackHeight: 4,
-                        activeTrackColor: LafleurColors.pink,
-                        inactiveTrackColor: Color(0xFF444444),
-                        thumbColor: Colors.white,
+                        activeTrackColor: context.colors.pink,
+                        inactiveTrackColor: context.colors.border,
+                        thumbColor: context.colors.thumb,
                         overlayShape: RoundSliderOverlayShape(
                           overlayRadius: 12,
                         ),

@@ -33,18 +33,20 @@ class MiniPlayer extends StatelessWidget {
             children: [
               Container(
                 height: 3,
-                color: const Color(0xFF333333),
+                color: context.colors.divider,
                 alignment: Alignment.centerLeft,
                 child: FractionallySizedBox(
                   widthFactor: f,
-                  child: Container(color: LafleurColors.pink),
+                  child: Container(color: context.colors.pink),
                 ),
               ),
               Container(
                 height: 64,
-                decoration: const BoxDecoration(
-                  color: LafleurColors.bar,
-                  border: Border(top: BorderSide(color: Colors.black)),
+                decoration: BoxDecoration(
+                  color: context.colors.bar,
+                  border: Border(
+                    top: BorderSide(color: context.colors.hairline),
+                  ),
                 ),
                 padding: const EdgeInsets.only(left: 16, right: 6),
                 child: Row(
@@ -72,8 +74,8 @@ class MiniPlayer extends StatelessWidget {
                                 : t.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF999999),
+                            style: TextStyle(
+                              color: context.colors.textMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -89,17 +91,17 @@ class MiniPlayer extends StatelessWidget {
                             ? Icons.pause_rounded
                             : Icons.play_arrow_rounded,
                         size: 24,
-                        color: LafleurColors.text,
+                        color: context.colors.text,
                       ),
                     ),
                     IconButton(
                       key: const Key('mini-next'),
                       onPressed: app.player.next,
                       visualDensity: VisualDensity.compact,
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.skip_next_rounded,
                         size: 24,
-                        color: LafleurColors.text,
+                        color: context.colors.text,
                       ),
                     ),
                   ],

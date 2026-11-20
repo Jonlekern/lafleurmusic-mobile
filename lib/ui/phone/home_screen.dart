@@ -53,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
       stream: accounts,
       builder: (context, a) {
         final list = a.data;
-        if (list == null) return const ColoredBox(color: LafleurColors.bg);
+        if (list == null) return ColoredBox(color: context.colors.bg);
         // un compte : l'Accueil habituel
         if (list.isNotEmpty) {
           return _home(context);
@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
           stream: _anyTrack,
           builder: (context, t) {
             final any = t.data;
-            if (any == null) return const ColoredBox(color: LafleurColors.bg);
+            if (any == null) return ColoredBox(color: context.colors.bg);
             return any
                 ? _home(context)
                 : PhoneScaffold(
@@ -97,8 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       // tirer la liste vers le bas : synchronise tous les comptes
       body: RefreshIndicator(
-        color: LafleurColors.pink,
-        backgroundColor: LafleurColors.bar,
+        color: context.colors.pink,
+        backgroundColor: context.colors.bar,
         onRefresh: () => app.accountService?.syncAll() ?? Future.value(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -111,13 +111,13 @@ class _HomeScreenState extends State<HomeScreen> {
               style: const TextStyle(fontSize: 14),
               decoration: InputDecoration(
                 hintText: s.search,
-                hintStyle: const TextStyle(
-                  color: Color(0xFF888888),
+                hintStyle: TextStyle(
+                  color: context.colors.textDim,
                   fontSize: 14,
                 ),
                 isDense: true,
                 filled: true,
-                fillColor: LafleurColors.bar,
+                fillColor: context.colors.bar,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 11,
@@ -323,8 +323,8 @@ class _OfflineLabel extends StatelessWidget {
       builder: (_, _) => service.offline
           ? Text(
               app.strings.offlineLabel,
-              style: const TextStyle(
-                color: Color(0xFF999999),
+              style: TextStyle(
+                color: context.colors.textMuted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -364,7 +364,7 @@ class _AccountChipsState extends State<_AccountChips> {
     final picked = await showMenu<DisplayMode>(
       context: context,
       position: pos,
-      color: LafleurColors.bar,
+      color: context.colors.bar,
       items: [
         for (final (m, label) in [
           (DisplayMode.all, s.allAccounts),
@@ -375,7 +375,7 @@ class _AccountChipsState extends State<_AccountChips> {
             child: Text(
               label,
               style: TextStyle(
-                color: mode == m ? LafleurColors.pink : LafleurColors.text,
+                color: mode == m ? context.colors.pink : context.colors.text,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -459,7 +459,7 @@ class PhoneChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = on ? LafleurColors.pink : LafleurColors.text;
+    final fg = on ? context.colors.pink : context.colors.text;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -467,7 +467,7 @@ class PhoneChip extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(12, 6, menu ? 8 : 12, 6),
         decoration: BoxDecoration(
           border: Border.all(
-            color: on ? LafleurColors.pink : const Color(0xFF444444),
+            color: on ? context.colors.pink : context.colors.border,
           ),
           borderRadius: BorderRadius.circular(16),
         ),
@@ -504,8 +504,8 @@ class PhoneSection extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Color(0xFF999999),
+        style: TextStyle(
+          color: context.colors.textMuted,
           fontSize: 11,
           letterSpacing: 1,
           fontWeight: FontWeight.w700,
@@ -538,7 +538,7 @@ class PhoneItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? LafleurColors.ink : LafleurColors.text;
+    final fg = selected ? context.colors.ink : context.colors.text;
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
@@ -551,7 +551,7 @@ class PhoneItem extends StatelessWidget {
             vertical: leading != null ? 11 : 11,
           ),
           decoration: BoxDecoration(
-            color: selected ? LafleurColors.pink : null,
+            color: selected ? context.colors.pink : null,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -578,8 +578,8 @@ class PhoneItem extends StatelessWidget {
                         Icons.arrow_downward_rounded,
                         size: 14,
                         color: selected
-                            ? LafleurColors.ink
-                            : LafleurColors.pink,
+                            ? context.colors.ink
+                            : context.colors.pink,
                       ),
                     ],
                     if (tag != null) ...[
@@ -589,8 +589,8 @@ class PhoneItem extends StatelessWidget {
                         maxLines: 1,
                         style: TextStyle(
                           color: selected
-                              ? LafleurColors.ink
-                              : const Color(0xFF999999),
+                              ? context.colors.ink
+                              : context.colors.textMuted,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
@@ -602,7 +602,7 @@ class PhoneItem extends StatelessWidget {
               Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: selected ? LafleurColors.ink : const Color(0xFF666666),
+                color: selected ? context.colors.ink : context.colors.textFaint,
               ),
             ],
           ),
