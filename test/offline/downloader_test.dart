@@ -68,7 +68,15 @@ class _Device implements Device {
   final announced = <String>[];
   void Function()? onReachable;
   @override
-  Future<Directory> musicRoot() async => root;
+  Future<Directory> keptRoot() async => root;
+  @override
+  Future<Directory> visibleRoot() async => root;
+  @override
+  Future<Directory> privateRoot() async => root;
+  @override
+  Future<void> setKeepInApp(bool value) async {}
+  @override
+  Future<bool> visibleReachable() => rootReachable();
   @override
   Future<bool> ensureAccess({bool readOthers = false}) async {
     ensureCalls++;
@@ -1619,7 +1627,7 @@ void main() {
       await add(_t('1'));
       await d.keep([_t('1')]);
       await d.whenIdle();
-      // the chosen folder is gone: musicRoot() answers with the default one,
+      // the chosen folder is gone: keptRoot() answers with the default one,
       // where the same relative path is somebody else's file
       final other = File('${root.path}/Art/Alb/01 Song 1.mp3');
       expect(other.existsSync(), isTrue);

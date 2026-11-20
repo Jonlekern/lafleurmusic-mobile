@@ -444,7 +444,9 @@ class _Device implements Device {
   _Device(this.root);
   final Directory root;
   @override
-  Future<Directory> musicRoot() async => root;
+  Future<Directory> keptRoot() async => root;
+  @override
+  Future<Directory> visibleRoot() async => root;
   @override
   Future<bool> rootReachable() async => true;
   @override

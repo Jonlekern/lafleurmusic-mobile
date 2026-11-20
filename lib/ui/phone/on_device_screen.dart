@@ -166,7 +166,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     if (device == null || _loadingSpace) return;
     _loadingSpace = true;
     try {
-      final root = await device.musicRoot();
+      final root = await device.keptRoot();
       final free = await device.freeBytes(root.path);
       if (mounted) setState(() => _free = free + used);
     } on Object {
@@ -183,8 +183,9 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     if (device == null) return;
     String? name;
     try {
-      if (app.settings?.musicFolder != null && await device.rootReachable()) {
-        final parts = p.split((await device.musicRoot()).path);
+      if (app.settings?.musicFolder != null &&
+          await device.visibleReachable()) {
+        final parts = p.split((await device.visibleRoot()).path);
         name = parts.skip(math.max(0, parts.length - 2)).join(' › ');
       }
     } on Object {
@@ -212,7 +213,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     final Directory old;
     final PickedFolder? picked;
     try {
-      old = await device.musicRoot();
+      old = await device.visibleRoot();
       picked = await device.pickFolder();
     } on FolderNotLocalException {
       say(messenger, s.folderNotLocal);
@@ -235,7 +236,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     // l'ancien dossier ne répond plus : rien à déplacer, on peut seulement adopter le nouveau
     var reachable = true;
     try {
-      reachable = await device.rootReachable();
+      reachable = await device.visibleReachable();
     } on Object {
       reachable = true; // moveRoot le redemandera
     }

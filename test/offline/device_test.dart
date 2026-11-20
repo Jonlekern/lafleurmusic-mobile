@@ -51,7 +51,7 @@ void main() {
 
   test('no chosen folder: default root, reachable', () async {
     final d = device();
-    expect((await d.musicRoot()).path, '${tmp.path}/def');
+    expect((await d.visibleRoot()).path, '${tmp.path}/def');
     expect(await d.rootReachable(), true);
   });
 
@@ -59,14 +59,14 @@ void main() {
     final x = Directory('${tmp.path}/X')..createSync();
     settings.musicFolder = x.path;
     final d = device();
-    expect((await d.musicRoot()).path, x.path);
+    expect((await d.visibleRoot()).path, x.path);
     expect(await d.rootReachable(), true);
   });
 
   test('Android: vanished folder falls back to default, unreachable', () async {
     settings.musicFolder = '${tmp.path}/gone';
     final d = device();
-    expect((await d.musicRoot()).path, '${tmp.path}/def');
+    expect((await d.visibleRoot()).path, '${tmp.path}/def');
     expect(await d.rootReachable(), false);
   });
 
@@ -80,7 +80,7 @@ void main() {
     await d.commitFolder(c);
     expect(settings.musicFolder, '/storage/1234-ABCD/Music');
     expect(saves, 1);
-    expect((await d.musicRoot()).path, '/storage/1234-ABCD/Music');
+    expect((await d.visibleRoot()).path, '/storage/1234-ABCD/Music');
   });
 
   test('pickFolder stores the bookmark (iOS)', () async {
@@ -133,7 +133,7 @@ void main() {
         ? {'path': '/private/iCloud/Music', 'bookmark': 'new'}
         : null;
     final d = device(ios: true);
-    expect((await d.musicRoot()).path, '/private/iCloud/Music');
+    expect((await d.visibleRoot()).path, '/private/iCloud/Music');
     expect(settings.musicFolder, 'new');
     expect(saves, 1);
   });
@@ -144,7 +144,7 @@ void main() {
         ? throw PlatformException(code: 'bookmark')
         : '${tmp.path}/def';
     final d = device(ios: true);
-    expect((await d.musicRoot()).path, '${tmp.path}/def');
+    expect((await d.visibleRoot()).path, '${tmp.path}/def');
     expect(await d.rootReachable(), false);
   });
 
@@ -170,7 +170,7 @@ void main() {
     expect(settings.musicFolder, isNull);
   });
 
-  test('concurrent musicRoot calls both get the chosen folder (iOS)', () async {
+  test('concurrent visibleRoot calls both get the chosen folder (iOS)', () async {
     settings.musicFolder = 'old';
     native = (c) async {
       if (c.method != 'openBookmark') return '${tmp.path}/def';
@@ -179,8 +179,8 @@ void main() {
     };
     final d = device(ios: true);
     final r = await Future.wait([
-      d.musicRoot(),
-      d.musicRoot(),
+      d.visibleRoot(),
+      d.visibleRoot(),
       d.rootReachable(),
     ]);
     expect((r[0] as Directory).path, '/private/iCloud/Music');
@@ -195,7 +195,7 @@ void main() {
         ? throw MissingPluginException()
         : '${tmp.path}/def';
     final d = device(ios: true);
-    expect((await d.musicRoot()).path, '${tmp.path}/def');
+    expect((await d.visibleRoot()).path, '${tmp.path}/def');
     expect(await d.rootReachable(), false);
   });
 
@@ -218,7 +218,7 @@ void main() {
       'openBookmark' => {'path': x.path},
       _ => null,
     };
-    expect((await d.musicRoot()).path, x.path);
+    expect((await d.visibleRoot()).path, x.path);
     save = () async => throw const FileSystemException('disk full');
     calls.clear();
     await expectLater(
@@ -227,7 +227,7 @@ void main() {
     );
     expect(settings.musicFolder, x.path);
     expect(calls.map((c) => c.method), isNot(contains('commitFolder')));
-    expect((await d.musicRoot()).path, x.path);
+    expect((await d.visibleRoot()).path, x.path);
   });
 
   test('commitFolder: a native failure puts the old choice back, saved', () async {
@@ -244,7 +244,7 @@ void main() {
     );
     expect(settings.musicFolder, 'old');
     expect(saves, 2, reason: 'new value saved, then the old one again');
-    expect((await d.musicRoot()).path, '${tmp.path}/old');
+    expect((await d.visibleRoot()).path, '${tmp.path}/old');
   });
 
   test('ensureAccess: a request that needs no dialog is never held behind a pending one', () async {

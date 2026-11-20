@@ -20,14 +20,14 @@ export '../sources/remote_key.dart' show parseRemoteKey;
 /// (deleted by hand: null, the stream is used).
 Future<String?> Function(String trackPath) keptFile(
   LibraryDb db,
-  Future<Directory> Function() musicRoot,
+  Future<Directory> Function() keptRoot,
 ) => (trackPath) async {
   final row = await db.offlineOf(trackPath);
   final rel = row?.filePath;
   if (row == null || rel == null || row.state != OfflineState.done.name) {
     return null;
   }
-  final file = p.join((await musicRoot()).path, rel);
+  final file = p.join((await keptRoot()).path, rel);
   return await File(file).exists() ? file : null;
 };
 

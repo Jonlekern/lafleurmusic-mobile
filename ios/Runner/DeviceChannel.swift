@@ -30,6 +30,23 @@ final class DeviceChannel: NSObject, UIDocumentPickerDelegate {
       } catch {
         result(FlutterError(code: "default_root", message: nil, details: nil))
       }
+    case "privateRoot":
+      // dossier privé des morceaux gardés : parti avec l'appli, jamais dans la sauvegarde iCloud
+      // (la musique se re-télécharge) ; l'exclusion est remise à chaque appel, elle ne coûte rien
+      do {
+        let support = try FileManager.default.url(
+          for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        var dir = support.appendingPathComponent("LAFLEURMUSIC", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if args?["excludeFromBackup"] as? Bool ?? true {
+          var values = URLResourceValues()
+          values.isExcludedFromBackup = true
+          try dir.setResourceValues(values)
+        }
+        result(dir.path)
+      } catch {
+        result(FlutterError(code: "private_root", message: nil, details: nil))
+      }
     case "pickFolder":
       pickFolder(result)
     case "commitFolder":

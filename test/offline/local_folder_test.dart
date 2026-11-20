@@ -266,4 +266,43 @@ void main() {
     await folder.rescan();
     expect(device.asks, 1);
   });
+
+  group('kept songs inside the app', () {
+    late Directory private;
+    setUp(() {
+      private = Directory('${tmp.path}/private/LAFLEURMUSIC')..createSync(recursive: true);
+      device
+        ..private = private
+        ..keepInApp = true;
+    });
+
+    test('a hand-placed file at a kept song\'s relative path is still a hand-placed file', () async {
+      File('${private.path}/A/B/01 x.mp3')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('kept');
+      final mine = put('A/B/01 x.mp3');
+      await db.upsertTrack(kept('1'));
+      await db.queueOffline(['subsonic://acc/1'], OfflineReason.user);
+      await db.markOfflineDone('subsonic://acc/1', 'A/B/01 x.mp3', 4);
+      await db.addPlay(mine.path, DateTime(2026));
+      await folder.rescan(); // listed
+      await folder.rescan(); // and not healed as a duplicate of the kept song
+      expect((await db.localTracks()).single.path, mine.path);
+      expect((await db.select(db.playCounts).get()).single.path, mine.path);
+      expect(reader.reads, [mine.path], reason: 'the private folder is never read');
+    });
+
+    test('kept songs in the app never remove hand-placed tracks, and a vanished visible folder removes nothing', () async {
+      final mine = put('a.mp3');
+      await folder.rescan();
+      expect(await db.localTracks(), hasLength(1));
+      mine.deleteSync();
+      device.reachable = false;
+      await folder.rescan();
+      expect(await db.localTracks(), hasLength(1), reason: 'visible folder unreachable: nothing removed');
+      device.reachable = true;
+      await folder.rescan();
+      expect(await db.localTracks(), isEmpty);
+    });
+  });
 }

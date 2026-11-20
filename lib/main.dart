@@ -79,7 +79,7 @@ Future<LafleurApp> buildLafleurApp({
     settings: settings,
     saveSettings: () => settings.save(settingsFile),
   );
-  final keptCopy = keptFile(db, device.musicRoot);
+  final keptCopy = keptFile(db, device.keptRoot);
   final resolver = MediaResolver(
     accounts.source,
     localCopy: keptCopy,
@@ -158,15 +158,18 @@ Future<LafleurApp> buildLafleurApp({
         downloader.targetPath, // le fichier en cours n'est pas posé à la main
   );
   // le lancement relit déjà ; une erreur du téléphone n'empêche jamais l'appli de démarrer
+  // le dossier relu, et celui des copies gardées (que la relecture laisse de côté)
+  Future<String> roots() async =>
+      '${(await device.visibleRoot()).path}\n${(await device.keptRoot()).path}';
   String? scannedRoot;
   try {
-    scannedRoot = (await device.musicRoot()).path;
+    scannedRoot = await roots();
   } on Object {
     scannedRoot = null;
   }
   accountService.addListener(() async {
     try {
-      final path = (await device.musicRoot()).path;
+      final path = await roots();
       if (path == scannedRoot) return;
       scannedRoot = path;
       unawaited(localFolder.rescan());

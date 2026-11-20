@@ -307,7 +307,7 @@ class Downloader extends ChangeNotifier {
     await db.queueOffline(done, reason);
     final need = fresh.fold<int>(0, (s, t) => s + _sizeOf(t));
     final limit = (await settings()).storageLimitBytes;
-    final root = await device.musicRoot();
+    final root = await device.keptRoot();
     // la file d'attente déjà promise compte aussi dans la limite
     Future<int> overLimit() async =>
         await db.offlineBytes() +
@@ -678,7 +678,7 @@ class Downloader extends ChangeNotifier {
       throw StateError('unknown track'); // pas un refus du serveur
     }
     final source = await resolver.source(key.$1);
-    final root = await device.musicRoot();
+    final root = await device.keptRoot();
 
     // Jellyfin: the token is read synchronously below, so it is loaded (or signed in) first
     final auth = source is AuthRenewable ? source as AuthRenewable : null;
@@ -946,7 +946,7 @@ class Downloader extends ChangeNotifier {
       _sweeping = true;
       try {
         if (await device.rootReachable()) {
-          final root = await device.musicRoot();
+          final root = await device.keptRoot();
           if (await root.exists()) {
             await for (final e in root.list(
               recursive: true,
@@ -1011,10 +1011,10 @@ class Downloader extends ChangeNotifier {
       a.cancel();
       await a.done;
     }
-    // dossier choisi injoignable : musicRoot() donne le dossier par défaut, où ces chemins
+    // dossier choisi injoignable : keptRoot() donne le dossier par défaut, où ces chemins
     // désignent peut-être d'autres fichiers. Les lignes sont retirées, aucun fichier effacé.
     if (!await device.rootReachable()) return;
-    final root = await device.musicRoot();
+    final root = await device.keptRoot();
     for (final (:rel, :alike) in taken.values) {
       if (rel == null) continue;
       final file = _inside(root, rel);
@@ -1094,7 +1094,7 @@ class Downloader extends ChangeNotifier {
     _active?.cancel();
     try {
       await whenIdle();
-      // [from] vient de musicRoot() : injoignable, c'est le dossier par défaut, pas celui des copies
+      // [from] vient de keptRoot() : injoignable, c'est le dossier par défaut, pas celui des copies
       if (!await device.rootReachable()) {
         await _releaseQuietly();
         return const KeepResult.failed();

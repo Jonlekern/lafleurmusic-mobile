@@ -9,11 +9,31 @@ import '../settings.dart';
 /// change quand l'appli est mise à jour ou restaurée, la partie après `docs://` reste.
 const docsScheme = 'docs://';
 
-/// Ce que l'appli demande au téléphone : dossier des copies, sélecteur, place libre.
+/// Clé d'un fichier du dossier privé de l'appli ([Device.privateRoot]) : la partie après
+/// `app://` est relative à ce dossier, son chemin absolu peut changer (conteneur iOS).
+const appScheme = 'app://';
+
+/// Ce que l'appli demande au téléphone : dossiers des copies, sélecteur, place libre.
+///
+/// Deux racines : [keptRoot] (où vont les morceaux gardés et leurs `.m3u8`) et
+/// [visibleRoot] (le dossier que l'utilisateur voit, relu pour les fichiers posés à la main).
+/// Elles sont la même tant que le réglage `keepInApp` est faux.
 abstract class Device {
-  /// Le dossier choisi s'il est accessible, sinon le dossier par défaut (Android : peut-être
-  /// pas encore créé, faute de droit d'écriture ; le premier téléchargement le crée).
-  Future<Directory> musicRoot();
+  /// Où le téléchargeur range les morceaux gardés : [privateRoot] avec `keepInApp`,
+  /// sinon [visibleRoot].
+  Future<Directory> keptRoot();
+
+  /// Le dossier visible : le dossier choisi s'il est accessible, sinon le dossier par défaut
+  /// (Android : peut-être pas encore créé, faute de droit d'écriture ; le premier
+  /// téléchargement le crée).
+  Future<Directory> visibleRoot();
+
+  /// Le dossier privé de l'appli, effacé avec elle (iOS : exclu de la sauvegarde iCloud ;
+  /// Android : jamais annoncé à la médiathèque).
+  Future<Directory> privateRoot();
+
+  /// Enregistre le réglage `keepInApp` ; une erreur d'enregistrement le laisse comme avant.
+  Future<void> setKeepInApp(bool value);
 
   /// Sélecteur de dossier du système. Renvoie un candidat (sans changer de dossier),
   /// ou null si annulé. Lève [FolderNotLocalException] si le dossier n'est pas sur le
@@ -23,26 +43,34 @@ abstract class Device {
   /// Abandonne le candidat (déplacement raté ou annulé) : iOS ferme son accès.
   Future<void> releaseCandidate();
 
-  /// Adopte le candidat : [musicRoot] renvoie ce dossier, le choix est enregistré.
+  /// Adopte le candidat : [visibleRoot] renvoie ce dossier, le choix est enregistré.
   Future<void> commitFolder(PickedFolder c);
 
-  /// Faux si le dossier choisi ne répond plus (carte SD retirée, signet périmé) :
-  /// [musicRoot] retombe alors sur le dossier par défaut.
+  /// Faux si le dossier des morceaux gardés ne répond plus : le dossier choisi est parti
+  /// (carte SD retirée, signet périmé) et [keptRoot] est le dossier visible. Le dossier
+  /// privé répond toujours.
   Future<bool> rootReachable();
+
+  /// Faux si le dossier choisi ne répond plus : [visibleRoot] retombe alors sur le dossier
+  /// par défaut.
+  Future<bool> visibleReachable();
 
   /// Android : demande les droits de stockage (écriture jusqu'à l'API 29 ; lecture des
   /// autres fichiers si [readOthers]). Vrai si accordés ou inutiles. iOS : toujours vrai.
   Future<bool> ensureAccess({bool readOthers = false});
 
-  /// `docs://rel` → chemin actuel dans Documents (iPhone) ; tout autre chemin tel quel.
+  /// `docs://rel` → chemin actuel dans Documents (iPhone), `app://rel` → dans le dossier
+  /// privé ; tout autre chemin tel quel.
   Future<String> absolutePath(String key);
 
-  /// Inverse : un fichier dans Documents (iPhone) reçoit sa clé `docs://rel` ; les autres restent absolus.
+  /// Inverse : un fichier du dossier privé reçoit sa clé `app://rel`, un fichier dans
+  /// Documents (iPhone) `docs://rel` ; les autres restent absolus.
   Future<String> keyFor(String absolutePath);
 
   Future<int> freeBytes(String path);
 
-  /// Android : prévient la médiathèque du système d'un nouveau fichier. iOS : rien.
+  /// Android : prévient la médiathèque du système d'un nouveau fichier (jamais pour le
+  /// dossier privé). iOS : rien.
   Future<void> announce(String path);
 }
 
@@ -115,13 +143,56 @@ class ChannelDevice implements Device {
   }
 
   @override
-  Future<Directory> musicRoot() async {
+  Future<Directory> visibleRoot() async {
     await _resolve();
     return _chosen ?? await _default();
   }
 
   @override
-  Future<bool> rootReachable() async {
+  Future<Directory> keptRoot() =>
+      settings.keepInApp ? privateRoot() : visibleRoot();
+
+  String? _private; // dernier chemin du dossier privé rendu par le natif
+
+  /// Le natif crée le dossier et (iOS) le remarque exclu de la sauvegarde à chaque appel.
+  @override
+  Future<Directory> privateRoot() async {
+    final path = (await _ch.invokeMethod<String>('privateRoot', {
+      'excludeFromBackup': true,
+    }))!;
+    _private = path;
+    return Directory(path);
+  }
+
+  /// Le dossier privé pour les clés `app://`, ou null si le téléphone ne le donne pas.
+  Future<String?> _privatePath() async {
+    final known = _private;
+    if (known != null) return known;
+    try {
+      return (await privateRoot()).path;
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> setKeepInApp(bool value) async {
+    final before = settings.keepInApp;
+    settings.keepInApp = value;
+    try {
+      await saveSettings();
+    } on Object {
+      settings.keepInApp = before;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> rootReachable() async =>
+      settings.keepInApp || await visibleReachable();
+
+  @override
+  Future<bool> visibleReachable() async {
     await _resolve();
     return settings.musicFolder == null || _chosen != null;
   }
@@ -208,12 +279,23 @@ class ChannelDevice implements Device {
   Future<String> _docs() async => p.dirname((await _default()).path);
 
   @override
-  Future<String> absolutePath(String key) async => key.startsWith(docsScheme)
-      ? p.join(await _docs(), key.substring(docsScheme.length))
-      : key;
+  Future<String> absolutePath(String key) async {
+    if (key.startsWith(docsScheme)) {
+      return p.join(await _docs(), key.substring(docsScheme.length));
+    }
+    if (key.startsWith(appScheme)) {
+      final priv = await _privatePath();
+      if (priv != null) return p.join(priv, key.substring(appScheme.length));
+    }
+    return key;
+  }
 
   @override
   Future<String> keyFor(String absolutePath) async {
+    final priv = await _privatePath();
+    if (priv != null && p.isWithin(priv, absolutePath)) {
+      return '$appScheme${p.posix.joinAll(p.split(p.relative(absolutePath, from: priv)))}';
+    }
     if (!_ios) return absolutePath;
     final docs = await _docs();
     if (!p.isWithin(docs, absolutePath)) return absolutePath;
@@ -227,6 +309,10 @@ class ChannelDevice implements Device {
   @override
   Future<void> announce(String path) async {
     if (_ios) return;
+    final priv = await _privatePath();
+    if (priv != null && (p.equals(priv, path) || p.isWithin(priv, path))) {
+      return; // le dossier privé n'est jamais montré à la médiathèque
+    }
     await _ch.invokeMethod<void>('announce', {'path': path});
   }
 }

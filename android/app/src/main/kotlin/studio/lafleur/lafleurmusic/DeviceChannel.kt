@@ -36,6 +36,11 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
                 dir.mkdirs()
                 result.success(dir.path)
             }
+            "privateRoot" -> {
+                val dir = privateRoot()
+                dir.mkdirs()
+                result.success(dir.path)
+            }
             "pickFolder" -> pickFolder(result)
             "ensureAccess" -> ensureAccess(call.argument<Boolean>("readOthers") == true, result)
             "freeBytes" -> {
@@ -55,10 +60,35 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
             }
             "announce" -> {
                 val path = call.argument<String>("path")
-                if (path != null) MediaScannerConnection.scanFile(activity, arrayOf(path), null, null)
+                // le dossier privé n'est jamais montré à la médiathèque
+                if (path != null && !isPrivate(path)) {
+                    MediaScannerConnection.scanFile(activity, arrayOf(path), null, null)
+                }
                 result.success(null)
             }
             else -> result.notImplemented()
+        }
+    }
+
+    /**
+     * Dossier privé des morceaux gardés : effacé à la désinstallation, sans permission.
+     * Sans stockage externe (rare), le stockage interne de l'appli.
+     */
+    private fun privateRoot(): File {
+        val base = activity.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: activity.filesDir
+        return File(base, "LAFLEURMUSIC")
+    }
+
+    private fun isPrivate(path: String): Boolean {
+        val target = File(path).absoluteFile
+        val roots = listOfNotNull(activity.getExternalFilesDir(null), activity.filesDir)
+        return roots.any { root ->
+            var f: File? = target
+            while (f != null) {
+                if (f == root.absoluteFile) return@any true
+                f = f.parentFile
+            }
+            false
         }
     }
 

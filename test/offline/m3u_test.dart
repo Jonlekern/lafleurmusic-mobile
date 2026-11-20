@@ -13,7 +13,9 @@ class _Device implements Device {
   bool reachable = true;
   final announced = <String>[];
   @override
-  Future<Directory> musicRoot() async => root;
+  Future<Directory> keptRoot() async => root;
+  @override
+  Future<Directory> visibleRoot() async => root;
   @override
   Future<bool> rootReachable() async => reachable;
   @override

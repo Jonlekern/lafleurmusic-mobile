@@ -637,6 +637,25 @@ void main() {
         expect(service.playableNow(tr('docs://LAFLEURMUSIC/y.mp3')), isFalse);
       });
 
+      test('kept inside the app: copies and app:// orphans follow the private folder', () async {
+        final private = Directory('${tmp.path}/private')..createSync();
+        device
+          ..private = private
+          ..keepInApp = true;
+        await service.refreshRoot();
+        File('${private.path}/Art/x.mp3')
+          ..createSync(recursive: true)
+          ..writeAsBytesSync([1]);
+        expect(service.playableNow(tr('app://Art/x.mp3')), isTrue);
+        expect(service.playableNow(tr('app://Art/y.mp3')), isFalse);
+        final k = 'subsonic://${a.id}/s1';
+        await db.queueOffline([k], OfflineReason.user);
+        await db.markOfflineDone(k, 'Art/x.mp3', 1);
+        await pumpEventQueue();
+        await service.checkAll([a.id]); // the server is gone: only the copy can play
+        expect(service.playableNow(tr(k, acc: a.id)), isTrue);
+      });
+
       test('server track without copy: playable unless the account is absent', () async {
         final k = tr('subsonic://${a.id}/s9', acc: a.id);
         expect(service.playableNow(k), isTrue, reason: 'not tested yet');

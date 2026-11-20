@@ -9,8 +9,10 @@ import '../tags/tag_reader.dart';
 import 'device.dart';
 import 'paths.dart';
 
-/// Les fichiers posés à la main dans LAFLEURMUSIC/ deviennent des morceaux `local`.
-/// Lecture seule : un fichier posé n'est jamais écrit, renommé ni effacé.
+/// Les fichiers posés à la main dans LAFLEURMUSIC/ (le dossier visible) deviennent des
+/// morceaux `local`. Lecture seule : un fichier posé n'est jamais écrit, renommé ni effacé.
+/// Les morceaux gardés sont à part : leurs chemins sont relatifs au dossier des copies
+/// ([Device.keptRoot]), le dossier visible lui-même ou le dossier privé de l'appli.
 class LocalFolder {
   LocalFolder({
     required this.db,
@@ -25,13 +27,15 @@ class LocalFolder {
   /// Le fichier que le téléchargeur est en train de ranger (Downloader.targetPath).
   final String? Function()? inFlight;
 
-  Future<bool>? _access; // la permission n'est demandée qu'une fois par lancement
+  Future<bool>?
+  _access; // la permission n'est demandée qu'une fois par lancement
 
   Future<bool> _ensureAccess() async {
     try {
       return await (_access ??= device.ensureAccess(readOthers: true));
     } on Object {
-      _access = null; // demande déjà en cours, plugin absent… : refusé cette fois
+      _access =
+          null; // demande déjà en cours, plugin absent… : refusé cette fois
       return false;
     }
   }
@@ -62,14 +66,17 @@ class LocalFolder {
   Future<void> _scan() async {
     // refus : on ne lit que nos propres fichiers, sans rien dire
     final access = await _ensureAccess();
-    final reachable = await device.rootReachable();
-    final root = await device.musicRoot();
+    final reachable = await device.visibleReachable();
+    final root = await device.visibleRoot();
     if (!await root.exists()) return;
+    // dans l'appli, les copies ne sont jamais dans le dossier relu : un fichier posé au même
+    // chemin relatif reste un fichier posé
+    final kept = await device.keptRoot();
 
     // nos copies gardées (et leurs téléchargements en cours) ne sont pas des fichiers posés
     Future<Set<String>> oursNow() async => {
       for (final o in await db.offlineRows())
-        if (o.filePath != null) p.join(root.path, o.filePath!),
+        if (o.filePath != null) p.join(kept.path, o.filePath!),
       ?inFlight?.call(),
     };
     var ours = await oursNow();
@@ -121,7 +128,7 @@ class LocalFolder {
     final done = {
       for (final o in await db.offlineRows())
         if (o.state == OfflineState.done.name && o.filePath != null)
-          p.join(root.path, o.filePath!): o.trackPath,
+          p.join(kept.path, o.filePath!): o.trackPath,
     };
     // (relu : un doublon d'un lot précédent de ce même tour compte aussi)
     final dupeTo = <String, String>{}; // clé du doublon → morceau du serveur

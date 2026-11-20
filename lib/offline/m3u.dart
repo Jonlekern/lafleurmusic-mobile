@@ -64,7 +64,7 @@ class PlaylistFiles {
     final kept = await db.keptPlaylistRows();
     if (kept.isEmpty) return;
     if (!await device.rootReachable()) return;
-    final root = await device.musicRoot();
+    final root = await device.keptRoot();
     final dir = Directory(p.join(root.path, folder));
     // les noms déjà pris par nos fichiers (minuscules : iOS et Android ignorent la casse)
     final ours = {
@@ -204,7 +204,7 @@ class PlaylistFiles {
     ];
     if (k.isEmpty) return;
     if (await device.rootReachable()) {
-      await _delete(await device.musicRoot(), k.single.fileName);
+      await _delete(await device.keptRoot(), k.single.fileName);
     }
     await db.dropKeptPlaylist(accountId, playlistId);
   });

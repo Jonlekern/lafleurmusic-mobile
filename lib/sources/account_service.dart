@@ -185,7 +185,7 @@ class AccountService extends ChangeNotifier {
   static Future<CopyRoot?> _copyRootOf(Device d) async {
     try {
       if (!await d.rootReachable()) return null;
-      return CopyRoot((await d.musicRoot()).path, d.keyFor);
+      return CopyRoot((await d.keptRoot()).path, d.keyFor);
     } on Object {
       return null;
     }
@@ -246,7 +246,7 @@ class AccountService extends ChangeNotifier {
   }
 
   Map<String, OfflineRow> _kept = const {};
-  String? _root, _docs;
+  String? _root, _docs, _app;
   CopyRoot?
   _copyRoot; // the reachable copies' folder, as of the last [refreshRoot]
   StreamSubscription<Map<String, OfflineRow>>? _keptSub;
@@ -288,14 +288,16 @@ class AccountService extends ChangeNotifier {
     });
   }
 
-  /// Reads the copies' folder and the Documents folder again (after a folder change).
+  /// Reads the kept copies' folder, the Documents and private folders again (after a folder change).
   /// A reachable folder also settles the tracks of accounts removed while it was unreachable.
   Future<void> refreshRoot() async {
     final d = device;
     if (d != null) {
       try {
-        _root = (await d.musicRoot()).path;
+        _root = (await d.keptRoot()).path;
         _docs = await d.absolutePath(docsScheme);
+        final app = await d.absolutePath(appScheme);
+        _app = app == appScheme ? null : app;
         final root = _copyRoot = await _copyRootOf(d);
         if (root != null) await _db.adoptOrphans(root);
       } on Object {
@@ -307,9 +309,15 @@ class AccountService extends ChangeNotifier {
 
   bool _disposed = false;
 
-  String _absolute(String path) => path.startsWith(docsScheme) && _docs != null
-      ? p.join(_docs!, path.substring(docsScheme.length))
-      : path;
+  String _absolute(String path) {
+    if (path.startsWith(docsScheme) && _docs != null) {
+      return p.join(_docs!, path.substring(docsScheme.length));
+    }
+    if (path.startsWith(appScheme) && _app != null) {
+      return p.join(_app!, path.substring(appScheme.length));
+    }
+    return path;
+  }
 
   /// Can this track start now? A local file: it exists. A server track: one of its rows
   /// (the same song on other accounts, a file on the phone: [MediaResolver.media]) can — a

@@ -29,6 +29,7 @@ class AppSettings {
     this.crossfadeSeconds = 5,
     this.storageLimitBytes = defaultStorageLimitBytes,
     this.musicFolder,
+    this.keepInApp = false,
     this.displayMode = DisplayMode.all,
     this.oneAccount,
     this.confirmRemove = true,
@@ -57,6 +58,7 @@ class AppSettings {
   storageLimitBytes; // place maximale des copies hors ligne (bornes : l'écran)
 
   String? musicFolder; // dossier choisi pour les copies (iOS : signet en base64) ; null = dossier par défaut
+  bool keepInApp; // les morceaux gardés vont dans le dossier privé de l'appli (musicFolder reste pour le retour)
 
   DisplayMode displayMode; // plusieurs comptes : un, tous ou un choix
   String? oneAccount; // le compte montré quand displayMode = one
@@ -108,6 +110,7 @@ class AppSettings {
                   (j['musicFolder']! as String).isNotEmpty
               ? j['musicFolder']! as String
               : null,
+          keepInApp: j['keepInApp'] == true,
           displayMode: DisplayMode.values.firstWhere(
             (m) => m.name == j['displayMode'],
             orElse: () => DisplayMode.all,
@@ -162,6 +165,7 @@ class AppSettings {
         'crossfadeSeconds': crossfadeSeconds,
         'storageLimitBytes': storageLimitBytes,
         'musicFolder': musicFolder,
+        'keepInApp': keepInApp,
         'displayMode': displayMode.name,
         'oneAccount': oneAccount,
         'customAccounts': customAccounts,

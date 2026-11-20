@@ -278,11 +278,31 @@ class DemoDevice implements Device {
   final committed = <PickedFolder>[];
   int released = 0;
 
-  @override
-  Future<Directory> musicRoot() async => Directory(root);
+  /// Les morceaux gardés vont dans [private] avec `keepInApp` (sinon dans [root]).
+  bool keepInApp = false;
+  String? private;
 
   @override
-  Future<bool> rootReachable() async => reachable;
+  Future<Directory> visibleRoot() async => Directory(root);
+
+  @override
+  Future<Directory> keptRoot() async =>
+      keepInApp ? await privateRoot() : await visibleRoot();
+
+  @override
+  Future<Directory> privateRoot() async => Directory(private ?? '$root.app');
+
+  @override
+  Future<void> setKeepInApp(bool value) async {
+    keepInApp = value;
+    settings?.keepInApp = value;
+  }
+
+  @override
+  Future<bool> rootReachable() async => keepInApp || reachable;
+
+  @override
+  Future<bool> visibleReachable() async => reachable;
 
   @override
   Future<PickedFolder?> pickFolder() async {

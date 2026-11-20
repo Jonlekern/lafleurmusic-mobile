@@ -37,7 +37,7 @@ class _NoMusicBodyState extends State<NoMusicBody> {
     final device = AppScope.of(context).device;
     if (device == null) return;
     try {
-      final path = (await device.musicRoot()).path;
+      final path = (await device.visibleRoot()).path;
       if (mounted) setState(() => _path = path);
     } on Object {
       // chemin inconnu : le dossier par défaut est dit
