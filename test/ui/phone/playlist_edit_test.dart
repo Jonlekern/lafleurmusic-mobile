@@ -189,6 +189,23 @@ void main() {
     expect(names, ['Trip']);
   });
 
+  testWidgets('a narrow phone (320×568): Ajouter · Modifier · Trier · ▶ fit '
+      'on one row, all still there and tappable', (tester) async {
+    final s = await _pump(tester);
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await s.open(await _road(s));
+    expect(tester.takeException(), isNull, reason: 'no overflow');
+    for (final k in const ['plAdd', 'plEdit', 'plSort', 'plPlay']) {
+      final b = find.byKey(Key(k));
+      expect(b.hitTestable(), findsOneWidget, reason: k);
+      expect(tester.getRect(b).right, lessThanOrEqualTo(320), reason: k);
+    }
+    await s.tap(const Key('plEdit'));
+    expect(find.byKey(const Key('editOk')), findsOneWidget);
+  });
+
   testWidgets('an empty name at OK: « Donne un nom à ta playlist. », '
       'nothing written, the screen stays', (tester) async {
     final s = await _pump(tester);

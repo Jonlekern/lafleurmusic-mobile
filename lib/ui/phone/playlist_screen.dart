@@ -297,29 +297,44 @@ class _EditActions extends StatelessWidget {
     final s = AppScope.of(context).strings;
     return Row(
       children: [
-        _Chip(
-          key: const Key('plAdd'),
-          icon: Icons.add_rounded,
-          label: s.addSongs,
-          onTap: () => pushPhone(context, AddSongsScreen(playlist: playlist)),
+        // a narrow phone (320 wide): the chips shrink to fit; at other widths, as they are
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _Chip(
+                    key: const Key('plAdd'),
+                    icon: Icons.add_rounded,
+                    label: s.addSongs,
+                    onTap: () =>
+                        pushPhone(context, AddSongsScreen(playlist: playlist)),
+                  ),
+                  const SizedBox(width: 8),
+                  _Chip(
+                    key: const Key('plEdit'),
+                    icon: Icons.edit_rounded,
+                    label: s.editPlaylist,
+                    onTap: () => _edit(context),
+                  ),
+                  const SizedBox(width: 8),
+                  _Chip(
+                    key: const Key('plSort'),
+                    icon: Icons.swap_vert_rounded,
+                    label: s.sortPlaylist,
+                    onTap: items.length < 2
+                        ? null
+                        : () => sortPlaylist(context, playlist, items),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
         const SizedBox(width: 8),
-        _Chip(
-          key: const Key('plEdit'),
-          icon: Icons.edit_rounded,
-          label: s.editPlaylist,
-          onTap: () => _edit(context),
-        ),
-        const SizedBox(width: 8),
-        _Chip(
-          key: const Key('plSort'),
-          icon: Icons.swap_vert_rounded,
-          label: s.sortPlaylist,
-          onTap: items.length < 2
-              ? null
-              : () => sortPlaylist(context, playlist, items),
-        ),
-        const Spacer(),
         Semantics(
           button: true,
           label: s.play,
