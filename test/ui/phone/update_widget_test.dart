@@ -248,6 +248,30 @@ void main() {
       },
     );
 
+    tw(
+      'un téléchargement fini pendant l\'animation de fermeture n\'ouvre pas l\'installeur',
+      (tester) async {
+        final service = await start(tester);
+        service.ignoreCancel = true;
+        await openSheet(tester);
+        await tester.tap(find.byKey(const Key('updateAction')));
+        await tester.pump();
+        Navigator.of(tester.element(find.byType(UpdateSheet))).pop();
+        await tester.pump(); // l'animation de fermeture commence
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.byType(UpdateSheet), findsOneWidget); // encore à l'écran
+        expect(service.token!.cancelled, isTrue);
+        service.download!.complete(
+          File('/cache/updates/LAFLEURMUSIC-android.apk'),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.pumpAndSettle();
+        expect(find.byType(UpdateSheet), findsNothing);
+        expect(installed, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     tw('Android sans APK : ouvre la page de la version', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       final service = FakeUpdateService(

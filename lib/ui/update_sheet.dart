@@ -96,14 +96,37 @@ class _UpdateSheetState extends State<UpdateSheet> {
   File?
   _file; // téléchargé et vérifié : « Installer » le rouvre sans retélécharger
   CancelToken? _cancel;
+  ModalRoute<Object?>? _route;
+  bool _closed =
+      false; // la feuille se ferme (ou est fermée) : plus rien ne part
+
+  /// La feuille est encore là et au premier plan (pas pendant l'animation de fermeture).
+  bool get _active =>
+      mounted && !_closed && (ModalRoute.of(context)?.isCurrent ?? true);
 
   /// Android avec un APK : télécharger puis installer ; sinon ouvrir le fichier (ou la page).
   bool get _apk => widget.android && widget.info.apkUrl != null;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null && !identical(route, _route)) {
+      _route = route;
+      // fermée : le téléchargement s'arrête dès le début de l'animation, pas seulement à la fin
+      route.popped.then((_) => _close());
+    }
+  }
+
+  void _close() {
+    _closed = true;
+    _cancel?.cancel();
+  }
+
+  @override
   void dispose() {
     // la feuille fermée pendant le téléchargement : il s'arrête, pas d'installeur plus tard
-    _cancel?.cancel();
+    _close();
     super.dispose();
   }
 
@@ -116,7 +139,7 @@ class _UpdateSheetState extends State<UpdateSheet> {
     });
     try {
       final dir = await widget.cacheDir();
-      if (token.cancelled) return;
+      if (token.cancelled || !_active) return;
       final file = await widget.service.downloadApk(
         widget.info,
         dir,
@@ -125,7 +148,7 @@ class _UpdateSheetState extends State<UpdateSheet> {
           if (mounted && !token.cancelled) setState(() => _progress = p);
         },
       );
-      if (!mounted || token.cancelled) return;
+      if (token.cancelled || !_active) return;
       _file = file;
       await _install();
     } on Object {
@@ -139,7 +162,7 @@ class _UpdateSheetState extends State<UpdateSheet> {
 
   Future<void> _install() async {
     final file = _file;
-    if (file == null) return;
+    if (file == null || !_active) return;
     bool ok;
     try {
       ok = await widget.install(file.path);
