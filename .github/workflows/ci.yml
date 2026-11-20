@@ -107,18 +107,20 @@ jobs:
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs
       # Signed with the fixed release key (repository secrets), so each version
-      # installs over the previous one. Pull requests from forks get no secrets
-      # and fall back to the debug key.
+      # installs over the previous one. No key, no APK: one signed with another
+      # key would never install over the app people already have.
       - name: Build the release APK
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ]; then
+            echo "::error::The Android release key secrets are missing"
+            exit 1
           fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
           flutter build apk --release
           rm -f "$RUNNER_TEMP/release.jks"
       - name: Rename the APK
