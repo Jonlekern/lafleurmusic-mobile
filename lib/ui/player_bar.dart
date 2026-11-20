@@ -9,6 +9,7 @@ import 'cover_image.dart';
 import 'coverflow_screen.dart';
 import 'now_playing_screen.dart';
 import 'format.dart';
+import 'seek_area.dart';
 
 /// Barre de lecture du bas (maquette 2).
 class PlayerBar extends StatefulWidget {
@@ -158,20 +159,13 @@ class _PlayerBarState extends State<PlayerBar> {
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: LayoutBuilder(
-                              builder: (_, c) => GestureDetector(
-                                onTapDown: (d) => total > 0
-                                    ? app.player.seek(
-                                        Duration(
-                                          milliseconds:
-                                              (d.localPosition.dx /
-                                                      c.maxWidth *
-                                                      total)
-                                                  .round(),
-                                        ),
-                                      )
-                                    : null,
-                                child: SizedBox(
+                            child: SeekArea(
+                              key: const Key('bar-seek'),
+                              total: total,
+                              fraction: f,
+                              onSeek: app.player.seek,
+                              builder: (context, f) => LayoutBuilder(
+                                builder: (_, c) => SizedBox(
                                   height: 14,
                                   child: Stack(
                                     alignment: Alignment.centerLeft,

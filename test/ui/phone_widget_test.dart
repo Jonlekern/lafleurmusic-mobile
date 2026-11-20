@@ -160,6 +160,37 @@ void main() {
     expect(find.byType(MiniPlayer), findsNothing);
   });
 
+  // Johnny 20.11 : « pouvoir glisser sur la barre de progression »
+  testWidgets(
+    'En cours : glisser la barre suit le doigt, un seul saut au lâcher',
+    (tester) async {
+      final f = await pumpPhone(tester);
+      await tester.tap(find.byType(MiniPlayer));
+      await tester.pumpAndSettle();
+      final bar = find.byKey(const Key('now-seek'));
+      final box = tester.getRect(bar);
+      final g = await tester.startGesture(
+        Offset(box.left + box.width * 0.1, box.center.dy),
+      );
+      await g.moveBy(const Offset(30, 0));
+      await g.moveTo(Offset(box.left + box.width * 0.75, box.center.dy));
+      await tester.pump();
+      expect(f.player.calls.where((c) => c == 'seek'), isEmpty);
+      await g.up();
+      await tester.pump();
+      expect(f.player.calls.where((c) => c == 'seek').length, 1);
+      final want = f.player.current.duration.inMilliseconds * 0.75;
+      expect(
+        (f.player.lastSeek!.inMilliseconds - want).abs(),
+        lessThan(f.player.current.duration.inMilliseconds * 0.02),
+      );
+      // toucher saute aussi, comme avant
+      await tester.tapAt(Offset(box.left + box.width * 0.5, box.center.dy));
+      await tester.pump();
+      expect(f.player.calls.where((c) => c == 'seek').length, 2);
+    },
+  );
+
   testWidgets('mini-lecteur : pause et suivant', (tester) async {
     final f = await pumpPhone(tester);
     await tester.tap(find.byKey(const Key('mini-toggle')));

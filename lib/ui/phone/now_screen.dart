@@ -9,6 +9,7 @@ import '../../theme/colors.dart';
 import '../cover_image.dart';
 import '../equalizer_panel.dart';
 import '../format.dart';
+import '../seek_area.dart';
 import '../now_panel.dart';
 import '../playback_card.dart';
 import '../track_menu.dart';
@@ -206,35 +207,27 @@ class _NowScreenState extends State<NowScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              LayoutBuilder(
-                builder: (_, c) => GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown: (d) => total > 0
-                      ? app.player.seek(
-                          Duration(
-                            milliseconds:
-                                (d.localPosition.dx / c.maxWidth * total)
-                                    .round(),
-                          ),
-                        )
-                      : null,
+              SeekArea(
+                key: const Key('now-seek'),
+                total: total,
+                fraction: f,
+                onSeek: app.player.seek,
+                builder: (context, f) => Container(
+                  height: 12,
+                  alignment: Alignment.centerLeft,
                   child: Container(
-                    height: 12,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: context.colors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                     alignment: Alignment.centerLeft,
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: context.colors.divider,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: f,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: context.colors.pink,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
+                    child: FractionallySizedBox(
+                      widthFactor: f,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: context.colors.pink,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
