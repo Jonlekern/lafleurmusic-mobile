@@ -363,7 +363,10 @@ void main() {
       expect(find.textContaining('nouvelle'), findsOneWidget);
       await s.tapKey('addOk');
       await tester.pumpAndSettle();
-      expect(nav.lists.values.map((l) => l.name), contains('Soirée'));
+      // the song is only on the phone: nothing is made on the server, and it is said
+      expect(nav.lists.values.map((l) => l.name), isNot(contains('Soirée')));
+      expect(find.text("Ce morceau n'est pas sur ce serveur."), findsOneWidget);
+      expect(find.text('Ajouter à une playlist'), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
     });
 

@@ -731,6 +731,10 @@ class Strings {
       'La playlist a changé, réessaie.',
       'The playlist changed, try again.',
     ),
+    PlaylistProblem.notThere => _t(
+      "Ce morceau n'est pas sur ce serveur.",
+      'This song is not on this server.',
+    ),
     PlaylistProblem.failed => _t(
       "Ça n'a pas marché. Réessaie.",
       "That didn't work. Try again.",

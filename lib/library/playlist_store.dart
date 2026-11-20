@@ -42,6 +42,10 @@ enum PlaylistProblem {
   /// nothing sent; it was read again, so trying again works on what the server has.
   changed,
 
+  /// None of the songs asked for is on this server (« Ce morceau n'est pas sur ce serveur. »):
+  /// nothing created.
+  notThere,
+
   /// Anything else (the server answered with an error).
   failed,
 }
@@ -309,10 +313,10 @@ class PlaylistStore {
       final (_, w) = await _writer(ref.accountId);
       if (w is PlaylistOrderWriter) {
         // the whole order in one write (Subsonic: one rewrite instead of one per move)
+        // the order was made from [rows]: they are what the server must still hold (else
+        // « changed », nothing written)
+        final ids = [for (final p in rows) _songIdOf(p)];
         return _serial(ref, () async {
-          final now = await _serverPaths(ref);
-          final ids = [for (final p in now) _songIdOf(p)];
-          if (now.length != count) throw RangeError.value(count, 'order');
           await _onServer(
             ref,
             (w) => (w as PlaylistOrderWriter).setOrder(ref.remoteId, [
@@ -618,7 +622,14 @@ class PlaylistStore {
     String name,
     List<String> songs,
   ) async {
+    final (source, _) = await _writer(accountId);
     final ids = await _songIdsFor(accountId, const [], songs, false);
+    // songs asked for and none on this server: not created (and counted as nothing done);
+    // a Plex playlist is never created empty (it needs a song of that server)
+    if (ids.isEmpty &&
+        (songs.isNotEmpty || _typeOf(source) == AccountType.plex)) {
+      throw PlaylistWriteException(PlaylistProblem.notThere, accountId);
+    }
     return _write(accountId, null, (s, w) async {
       final id = await w.createPlaylist(name, songIds: ids);
       // not read back: shown empty under its name until the next action or sync

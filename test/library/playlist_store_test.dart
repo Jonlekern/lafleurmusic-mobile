@@ -72,6 +72,18 @@ void main() {
       expect((await view.playlists().first).map((p) => p.name), ['Soirée']);
     });
 
+    test('a kept playlist of files put by hand shows as kept (a local song '
+        'needs no copy)', () async {
+      await db.upsertTracks([_t('/music/a.mp3'), _t('/music/b.mp3')]);
+      final ref = await store.create(
+        'Mine',
+        songs: ['/music/a.mp3', '/music/b.mp3'],
+      ) as PhonePlaylistRef;
+      expect((await db.watchPlaylists().first).single.kept, isFalse);
+      await db.addKeptPlaylist(phonePlaylistAccount, '${ref.id}');
+      expect((await db.watchPlaylists().first).single.kept, isTrue);
+    });
+
     test('create: an empty name is refused', () async {
       await expectLater(store.create('   '), throwsArgumentError);
       expect(await db.watchPlaylists().first, isEmpty);
@@ -408,6 +420,42 @@ void main() {
       expect(await stored('pl1'), [k('s1'), k('s2'), k('s3'), k('s4')]);
     });
 
+    test('create with songs the server does not have: nothing is created, '
+        'a clear error', () async {
+      await expectLater(
+        srv.create('Soirée', accountId: acc, songs: ['jellyfin://jf/1']),
+        throwsA(
+          isA<PlaylistWriteException>().having(
+            (e) => e.problem,
+            'problem',
+            PlaylistProblem.notThere,
+          ),
+        ),
+      );
+      expect(nav.lists.keys, ['pl1']);
+      expect(await db.playlistsOf(acc), hasLength(1));
+    });
+
+    test('reorder: a song added while the order waits its turn: « changed », '
+        'nothing written, no song lost', () async {
+      nav.delay = const Duration(milliseconds: 20);
+      final adding = srv.add(ref, [k('s4')]);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      final sorting = srv.reorder(ref, [2, 1, 0]); // made from the 3 rows seen
+      await adding;
+      await expectLater(
+        sorting,
+        throwsA(
+          isA<PlaylistWriteException>().having(
+            (e) => e.problem,
+            'problem',
+            PlaylistProblem.changed,
+          ),
+        ),
+      );
+      expect(nav.lists['pl1']!.songs, ['s1', 's2', 's3', 's4']);
+    });
+
     test('reorder (a sort): the server gets the new order, the stored '
         'playlist follows', () async {
       nav.lists['pl1'] = (name: 'Road', songs: ['s1', 's2', 's3', 's4']);
@@ -718,11 +766,42 @@ void main() {
       PlexSource.resetStateForTests();
       final px = FakePlexPlaylists();
       final s = PlaylistStore(db, sourceOf: (_) async => px.source());
-      final r = await s.create('Rock', accountId: 'acc1');
+      final r = await s.create(
+        'Rock',
+        accountId: 'acc1',
+        songs: ['plex://acc1/101'],
+      );
+      await s.add(r, ['plex://acc1/102']);
+      await s.remove(r, [1]);
       await s.add(r, ['plex://acc1/101', 'plex://acc1/102']);
       await s.remove(r, [0]);
       expect(px.songs('910'), ['102']);
       expect(await db.playlistPaths('acc1', '910'), ['plex://acc1/102']);
+    });
+
+    test('Plex: never an empty creation (a playlist needs a song of that '
+        'server), nothing sent', () async {
+      PlexSource.resetStateForTests();
+      final px = FakePlexPlaylists();
+      final before = px.lists.length;
+      final s = PlaylistStore(db, sourceOf: (_) async => px.source());
+      for (final songs in [
+        const <String>[],
+        ['subsonic://other/1'],
+      ]) {
+        await expectLater(
+          s.create('Rock', accountId: 'acc1', songs: songs),
+          throwsA(
+            isA<PlaylistWriteException>().having(
+              (e) => e.problem,
+              'problem',
+              PlaylistProblem.notThere,
+            ),
+          ),
+        );
+      }
+      expect(px.lists.length, before);
+      expect(px.log.where((r) => r.method != 'GET'), isEmpty);
     });
   });
 }
