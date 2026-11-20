@@ -7,8 +7,8 @@ Mise à jour : 20.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Écrans : reprendre ceux du Mac, empilés
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
-- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes », 4 « Jellyfin », 5 « Plex » et 6 « Mode Classic » écrits et codés ; plan 8 « file et bibliothèque » et plan 9 « playlists modifiables » codés ; plan 7 « mode clair » codé
-- ⬜ Code (plans 1 à 9 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
+- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes », 4 « Jellyfin », 5 « Plex » et 6 « Mode Classic » écrits et codés ; plan 8 « file et bibliothèque », plan 9 « playlists modifiables » et plan 10 « musique dans l'appli » codés ; plan 7 « mode clair » codé
+- ⬜ Code (plans 1 à 10 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 
@@ -74,6 +74,10 @@ Mise à jour : 20.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Plan 9 fait : des playlists qui restent sur le téléphone, avec des morceaux de tous les comptes et des fichiers posés à la main ; « Garder » écrit leur `.m3u8`, qui suit chaque changement
 - ✅ Plan 9 fait : l'appli marche sans aucun serveur (« Juste la musique de mon iPhone ») : un Accueil vide qui dit où mettre ses fichiers
 - ✅ Plan 9 essayé de bout en bout dans le simulateur : sans compte (playlist du téléphone, `.m3u8` écrit, renommé, supprimé, le morceau reste) et avec un faux Navidrome (créer, ajouter, doublon refusé, trier, relire)
+- ✅ Plan 10 fait : « OÙ GARDER LA MUSIQUE » dans « Sur mon iPhone » (maquette 17 validée par Johnny, 20.11.2026) : « Dans un dossier visible » ou « Dans l'appli seulement »
+- ✅ Plan 10 fait : changer déplace les morceaux gardés (question d'abord, place vérifiée, un seul déplacement à la fois, reprise sûre si l'appli est coupée en route) ; dans l'appli, ils partent avec elle et (iPhone) ne sont pas dans la sauvegarde iCloud
+- ✅ Plan 10 fait : les fichiers posés à la main restent dans le dossier visible et jouent toujours
+- ✅ Plan 10 essayé de bout en bout dans le simulateur (faux serveur) : album gardé dans le dossier visible, passage dans l'appli (le dossier visible ne l'a plus), lecture sans serveur, retour au dossier visible aux mêmes chemins ; le fichier posé à la main n'a pas bougé
 
 ## Mode clair
 - ✅ L'affichage actuel = mode sombre
