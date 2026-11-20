@@ -91,7 +91,10 @@ class FakeSubsonic {
   final requests = <FakeRequest>[];
 
   /// Server playlists (getPlaylists / getPlaylist): id → (name, song ids). Empty: none.
+  /// The server keeps them: createPlaylist, updatePlaylist and deletePlaylist (plan 9) change
+  /// this map, like a Navidrome does.
   final Map<String, (String, List<String>)> playlists;
+  var _nextPlaylist = 1;
 
   /// Cuts the server: every connection is closed without an answer (the app sees a network
   /// error, like a phone out of reach of its server). Nothing is recorded in [requests].
@@ -118,7 +121,10 @@ class FakeSubsonic {
       password,
       secondAlbum,
       topPlays,
-      playlists,
+      // a copy: the writes below change it, never the caller's map
+      {
+        for (final e in playlists.entries) e.key: (e.value.$1, [...e.value.$2]),
+      },
     );
     server.listen(fake._handle);
     return fake;
@@ -153,6 +159,25 @@ class FakeSubsonic {
     'openSubsonic': true,
   };
 
+  String _failed(int code, String message) => jsonEncode({
+    'subsonic-response': {
+      ..._ok,
+      'status': 'failed',
+      'error': {'code': code, 'message': message},
+    },
+  });
+
+  String _playlistAnswer(String id) => jsonEncode({
+    'subsonic-response': {
+      ..._ok,
+      'playlist': {
+        'id': id,
+        'name': playlists[id]!.$1,
+        'songCount': playlists[id]!.$2.length,
+      },
+    },
+  });
+
   bool _authOk(Map<String, String> q) {
     final salt = q['s'], token = q['t'];
     if (q['u'] != user || salt == null || token == null) return false;
@@ -167,6 +192,8 @@ class FakeSubsonic {
       return;
     }
     final q = req.uri.queryParameters;
+    final all =
+        req.uri.queryParametersAll; // songId=…&songId=… (several values)
     final last = req.uri.pathSegments.isEmpty ? '' : req.uri.pathSegments.last;
     final method = last.endsWith('.view')
         ? last.substring(0, last.length - '.view'.length)
@@ -210,6 +237,56 @@ class FakeSubsonic {
           } else {
             res.statusCode = HttpStatus.notFound;
           }
+        case 'getOpenSubsonicExtensions':
+          // OpenSubsonic, but no form POST: the app writes with GET
+          json(
+            jsonEncode({
+              'subsonic-response': {..._ok, 'openSubsonicExtensions': []},
+            }),
+          );
+        case 'createPlaylist':
+          // with `playlistId`: the whole list written again (reorder); without: a new one
+          final existing = q['playlistId'];
+          final songs = [...?all['songId']];
+          if (existing != null) {
+            final old = playlists[existing];
+            if (old == null) {
+              json(_failed(70, 'Playlist not found'));
+            } else {
+              playlists[existing] = (q['name'] ?? old.$1, songs);
+              json(_playlistAnswer(existing));
+            }
+          } else {
+            final id = 'pl-new-${_nextPlaylist++}';
+            playlists[id] = (q['name'] ?? '', songs);
+            json(_playlistAnswer(id));
+          }
+        case 'updatePlaylist':
+          final id = q['playlistId'];
+          final old = playlists[id];
+          if (old == null) {
+            json(_failed(70, 'Playlist not found'));
+          } else {
+            final gone = {
+              for (final i in all['songIndexToRemove'] ?? const <String>[])
+                int.parse(i),
+            };
+            playlists[id!] = (
+              q['name'] ?? old.$1,
+              [
+                for (final (i, s) in old.$2.indexed)
+                  if (!gone.contains(i)) s,
+                ...?all['songIdToAdd'],
+              ],
+            );
+            json(pingJson);
+          }
+        case 'deletePlaylist':
+          json(
+            playlists.remove(q['id']) == null
+                ? _failed(70, 'Playlist not found')
+                : pingJson,
+          );
         case 'getPlaylists':
           json(
             jsonEncode({

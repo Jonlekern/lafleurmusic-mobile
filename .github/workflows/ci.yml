@@ -173,6 +173,8 @@ jobs:
             flutter test integration_test/offline_test.dart
             flutter test integration_test/accounts_test.dart
             flutter test integration_test/classic_test.dart
+            flutter test integration_test/playlists_phone_test.dart
+            flutter test integration_test/playlists_server_test.dart
 
   # Android 9 (API 28): storage still asks for the write permission at run time
   # (until API 29). The app must start without it (end-to-end run, nothing
@@ -213,6 +215,10 @@ jobs:
           cp build/app/outputs/flutter-apk/app-debug.apk offline-debug.apk
           flutter build apk --debug -t integration_test/accounts_test.dart
           cp build/app/outputs/flutter-apk/app-debug.apk accounts-debug.apk
+          flutter build apk --debug -t integration_test/playlists_phone_test.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk playlists-phone-debug.apk
+          flutter build apk --debug -t integration_test/playlists_server_test.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk playlists-server-debug.apk
           flutter build apk --debug -t integration_test/app_test.dart
       - uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -229,6 +235,10 @@ jobs:
             flutter test integration_test/offline_test.dart
             adb install -r -t -g accounts-debug.apk
             flutter test integration_test/accounts_test.dart
+            adb install -r -t -g playlists-phone-debug.apk
+            flutter test integration_test/playlists_phone_test.dart
+            adb install -r -t -g playlists-server-debug.apk
+            flutter test integration_test/playlists_server_test.dart
 
   # Contract with a real Navidrome (plan 1, task 10): a throw-away server whose
   # music folder is test/fixtures/, its admin created through the API, then
