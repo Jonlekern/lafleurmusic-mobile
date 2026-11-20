@@ -66,8 +66,6 @@ What works now:
 - **Files placed by hand** in the LAFLEURMUSIC folder show up in the library.
 - **Builds** for iPhone and Android.
 
-What comes next: the "On my iPhone" screen.
-
 ## Supported servers
 
 - Servers that speak the Subsonic API: Navidrome, Gonic, Airsonic-Advanced, Subsonic and compatible servers.
