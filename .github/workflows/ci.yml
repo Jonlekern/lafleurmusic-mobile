@@ -153,7 +153,10 @@ jobs:
       # Build once before the emulator starts, so Gradle and the NDK don't compete
       # with it; the integration tests below then reuse the warm Gradle build.
       - name: Build the test APK before the emulator
-        run: flutter build apk --debug -t integration_test/sound_proof_test.dart
+        run: |
+          flutter build apk --debug -t integration_test/playlists_phone_test.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk playlists-phone-debug.apk
+          flutter build apk --debug -t integration_test/sound_proof_test.dart
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -173,8 +176,11 @@ jobs:
             flutter test integration_test/offline_test.dart
             flutter test integration_test/accounts_test.dart
             flutter test integration_test/classic_test.dart
-            flutter test integration_test/playlists_phone_test.dart
             flutter test integration_test/playlists_server_test.dart
+            # no account: the app reads the folder, which on Android 13+ asks for the audio
+            # permission; a test cannot answer that dialog, so it is granted at install
+            adb install -r -t -g playlists-phone-debug.apk
+            flutter test integration_test/playlists_phone_test.dart
 
   # Android 9 (API 28): storage still asks for the write permission at run time
   # (until API 29). The app must start without it (end-to-end run, nothing

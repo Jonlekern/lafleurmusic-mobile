@@ -50,161 +50,164 @@ void main() {
     await testStorage.deleteAll();
   });
 
-  testWidgets(
-    'no account: a phone playlist → kept → .m3u8 → renamed → deleted',
-    (tester) async {
-      final app = await mountGuarded(
-        () => buildLafleurApp(
-          support: support,
-          secrets: SecureSecretStore(testStorage),
-        ),
-      );
-      final s = app.strings;
-      await tester.pumpWidget(app);
+  testWidgets('no account: a phone playlist → kept → .m3u8 → renamed → deleted', (
+    tester,
+  ) async {
+    final app = await mountGuarded(
+      () => buildLafleurApp(
+        support: support,
+        secrets: SecureSecretStore(testStorage),
+      ),
+    );
+    final s = app.strings;
+    await tester.pumpWidget(app);
 
-      // first launch: the account screen, and its way out
-      await pumpUntil(tester, find.byKey(const Key('justThePhoneMusic')));
-      await tapVisible(tester, find.byKey(const Key('justThePhoneMusic')));
-      await pumpUntil(tester, find.text(s.noMusicYet));
-      expect(await app.accounts.watch().first, isEmpty);
+    // first launch: the account screen, and its way out
+    await pumpUntil(tester, find.byKey(const Key('justThePhoneMusic')));
+    await tapVisible(tester, find.byKey(const Key('justThePhoneMusic')));
+    await pumpUntil(tester, find.text(s.noMusicYet));
+    expect(await app.accounts.watch().first, isEmpty);
 
-      // a file put by hand in the phone's folder (the test removes it at the end)
-      final root = await deviceRoot();
-      root.createSync(recursive: true);
-      final file = File(p.join(root.path, 'Plan9 e2e tone.flac'));
-      expect(file.existsSync(), isFalse, reason: 'not a file of the phone');
-      file.writeAsBytesSync(base64Decode(aFlacBase64), flush: true);
-      addTearDown(() {
-        if (file.existsSync()) file.deleteSync();
-      });
-      await app.localFolder.rescan();
-      await waitFor(
-        tester,
-        () async => (await app.db.localTracks()).any(
-          (t) => p.basename(t.path) == 'Plan9 e2e tone.flac',
-        ),
-        'the local file is in the library',
-      );
-      await pumpUntil(tester, find.byType(ListView));
-      await waitFor(
-        tester,
-        () async => find.text(s.noMusicYet).evaluate().isEmpty,
-        'Home leaves the « no music » screen',
-      );
-      final song = (await app.db.localTracks()).firstWhere(
+    // a file put by hand in the phone's folder (the test removes it at the end)
+    final root = await deviceRoot();
+    root.createSync(recursive: true);
+    final file = File(p.join(root.path, 'Plan9 e2e tone.flac'));
+    expect(file.existsSync(), isFalse, reason: 'not a file of the phone');
+    file.writeAsBytesSync(base64Decode(aFlacBase64), flush: true);
+    addTearDown(() {
+      if (file.existsSync()) file.deleteSync();
+    });
+    await app.localFolder.rescan();
+    await waitFor(
+      tester,
+      () async => (await app.db.localTracks()).any(
         (t) => p.basename(t.path) == 'Plan9 e2e tone.flac',
-      );
+      ),
+      'the local file is in the library',
+    );
+    await pumpUntil(tester, find.byType(ListView));
+    await waitFor(
+      tester,
+      () async => find.text(s.noMusicYet).evaluate().isEmpty,
+      'Home leaves the « no music » screen',
+    );
+    final song = (await app.db.localTracks()).firstWhere(
+      (t) => p.basename(t.path) == 'Plan9 e2e tone.flac',
+    );
 
-      BuildContext screen() => tester.element(find.byType(Scaffold).first);
-      Future<void> tapKey(Key k) async {
-        // on screen (a page still sliding in is not), then tapped
-        await pumpUntil(tester, find.byKey(k).hitTestable());
-        await tester.tap(find.byKey(k).hitTestable().first);
-        await tester.pump(const Duration(milliseconds: 300));
-      }
-
-      // « Ajouter à une playlist » › « Nouvelle playlist » (no account: the playlist stays on the phone)
-      unawaited(showAddToPlaylist(screen(), [song]));
-      await tapKey(const Key('addNew'));
-      await pumpUntil(tester, find.byKey(const Key('newPlaylistName')));
-      expect(
-        find.text(s.whereToKeep),
-        findsNothing,
-        reason: 'no account: no place to choose',
-      );
-      await tester.enterText(
-        find.byKey(const Key('newPlaylistName')),
-        'Plan9 Phone e2e',
-      );
+    BuildContext screen() => tester.element(find.byType(Scaffold).first);
+    Future<void> tapKey(Key k) async {
+      // on screen (a page still sliding in is not), then tapped
+      await pumpUntil(tester, find.byKey(k).hitTestable());
+      // …and the page has stopped moving (a slow phone is still sliding it in)
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.byKey(k).hitTestable().first);
       await tester.pump(const Duration(milliseconds: 300));
-      await tapKey(const Key('newPlaylistCreate'));
-      await tapKey(const Key('addOk'));
-      await waitFor(
-        tester,
-        () async => (await app.db.watchPlaylists().first).any(
-          (l) => l.onPhone && l.name == 'Plan9 Phone e2e' && l.songCount == 1,
-        ),
-        'the phone playlist holds the song',
-      );
-      final made = (await app.db.watchPlaylists().first).singleWhere(
-        (l) => l.onPhone,
-      );
+    }
 
-      // kept: its `.m3u8` is under Playlists/
-      final dir = Directory(p.join(root.path, 'Playlists'));
-      File m3u8(String name) => File(p.join(dir.path, '$name.m3u8'));
-      List<String> names() => dir.existsSync()
-          ? [
-              for (final f in dir.listSync().whereType<File>())
-                p.basename(f.path),
-            ]
-          : const [];
-      final kept = await app.downloader.keepPlaylist(made.accountId, made.id);
-      expect(kept.ok, isTrue);
-      await waitFor(
-        tester,
-        () async =>
-            m3u8('Plan9 Phone e2e').existsSync() &&
-            m3u8('Plan9 Phone e2e').readAsStringSync().contains('.flac'),
-        '.m3u8 written',
-        timeout: const Duration(seconds: 30),
-        why: () async => 'files: ${names()}',
-      );
-      expect(names(), ['Plan9 Phone e2e.m3u8']);
-      expect(
-        m3u8('Plan9 Phone e2e').readAsStringSync().startsWith('#EXTM3U'),
-        isTrue,
-      );
-      debugPrint(
-        'PREUVE playlist du téléphone : Playlists/Plan9 Phone e2e.m3u8 écrit',
-      );
+    // « Ajouter à une playlist » › « Nouvelle playlist » (no account: the playlist stays on the phone)
+    unawaited(showAddToPlaylist(screen(), [song]));
+    await tapKey(const Key('addNew'));
+    await pumpUntil(tester, find.byKey(const Key('newPlaylistName')));
+    expect(
+      find.text(s.whereToKeep),
+      findsNothing,
+      reason: 'no account: no place to choose',
+    );
+    await tester.enterText(
+      find.byKey(const Key('newPlaylistName')),
+      'Plan9 Phone e2e',
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tapKey(const Key('newPlaylistCreate'));
+    await tapKey(const Key('addOk'));
+    await waitFor(
+      tester,
+      () async => (await app.db.watchPlaylists().first).any(
+        (l) => l.onPhone && l.name == 'Plan9 Phone e2e' && l.songCount == 1,
+      ),
+      'the phone playlist holds the song',
+    );
+    final made = (await app.db.watchPlaylists().first).singleWhere(
+      (l) => l.onPhone,
+    );
 
-      // « Modifier » › the name › OK: the file follows
-      unawaited(openPlaylist(screen(), made));
-      await tapKey(const Key('plEdit'));
-      await pumpUntil(tester, find.byKey(const Key('editName')));
-      await tester.enterText(
-        find.byKey(const Key('editName')),
-        'Plan9 Renamed',
-      );
-      await tester.pump(const Duration(milliseconds: 300));
-      await tapKey(const Key('editOk'));
-      await waitFor(
-        tester,
-        () async =>
-            m3u8('Plan9 Renamed').existsSync() &&
-            !m3u8('Plan9 Phone e2e').existsSync(),
-        'the .m3u8 is renamed',
-        timeout: const Duration(seconds: 30),
-        why: () async => 'files: ${names()}',
-      );
-      expect(names(), ['Plan9 Renamed.m3u8']);
-      debugPrint('PREUVE renommée : Playlists/Plan9 Renamed.m3u8');
+    // kept: its `.m3u8` is under Playlists/
+    final dir = Directory(p.join(root.path, 'Playlists'));
+    File m3u8(String name) => File(p.join(dir.path, '$name.m3u8'));
+    List<String> names() => dir.existsSync()
+        ? [for (final f in dir.listSync().whereType<File>()) p.basename(f.path)]
+        : const [];
+    final kept = await app.downloader.keepPlaylist(made.accountId, made.id);
+    expect(kept.ok, isTrue);
+    await waitFor(
+      tester,
+      () async =>
+          m3u8('Plan9 Phone e2e').existsSync() &&
+          m3u8('Plan9 Phone e2e').readAsStringSync().contains('.flac'),
+      '.m3u8 written',
+      timeout: const Duration(seconds: 30),
+      why: () async => 'files: ${names()}',
+    );
+    expect(names(), ['Plan9 Phone e2e.m3u8']);
+    expect(
+      m3u8('Plan9 Phone e2e').readAsStringSync().startsWith('#EXTM3U'),
+      isTrue,
+    );
+    debugPrint(
+      'PREUVE playlist du téléphone : Playlists/Plan9 Phone e2e.m3u8 écrit',
+    );
 
-      // « Modifier » › « Supprimer la playlist » › yes: the `.m3u8` is gone, the song stays
-      await tapKey(const Key('plEdit'));
-      await tapKey(const Key('editDelete'));
-      await tapKey(const Key('questionYes'));
-      await waitFor(
-        tester,
-        () async =>
-            names().isEmpty && (await app.db.watchPlaylists().first).isEmpty,
-        'playlist and .m3u8 deleted',
-        timeout: const Duration(seconds: 30),
-        why: () async => 'files: ${names()}',
-      );
-      expect(
-        file.existsSync(),
-        isTrue,
-        reason: 'the song is still on the phone',
-      );
-      expect(
-        (await app.db.localTracks()).any((t) => t.path == song.path),
-        isTrue,
-        reason: 'and in the library',
-      );
-      expect(await app.db.keptPlaylistRows(), isEmpty);
-      debugPrint('PREUVE suppression : .m3u8 parti, le morceau est resté');
-    },
-  );
+    // « Modifier » › the name › OK: the file follows
+    unawaited(openPlaylist(screen(), made));
+    await tapKey(const Key('plEdit'));
+    await pumpUntil(tester, find.byKey(const Key('editName')));
+    await tester.enterText(find.byKey(const Key('editName')), 'Plan9 Renamed');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tapKey(const Key('editOk'));
+    // first the library (the name is saved), then the file that follows it: a failure says which
+    await waitFor(
+      tester,
+      () async => (await app.db.watchPlaylists().first).any(
+        (l) => l.onPhone && l.name == 'Plan9 Renamed',
+      ),
+      'the playlist is renamed in the library',
+      why: () async =>
+          'playlists: ${[for (final l in await app.db.watchPlaylists().first) l.name]}',
+    );
+    await waitFor(
+      tester,
+      () async =>
+          m3u8('Plan9 Renamed').existsSync() &&
+          !m3u8('Plan9 Phone e2e').existsSync(),
+      'the .m3u8 is renamed',
+      timeout: const Duration(seconds: 60),
+      why: () async =>
+          'files: ${names()}, kept: ${[for (final k in await app.db.keptPlaylistRows()) k.fileName]}, '
+          'last error: ${app.downloader.lastError}',
+    );
+    expect(names(), ['Plan9 Renamed.m3u8']);
+    debugPrint('PREUVE renommée : Playlists/Plan9 Renamed.m3u8');
+
+    // « Modifier » › « Supprimer la playlist » › yes: the `.m3u8` is gone, the song stays
+    await tapKey(const Key('plEdit'));
+    await tapKey(const Key('editDelete'));
+    await tapKey(const Key('questionYes'));
+    await waitFor(
+      tester,
+      () async =>
+          names().isEmpty && (await app.db.watchPlaylists().first).isEmpty,
+      'playlist and .m3u8 deleted',
+      timeout: const Duration(seconds: 30),
+      why: () async => 'files: ${names()}',
+    );
+    expect(file.existsSync(), isTrue, reason: 'the song is still on the phone');
+    expect(
+      (await app.db.localTracks()).any((t) => t.path == song.path),
+      isTrue,
+      reason: 'and in the library',
+    );
+    expect(await app.db.keptPlaylistRows(), isEmpty);
+    debugPrint('PREUVE suppression : .m3u8 parti, le morceau est resté');
+  });
 }
