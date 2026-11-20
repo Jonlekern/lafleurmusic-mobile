@@ -218,18 +218,23 @@ void main() {
               .toList()
         : const [];
     // the app writes `<name>.lafleur-part.m3u8` then renames it: wait for the final name, with
-    // nothing half-written left (the partial already holds the whole text before the rename)
+    // nothing half-written left (the partial already holds the whole text before the rename).
+    // The name is noted only after the file is there and announced (Android's media scan can
+    // take a moment): wait for that note too
     final want = File(p.join(dir.path, 'Road Trip e2e.m3u8'));
+    Future<List<String>> noted() async => [
+      for (final k in await app.db.keptPlaylistRows()) k.fileName,
+    ];
     await waitFor(
       tester,
       () async =>
           want.existsSync() &&
           want.readAsStringSync().contains('Night Drive') &&
-          files().every((f) => !isPartialName(f.path)),
-      '.m3u8 written',
+          files().every((f) => !isPartialName(f.path)) &&
+          (await noted()).every((n) => n.isNotEmpty),
+      '.m3u8 written and noted',
       timeout: const Duration(seconds: 60),
-      why: () async =>
-          'files: ${files()}, kept: ${(await app.db.keptPlaylistRows()).length}',
+      why: () async => 'files: ${files()}, kept: ${await noted()}',
     );
     expect(files().map((f) => p.basename(f.path)), ['Road Trip e2e.m3u8']);
     final text = want.readAsStringSync();
