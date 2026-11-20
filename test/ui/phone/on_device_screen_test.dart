@@ -903,6 +903,22 @@ void main() {
     );
 
     phoneTest(
+      'retour : la taille compte aussi les morceaux locaux du dossier privé',
+      TargetPlatform.iOS,
+      (tester) async {
+        final d = DemoDownloader()..moveBytes = 5 * gib;
+        await pumpOnDevice(tester, keepInApp: true, downloader: d);
+        await tapCard(tester, 'keepVisible');
+        expect(
+          find.text(
+            "Les 5 Go gardés quittent l'appli et retournent dans Sur mon iPhone › LAFLEURMUSIC.",
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    phoneTest(
       'Android, retour : « Musique › LAFLEURMUSIC »',
       TargetPlatform.android,
       (tester) async {

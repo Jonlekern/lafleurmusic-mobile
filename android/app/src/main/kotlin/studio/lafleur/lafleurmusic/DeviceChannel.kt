@@ -39,7 +39,15 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
             "privateRoot" -> {
                 val dir = privateRoot()
                 // sans « create » : son chemin seul, rien n'est créé
-                if (call.argument<Boolean>("create") != false) dir.mkdirs()
+                if (call.argument<Boolean>("create") != false) {
+                    dir.mkdirs()
+                    // Android 7 à 10 : sans .nomedia, la médiathèque indexe aussi ce dossier
+                    try {
+                        File(dir, ".nomedia").createNewFile()
+                    } catch (e: Exception) {
+                        // pas vital : Android 11 et plus ne regardent jamais Android/data
+                    }
+                }
                 result.success(dir.path)
             }
             "pickFolder" -> pickFolder(result)

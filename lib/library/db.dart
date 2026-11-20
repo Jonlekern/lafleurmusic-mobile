@@ -389,6 +389,41 @@ class LibraryDb extends _$LibraryDb {
     }
   });
 
+  /// Finished copies whose file is gone (a phone restored from a backup that leaves the app's
+  /// private folder out): back in the queue, without path or size, to be downloaded again.
+  Future<void> requeueOffline(List<String> trackPaths) => transaction(() async {
+    for (var i = 0; i < trackPaths.length; i += 500) {
+      final chunk = trackPaths.skip(i).take(500).toList();
+      await (update(offline)..where((o) => o.trackPath.isIn(chunk))).write(
+        OfflineCompanion(
+          filePath: const Value(null),
+          size: const Value(0),
+          failures: const Value(0),
+          state: Value(OfflineState.queued.name),
+        ),
+      );
+    }
+  });
+
+  /// Local tracks whose file moved (old key → new key), in one transaction: the track, its
+  /// plays and the phone playlists that name it follow. A stale row already at the new key
+  /// (no file there: the destination is always free) gives way; loudness is measured again.
+  Future<void> rekeyLocalTracks(Map<String, String> moves) =>
+      transaction(() async {
+        for (final e in moves.entries) {
+          if (e.key == e.value) continue;
+          await (delete(tracks)..where((t) => t.path.equals(e.value))).go();
+          await (update(tracks)..where((t) => t.path.equals(e.key))).write(
+            TracksCompanion(path: Value(e.value)),
+          );
+          await movePlays(e.key, e.value);
+          await (delete(loudness)..where((l) => l.path.equals(e.key))).go();
+          await (update(phonePlaylistItems)
+                ..where((i) => i.trackPath.equals(e.key)))
+              .write(PhonePlaylistItemsCompanion(trackPath: Value(e.value)));
+        }
+      });
+
   /// Le dossier des copies est perdu (on en adopte un autre) : chaque copie finie passe
   /// en échec, sans chemin ni taille, à refaire depuis « À réessayer ».
   Future<void> failDoneCopies() =>

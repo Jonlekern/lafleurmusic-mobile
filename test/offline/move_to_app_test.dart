@@ -15,6 +15,7 @@ import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/sources/source.dart';
 import 'package:lafleurmusic/tags/tag_reader.dart';
 import 'package:lafleurmusic/tags/tag_writer.dart';
+import 'package:path/path.dart' as p;
 
 const _mb = 1024 * 1024;
 
@@ -629,13 +630,16 @@ void main() {
       phone.after = null;
       final journal = File('${private.path}/.move.json');
       expect(journal.existsSync(), isTrue);
-      // the private folder refuses deletes: the journal stays, marked done
-      Process.runSync('chmod', ['555', private.path]);
-      try {
-        await make().recoverMove();
-      } finally {
-        Process.runSync('chmod', ['755', private.path]);
-      }
+      // the private folder refuses deletes: the journal stays, marked done (injected, so it
+      // holds as root on Linux CI too, where file rights do not stop a delete)
+      final stuck = make()
+        ..deleteFile = (f) async {
+          if (p.isWithin(private.path, f.path)) {
+            throw FileSystemException('refused', f.path);
+          }
+          await f.delete();
+        };
+      await stuck.recoverMove();
       expect(journal.existsSync(), isTrue);
       expect(byDefault.existsSync() ? _files(byDefault) : [], isEmpty);
       // later, a file of the same size put by hand where a kept song was
@@ -661,5 +665,284 @@ void main() {
       expect(settings.keepInApp, isFalse);
       await expectSound(songs);
     });
+  });
+  group(
+    'songs the server dropped while in the app (local `app://` tracks)',
+    () {
+      const song3 = 'Art/Alb/03 Song 3.mp3';
+      const appKey = '$appScheme$song3';
+
+      /// Kept 1..3, into the app, then song 3 leaves the server: its file stays, as a local
+      /// track of the private folder, with a play and a place in a phone playlist.
+      Future<Downloader> dropped() async {
+        final d = await keptSongs();
+        await d.moveKept(toApp: true);
+        await db.dropServerTracks([
+          'subsonic://acc/3',
+        ], root: CopyRoot(private.path, phone.keyFor));
+        expect([for (final t in await db.localTracks()) t.path], [appKey]);
+        await db.addPlay(appKey, DateTime(2026));
+        final pl = await db
+            .into(db.phonePlaylists)
+            .insert(PhonePlaylistsCompanion.insert(name: 'Mine', createdAt: 1));
+        await db
+            .into(db.phonePlaylistItems)
+            .insert(
+              PhonePlaylistItemsCompanion.insert(
+                playlistId: pl,
+                position: 0,
+                trackPath: appKey,
+              ),
+            );
+        return d;
+      }
+
+      test('the return takes them to the visible folder: never left to go with '
+          'the app', () async {
+        final d = await dropped();
+        expect(
+          await d.bytesToMove(toApp: false),
+          12,
+          reason: '2 kept + 1 local',
+        );
+        final r = await d.moveKept(toApp: false);
+        expect((r.ok, r.count, r.bytes), (true, 3, 12));
+        expect(_files(private), isEmpty);
+        final back = File('${byDefault.path}/$song3');
+        expect(back.readAsBytesSync(), [1, 2, 3, 4]);
+        final key = await phone.keyFor(back.path);
+        expect([for (final t in await db.localTracks()) t.path], [key]);
+        expect(await phone.absolutePath(key), back.path);
+        expect((await db.top(10)).map((e) => e.$1.path), contains(key));
+        final items = await db.select(db.phonePlaylistItems).get();
+        expect(items.single.trackPath, key);
+        // a rescan sees the same file under the same key: one track, not two
+        await folder(d).rescan();
+        expect([for (final t in await db.localTracks()) t.path], [key]);
+        await expectKeptWhereTheSettingSays();
+      });
+
+      test('counted in the room asked for', () async {
+        final d = await dropped();
+        phone.free = 200 * _mb + 10; // usable: 10 bytes; 2 kept + 1 local: 12
+        final r = await d.moveKept(toApp: false);
+        expect((r.ok, r.neededBytes), (false, 2));
+        expect(settings.keepInApp, isTrue);
+        expect(File('${private.path}/$song3').existsSync(), isTrue);
+        expect([for (final t in await db.localTracks()) t.path], [appKey]);
+      });
+
+      test(
+        'next to a file put by hand at the same path: never written over',
+        () async {
+          final d = await dropped();
+          final mine = File('${byDefault.path}/$song3')
+            ..createSync(recursive: true)
+            ..writeAsStringSync('mine');
+          final r = await d.moveKept(toApp: false);
+          expect(r.ok, isTrue);
+          expect(mine.readAsStringSync(), 'mine');
+          expect(_files(private), isEmpty);
+          final locals = [for (final t in await db.localTracks()) t.path];
+          expect(locals, hasLength(1));
+          final moved = File(await phone.absolutePath(locals.single));
+          expect(moved.path, isNot(mine.path));
+          expect(moved.readAsBytesSync(), [1, 2, 3, 4]);
+        },
+      );
+
+      test('killed after the rows, before the setting: rolled back', () async {
+        final d = await dropped();
+        phone.before = () => Completer<void>().future;
+        unawaited(d.moveKept(toApp: false));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        phone.before = null;
+        final again = make();
+        await again.recoverMove();
+        await folder(again).rescan();
+        expect(settings.keepInApp, isTrue);
+        expect([for (final t in await db.localTracks()) t.path], [appKey]);
+        expect(File('${private.path}/$song3').existsSync(), isTrue);
+        expect(File('${byDefault.path}/$song3').existsSync(), isFalse);
+        final items = await db.select(db.phonePlaylistItems).get();
+        expect(items.single.trackPath, appKey);
+      });
+
+      test('killed after the setting, before the deletes: finished', () async {
+        final d = await dropped();
+        phone.after = () => Completer<void>().future;
+        unawaited(d.moveKept(toApp: false));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        phone.after = null;
+        final again = make();
+        await again.recoverMove();
+        await folder(again).rescan();
+        expect(settings.keepInApp, isFalse);
+        final back = File('${byDefault.path}/$song3');
+        expect(back.existsSync(), isTrue);
+        expect(File('${private.path}/$song3').existsSync(), isFalse);
+        expect(
+          [for (final t in await db.localTracks()) t.path],
+          [await phone.keyFor(back.path)],
+        );
+      });
+
+      test(
+        'in the visible folder, a dropped song stays there on the way into '
+        'the app (a local file: never moved, never deleted with the app)',
+        () async {
+          final d = await keptSongs();
+          await db.dropServerTracks([
+            'subsonic://acc/3',
+          ], root: CopyRoot(byDefault.path, phone.keyFor));
+          final file = File('${byDefault.path}/$song3');
+          expect(await d.bytesToMove(toApp: true), 8);
+          await d.moveKept(toApp: true);
+          await folder(d).rescan();
+          expect(file.existsSync(), isTrue);
+          expect(File('${private.path}/$song3').existsSync(), isFalse);
+          expect([for (final t in await db.localTracks()) t.path], [file.path]);
+        },
+      );
+    },
+  );
+
+  group(
+    'after a restore or on a new phone (private folder not in the backup)',
+    () {
+      test(
+        'in the app, kept songs whose file is gone are downloaded again',
+        () async {
+          final d = await keptSongs();
+          await d.moveKept(toApp: true);
+          final songs = _files(private);
+          private.deleteSync(
+            recursive: true,
+          ); // restored: the database is back, not the files
+          final again = make();
+          await again.recoverMove();
+          await again.resumeAtLaunch();
+          await again.whenIdle();
+          await again.whenPlaylistsSettled();
+          expect(
+            (await db.offlineRows()).where((r) => r.state == 'done'),
+            hasLength(3),
+          );
+          expect(_files(private), songs);
+          await expectKeptWhereTheSettingSays();
+        },
+      );
+
+      test('a local song of the private folder whose file is gone leaves the '
+          'library', () async {
+        final d = await keptSongs();
+        await d.moveKept(toApp: true);
+        await db.dropServerTracks([
+          'subsonic://acc/3',
+        ], root: CopyRoot(private.path, phone.keyFor));
+        private.deleteSync(recursive: true);
+        final again = make();
+        await again.recoverMove();
+        await again.resumeAtLaunch();
+        await again.whenIdle();
+        expect(await db.localTracks(), isEmpty);
+      });
+
+      test('in the visible folder: nothing changes', () async {
+        final d = await keptSongs();
+        File('${byDefault.path}/Art/Alb/03 Song 3.mp3').deleteSync();
+        final again = make();
+        await again.recoverMove();
+        await again.resumeAtLaunch();
+        await again.whenIdle();
+        expect(
+          File('${byDefault.path}/Art/Alb/03 Song 3.mp3').existsSync(),
+          isFalse,
+        );
+        expect((await db.offlineOf('subsonic://acc/3'))!.state, 'done');
+        expect(d.isMoving, isFalse);
+      });
+
+      test(
+        'a move left half done is recovered first, never re-queued',
+        () async {
+          final d = await keptSongs();
+          phone.after = () => Completer<void>().future;
+          unawaited(d.moveKept(toApp: true));
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          phone.after = null;
+          final songs = _files(byDefault)..remove('Playlists/Soirée.m3u8');
+          var downloads = 0;
+          handler = (r) async {
+            downloads++;
+            return _ok([1, 2, 3, 4]);
+          };
+          final again = make();
+          await again.recoverMove();
+          await again.resumeAtLaunch();
+          await again.whenIdle();
+          expect(_files(private)..remove('Playlists/Soirée.m3u8'), songs);
+          expect(downloads, 0, reason: 'every copy was there');
+        },
+      );
+    },
+  );
+
+  test('a playlist sync during the move never writes over a .m3u8 of the '
+      "user's in the folder the songs go back to", () async {
+    final d = await keptSongs();
+    d.followPlaylists();
+    await d.moveKept(toApp: true);
+    await d.whenPlaylistsSettled();
+    expect(_files(private), contains('Playlists/Soirée.m3u8'));
+    // in the app, the user puts a playlist of their own under the same name
+    final mine = File('${byDefault.path}/Playlists/Soirée.m3u8')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('mine');
+    final hold = Completer<void>();
+    phone.after = () =>
+        hold.future; // setting saved: the songs are on their way
+    final back = d.moveKept(toApp: false);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // the server renames a song meanwhile: the playlists table changes
+    await db.replacePlaylists('acc', [
+      (
+        id: 'p',
+        name: 'Soirée',
+        paths: ['subsonic://acc/2', 'subsonic://acc/1'],
+      ),
+    ]);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await d.whenPlaylistsSettled();
+    expect(mine.readAsStringSync(), 'mine');
+    phone.after = null;
+    hold.complete();
+    expect((await back).ok, isTrue);
+    await d.whenPlaylistsSettled();
+    expect(mine.readAsStringSync(), 'mine');
+    final ours = File('${byDefault.path}/Playlists/Soirée (2).m3u8');
+    expect(ours.readAsStringSync(), contains('../Art/Alb/02 Song 2.mp3'));
+  });
+
+  test('.nomedia and the journal in the private folder are never songs nor '
+      'moved', () async {
+    final d = await keptSongs();
+    await d.moveKept(toApp: true);
+    final nomedia = File('${private.path}/.nomedia')..writeAsStringSync('');
+    await folder(d).rescan();
+    await d.moveKept(toApp: false);
+    await d.moveKept(toApp: true);
+    await folder(d).rescan();
+    final again = make();
+    await again.recoverMove();
+    await again.resumeAtLaunch();
+    await again.whenIdle();
+    expect(nomedia.existsSync(), isTrue);
+    expect(File('${byDefault.path}/.nomedia').existsSync(), isFalse);
+    expect(await db.localTracks(), isEmpty);
+    expect(
+      (await db.offlineRows()).where((r) => r.state == 'done'),
+      hasLength(3),
+    );
   });
 }

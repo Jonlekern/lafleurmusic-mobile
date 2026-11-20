@@ -114,14 +114,15 @@ Future<LafleurApp> buildLafleurApp({
     // un compte qui ne répond pas : ses morceaux viennent d'un jumeau qui répond
     reachable: (id) => accountService.mayAnswer(id),
   );
-  downloader.followPlaylists(); // synchro, compte retiré : les .m3u8 suivent
   // un déplacement dans l'appli (ou retour) coupé par l'arrêt : fini ou défait avant que le
-  // dossier visible soit relu (un original laissé n'est pas un fichier posé à la main)
+  // dossier visible soit relu (un original laissé n'est pas un fichier posé à la main), et
+  // avant tout .m3u8 écrit (les noms notés désignent peut-être encore l'ancien dossier)
   try {
     await downloader.recoverMove();
   } on Object {
     // jamais un empêchement de démarrer
   }
+  downloader.followPlaylists(); // synchro, compte retiré : les .m3u8 suivent
   unawaited(downloader.resumeAtLaunch());
   final topKeeper = TopKeeper(
     db: db,

@@ -65,8 +65,8 @@ void main() {
           secrets: SecureSecretStore(testStorage),
         ),
       );
-      // a run that fails in app mode: its copies are still forgotten by mountGuarded (forget
-      // deletes in the kept root, the private folder then)
+      // if the run fails while in app mode, mountGuarded still forgets its copies: forget
+      // deletes in the kept root, which is the private folder at that point
       final s = app.strings;
       final device = app.downloader.device;
       await tester.pumpWidget(app);
@@ -222,6 +222,14 @@ void main() {
       }
       expect((await device.keptRoot()).path, private.path);
       expect((await device.visibleRoot()).path, visible.path);
+      if (Platform.isAndroid) {
+        // Android 7–10: the media scanner skips a folder with a .nomedia file
+        expect(
+          File(p.join(private.path, '.nomedia')).existsSync(),
+          isTrue,
+          reason: 'the private folder is never indexed by the media scanner',
+        );
+      }
       expect(hand.existsSync(), isTrue, reason: 'the hand-placed file stays');
       expect(await handListed(), isTrue, reason: 'and still in the library');
       debugPrint('PREUVE dans l\'appli : ${private.path}');

@@ -133,7 +133,15 @@ class Downloader extends ChangeNotifier {
   /// Les `.m3u8` des playlists gardées, réécrits quand une copie arrive ou part.
   late final playlistFiles = PlaylistFiles(db, device);
 
-  Future<void> _refreshPlaylists() async {
+  /// Pendant un déplacement, les `.m3u8` ne s'écrivent pas : les noms notés désignent encore
+  /// l'ancien dossier ([PlaylistFiles.leave] vient à la fin), et le dossier d'arrivée peut
+  /// avoir un fichier de l'utilisateur à ce nom. Le déplacement réécrit les siens ([move]) ;
+  /// une demande arrivée entre-temps est faite à la fin.
+  Future<void> _refreshPlaylists({bool move = false}) async {
+    if (_moving && !move) {
+      _playlistsAfterMove = true;
+      return;
+    }
     try {
       await playlistFiles.refresh();
     } catch (e) {
@@ -144,6 +152,9 @@ class Downloader extends ChangeNotifier {
 
   /// Une copie est arrivée pendant ce tour : les .m3u8 se réécrivent une fois, à la fin.
   bool _playlistsDirty = false;
+
+  /// Une réécriture des .m3u8 demandée pendant un déplacement : faite à sa fin.
+  bool _playlistsAfterMove = false;
 
   StreamSubscription<void>? _playlistsSub;
   Future<void> _playlistsJob = Future.value();
@@ -222,7 +233,26 @@ class Downloader extends ChangeNotifier {
   void _setMoving(bool v, {bool? toApp}) {
     _moving = v;
     _movingKeptToApp = v ? toApp : null;
+    if (v) {
+      _moveEnded = Completer<void>();
+    } else {
+      _moveEnded?.complete();
+      _moveEnded = null;
+      if (_playlistsAfterMove) {
+        _playlistsAfterMove = false;
+        unawaited(_playlistsSerial(_refreshPlaylists));
+      }
+    }
     notifyListeners();
+  }
+
+  Completer<void>? _moveEnded;
+
+  /// Se termine quand aucun déplacement ne tourne.
+  Future<void> _afterMove() async {
+    while (_moving) {
+      await (_moveEnded?.future ?? Future<void>.value());
+    }
   }
 
   bool _accessOk = false;
@@ -467,6 +497,8 @@ class Downloader extends ChangeNotifier {
   /// Jamais en même temps qu'un rattrapage ([syncPlaylists]).
   Future<void> forgetPlaylist(String accountId, String playlistId) =>
       _playlistsSerial(() async {
+        // son fichier est dans le dossier que le déplacement quitte, ou déjà dans l'autre
+        await _afterMove();
         await playlistFiles.remove(accountId, playlistId);
         await forgetFrom(
           KeepOrigin.playlist(accountId, playlistId),
@@ -961,9 +993,13 @@ class Downloader extends ChangeNotifier {
     };
   }
 
+  /// How a file is deleted (tests make a folder refuse it, whatever the platform's rights).
+  @visibleForTesting
+  Future<void> Function(File f) deleteFile = (f) => f.delete();
+
   Future<void> _drop(File f) async {
     try {
-      if (await f.exists()) await f.delete();
+      if (await f.exists()) await deleteFile(f);
     } catch (_) {}
   }
 
@@ -979,6 +1015,11 @@ class Downloader extends ChangeNotifier {
   Future<void> resumeAtLaunch() async {
     if (_loop == null && !_moving) {
       _sweeping = true;
+      try {
+        await _lostInPrivate();
+      } catch (_) {
+        // une base ou un dossier illisible n'empêche pas la reprise
+      }
       try {
         if (await device.rootReachable()) {
           final root = await device.keptRoot();
@@ -999,6 +1040,39 @@ class Downloader extends ChangeNotifier {
     }
     await syncPlaylists(); // un morceau gagné avant l'arrêt de l'appli
     start();
+  }
+
+  /// Le dossier privé n'est pas dans la sauvegarde, la base si : après une restauration ou
+  /// sur un nouveau téléphone, ses fichiers manquent. Dans l'appli, une copie finie sans son
+  /// fichier repart en file (téléchargée de nouveau) ; un morceau local du dossier privé sans
+  /// son fichier quitte la bibliothèque, comme tout fichier local disparu. Jamais pendant
+  /// qu'un déplacement attend d'être repris ([recoverMove] n'a pas pu finir).
+  Future<void> _lostInPrivate() async {
+    final journal = await _journalFile();
+    if (await journal.exists()) {
+      try {
+        final j = jsonDecode(await journal.readAsString());
+        if (!(j is Map && j['done'] == true)) return;
+      } catch (_) {
+        return;
+      }
+    }
+    final private = await device.privateRoot(create: false);
+    final gone = <String>[];
+    for (final t in await db.localTracks()) {
+      if (!t.path.startsWith(appScheme)) continue;
+      final f = _inside(private, t.path.substring(appScheme.length));
+      if (f != null && !await f.exists()) gone.add(t.path);
+    }
+    if (gone.isNotEmpty) await db.deletePaths(gone);
+    if (!(await settings()).keepInApp) return;
+    final lost = <String>[];
+    for (final r in await db.offlineRows()) {
+      if (r.state != OfflineState.done.name || r.filePath == null) continue;
+      final f = _inside(private, r.filePath!);
+      if (f != null && !await f.exists()) lost.add(r.trackPath);
+    }
+    if (lost.isNotEmpty) await db.requeueOffline(lost);
   }
 
   /// Retire les copies de [trackPaths] : efface leurs fichiers (sous la racine seulement,
@@ -1179,7 +1253,14 @@ class Downloader extends ChangeNotifier {
       for (final r in (await db.watchOffline().first).values)
         if (r.state == OfflineState.done.name && r.filePath != null) r,
     ];
-    final need = rows.fold<int>(0, (s, r) => s + r.size);
+    // au retour, les morceaux que leur serveur a lâchés pendant le séjour dans l'appli
+    // (morceaux locaux `app://`) : la seule copie, jamais laissée partir avec l'appli
+    final locals = toApp == false
+        ? await _privateLocals(from)
+        : const <({String key, String rel, File file, int size})>[];
+    final need =
+        rows.fold<int>(0, (s, r) => s + r.size) +
+        locals.fold<int>(0, (s, l) => s + l.size);
     try {
       await to.create(recursive: true);
       final room = await device.freeBytes(to.path) - _freeMargin;
@@ -1219,15 +1300,38 @@ class Downloader extends ChangeNotifier {
         dst: dst,
       ));
     }
+    final localPlan = <_LocalMove>[];
+    for (final l in locals) {
+      final rel = uniquePath(
+        l.rel,
+        (c) =>
+            taken.contains(c.toLowerCase()) ||
+            fileOrPlaceholderExists(p.join(to.path, c)),
+      );
+      final dst = _inside(to, rel);
+      if (dst == null) continue;
+      taken.add(rel.toLowerCase());
+      localPlan.add(
+        _LocalMove(
+          key: l.key,
+          oldRel: l.rel,
+          rel: rel,
+          newKey: await device.keyFor(dst.path),
+          src: l.file,
+          dst: dst,
+        ),
+      );
+    }
     _movingFiles.addAll([
       for (final m in plan) ...[m.src.path, m.dst.path],
+      for (final m in localPlan) ...[m.src.path, m.dst.path],
     ]);
     // entre le dossier visible et le dossier privé : noté avant la première copie, une appli
     // tuée au milieu se remet d'aplomb au lancement suivant ([recoverMove])
     File? journal;
     if (toApp != null) {
       try {
-        journal = await _writeJournal(toApp, from, to, plan);
+        journal = await _writeJournal(toApp, from, to, plan, localPlan);
       } catch (_) {
         return const KeepResult.failed();
       }
@@ -1247,6 +1351,19 @@ class Downloader extends ChangeNotifier {
         newRel[m.track] = m.rel;
         bytes += await m.dst.length();
       }
+      for (final m in localPlan) {
+        await m.dst.parent.create(recursive: true);
+        created.add(m.dst);
+        await m.src.copy(m.dst.path);
+        if (await m.dst.length() != await m.src.length()) {
+          throw const FileSystemException('size differs');
+        }
+        // même date : la relecture du dossier visible reconnaît le morceau sans le relire
+        try {
+          await m.dst.setLastModified(await m.src.lastModified());
+        } catch (_) {}
+        bytes += await m.dst.length();
+      }
     } catch (_) {
       await _dropCreated(to, created);
       await _dropJournal(journal);
@@ -1255,6 +1372,8 @@ class Downloader extends ChangeNotifier {
     // les lignes d'abord, en une transaction, puis le dossier : une ligne ne pointe
     // jamais vers un fichier qui n'est pas le nôtre, et jamais « ok » sans elles
     final oldRel = {for (final m in plan) m.track: m.oldRel};
+    final newKey = {for (final m in localPlan) m.key: m.newKey};
+    final oldKey = {for (final m in localPlan) m.newKey: m.key};
     try {
       await db.applyOfflineMove(newRel, [
         for (final r in rows)
@@ -1265,12 +1384,28 @@ class Downloader extends ChangeNotifier {
       await _dropJournal(journal);
       return const KeepResult.failed();
     }
+    if (newKey.isNotEmpty) {
+      try {
+        await db.rekeyLocalTracks(newKey);
+      } catch (_) {
+        var back = true;
+        try {
+          await db.applyOfflineMove(oldRel, const []);
+        } catch (_) {
+          back = false; // le prochain lancement les remet (journal)
+        }
+        await _dropCreated(to, created);
+        if (back) await _dropJournal(journal);
+        return const KeepResult.failed();
+      }
+    }
     try {
       await commit?.call();
     } catch (_) {
       var back = true;
       try {
         await db.applyOfflineMove(oldRel, const []); // l'ancien dossier reste
+        if (oldKey.isNotEmpty) await db.rekeyLocalTracks(oldKey);
       } catch (_) {
         back = false; // les lignes reviendront au prochain lancement (journal)
       }
@@ -1278,7 +1413,10 @@ class Downloader extends ChangeNotifier {
       if (back) await _dropJournal(journal);
       return const KeepResult.failed();
     }
-    for (final m in plan) {
+    for (final m in [
+      for (final m in plan) (src: m.src, dst: m.dst),
+      for (final m in localPlan) (src: m.src, dst: m.dst),
+    ]) {
       await _announce(m.dst.path);
       await _drop(m.src);
       await _announce(m.src.path);
@@ -1289,8 +1427,8 @@ class Downloader extends ChangeNotifier {
       await playlistFiles.leave(from);
     } catch (_) {}
     await _dropJournal(journal);
-    await _refreshPlaylists();
-    return KeepResult.queued(newRel.length, bytes);
+    await _refreshPlaylists(move: true);
+    return KeepResult.queued(newRel.length + newKey.length, bytes);
   }
 
   Future<void> _dropCreated(Directory to, List<File> created) async {
@@ -1365,6 +1503,30 @@ class Downloader extends ChangeNotifier {
     );
   }
 
+  /// The bytes [moveKept] would move: every finished copy, and on the way back the local
+  /// songs of the private folder too (songs their server dropped while in the app).
+  Future<int> bytesToMove({required bool toApp}) async =>
+      await db.offlineBytes() +
+      (toApp
+          ? 0
+          : (await _privateLocals(await device.privateRoot(create: false)))
+                .fold<int>(0, (s, l) => s + l.size));
+
+  /// Les morceaux locaux du dossier privé (clé `app://`) dont le fichier est là.
+  Future<List<({String key, String rel, File file, int size})>> _privateLocals(
+    Directory private,
+  ) async {
+    final out = <({String key, String rel, File file, int size})>[];
+    for (final t in await db.localTracks()) {
+      if (!t.path.startsWith(appScheme)) continue;
+      final rel = t.path.substring(appScheme.length);
+      final file = _inside(private, rel);
+      if (file == null || !await file.exists()) continue;
+      out.add((key: t.path, rel: rel, file: file, size: await file.length()));
+    }
+    return out;
+  }
+
   static const _journalName = '.move.json';
 
   Future<File> _journalFile() async => File(
@@ -1377,6 +1539,7 @@ class Downloader extends ChangeNotifier {
     Directory from,
     Directory to,
     List<({String track, String oldRel, String rel, File src, File dst})> plan,
+    List<_LocalMove> locals,
   ) async {
     final f = await _journalFile();
     final tmp = File('${f.path}.tmp');
@@ -1389,6 +1552,11 @@ class Downloader extends ChangeNotifier {
         'moves': [
           for (final m in plan) [m.track, m.oldRel, m.rel],
         ],
+        // morceaux locaux du dossier privé : ancienne clé, chemins, nouvelle clé
+        if (locals.isNotEmpty)
+          'locals': [
+            for (final m in locals) [m.key, m.oldRel, m.rel, m.newKey],
+          ],
       }),
       flush: true,
     );
@@ -1432,6 +1600,16 @@ class Downloader extends ChangeNotifier {
           if (m is List && m.length == 3)
             (track: '${m[0]}', oldRel: '${m[1]}', rel: '${m[2]}'),
       ];
+      final locals = [
+        for (final m in (j['locals'] as List? ?? const []))
+          if (m is List && m.length == 4)
+            (
+              key: '${m[0]}',
+              oldRel: '${m[1]}',
+              rel: '${m[2]}',
+              newKey: '${m[3]}',
+            ),
+      ];
       final private = await device.privateRoot(create: false);
       final visible = await device.visibleRoot();
       final sameVisible = p.equals(
@@ -1458,6 +1636,24 @@ class Downloader extends ChangeNotifier {
             await playlistFiles.leave(from);
           } catch (_) {}
         }
+        // morceaux locaux (seulement au retour) : l'original part si sa copie est là, dans le
+        // même dossier visible ; sinon il reste, et sa ligne reprend sa clé `app://`
+        final keysBack = <String, String>{};
+        for (final m in locals) {
+          final src = _inside(from, m.oldRel), dst = _inside(to, m.rel);
+          if (src == null || dst == null || !await src.exists()) continue;
+          final copied =
+              sameVisible &&
+              await dst.exists() &&
+              await dst.length() == await src.length();
+          if (copied) {
+            await _drop(src);
+            _pruneEmpty(from, src.parent);
+          } else if (await db.trackByPath(m.newKey) != null) {
+            keysBack[m.newKey] = m.key;
+          }
+        }
+        if (keysBack.isNotEmpty) await db.rekeyLocalTracks(keysBack);
       } else {
         // défait : les lignes reviennent à l'ancien dossier, les copies partent
         final back = <String, String>{};
@@ -1467,7 +1663,20 @@ class Downloader extends ChangeNotifier {
           if (row?.filePath == m.rel) back[m.track] = m.oldRel;
         }
         if (back.isNotEmpty) await db.applyOfflineMove(back, const []);
+        final keysBack = <String, String>{
+          for (final m in locals)
+            if (await db.trackByPath(m.newKey) != null &&
+                await db.trackByPath(m.key) == null)
+              m.newKey: m.key,
+        };
+        if (keysBack.isNotEmpty) await db.rekeyLocalTracks(keysBack);
         if (toOk) {
+          for (final m in locals) {
+            final src = _inside(from, m.oldRel), dst = _inside(to, m.rel);
+            if (src == null || dst == null || !await src.exists()) continue;
+            await _drop(dst);
+            _pruneEmpty(to, dst.parent);
+          }
           for (final m in moves) {
             final src = _inside(from, m.oldRel), dst = _inside(to, m.rel);
             if (src == null || dst == null) continue;
@@ -1483,6 +1692,21 @@ class Downloader extends ChangeNotifier {
       // base ou dossier illisible : le journal reste, le prochain lancement réessaie
     }
   }
+}
+
+/// Un morceau local du dossier privé qui revient au dossier visible : sa clé `app://` [key]
+/// devient [newKey] (celle de [dst]).
+class _LocalMove {
+  const _LocalMove({
+    required this.key,
+    required this.oldRel,
+    required this.rel,
+    required this.newKey,
+    required this.src,
+    required this.dst,
+  });
+  final String key, oldRel, rel, newKey;
+  final File src, dst;
 }
 
 /// Le téléchargement en cours : son client (le fermer l'interrompt).

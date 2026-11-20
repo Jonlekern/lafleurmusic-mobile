@@ -89,6 +89,13 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
   /// Les changements demandés à [moveKept] : vrai = dans l'appli.
   final keptMoves = <bool>[];
 
+  /// Réponse de [bytesToMove] ; null : la démo ne sait pas (l'écran garde sa taille).
+  int? moveBytes;
+
+  @override
+  Future<int> bytesToMove({required bool toApp}) async =>
+      moveBytes ?? (throw UnsupportedError('demo'));
+
   /// Ce que fait le vrai téléchargeur quand [moveKept] réussit (le mode est enregistré).
   Future<void> Function(bool toApp)? commitKept;
 

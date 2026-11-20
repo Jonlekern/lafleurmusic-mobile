@@ -1065,7 +1065,17 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     if (downloader == null) return;
     final s = app.strings;
     final messenger = ScaffoldMessenger.of(context);
-    final size = s.size(_data.used);
+    // au retour, les morceaux locaux du dossier privé (lâchés par leur serveur) partent aussi
+    var bytes = _data.used;
+    if (!toApp) {
+      try {
+        bytes = await downloader.bytesToMove(toApp: false);
+      } on Object {
+        // la base ne répond pas : la taille gardée
+      }
+    }
+    if (!mounted) return;
+    final size = s.size(bytes);
     // le retour va au dossier choisi s'il répond encore, sinon à celui par défaut
     if (!toApp) await _loadFolder();
     if (!mounted) return;
