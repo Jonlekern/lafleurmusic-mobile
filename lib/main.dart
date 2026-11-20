@@ -115,6 +115,13 @@ Future<LafleurApp> buildLafleurApp({
     reachable: (id) => accountService.mayAnswer(id),
   );
   downloader.followPlaylists(); // synchro, compte retiré : les .m3u8 suivent
+  // un déplacement dans l'appli (ou retour) coupé par l'arrêt : fini ou défait avant que le
+  // dossier visible soit relu (un original laissé n'est pas un fichier posé à la main)
+  try {
+    await downloader.recoverMove();
+  } on Object {
+    // jamais un empêchement de démarrer
+  }
   unawaited(downloader.resumeAtLaunch());
   final topKeeper = TopKeeper(
     db: db,
@@ -156,6 +163,7 @@ Future<LafleurApp> buildLafleurApp({
     reader: TagLibReader(),
     inFlight: () =>
         downloader.targetPath, // le fichier en cours n'est pas posé à la main
+    moving: () => downloader.movingFiles, // ni ceux d'un déplacement en cours
   );
   // le lancement relit déjà ; une erreur du téléphone n'empêche jamais l'appli de démarrer
   // le dossier relu, et celui des copies gardées (que la relecture laisse de côté)

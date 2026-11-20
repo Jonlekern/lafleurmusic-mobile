@@ -32,16 +32,21 @@ final class DeviceChannel: NSObject, UIDocumentPickerDelegate {
       }
     case "privateRoot":
       // dossier privé des morceaux gardés : parti avec l'appli, jamais dans la sauvegarde iCloud
-      // (la musique se re-télécharge) ; l'exclusion est remise à chaque appel, elle ne coûte rien
+      // (la musique se re-télécharge) ; l'exclusion est remise à chaque appel, elle ne coûte rien.
+      // Sans « create » : son chemin seul, rien n'est créé (personne n'y garde rien encore).
+      let create = args?["create"] as? Bool ?? true
       do {
         let support = try FileManager.default.url(
-          for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+          for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: create)
         var dir = support.appendingPathComponent("LAFLEURMUSIC", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        if args?["excludeFromBackup"] as? Bool ?? true {
-          var values = URLResourceValues()
-          values.isExcludedFromBackup = true
-          try dir.setResourceValues(values)
+        if create {
+          try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+          if args?["excludeFromBackup"] as? Bool ?? true {
+            // une exclusion refusée n'empêche pas de garder la musique
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try? dir.setResourceValues(values)
+          }
         }
         result(dir.path)
       } catch {

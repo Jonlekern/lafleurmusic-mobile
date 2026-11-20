@@ -29,11 +29,14 @@ abstract class Device {
   Future<Directory> visibleRoot();
 
   /// Le dossier privé de l'appli, effacé avec elle (iOS : exclu de la sauvegarde iCloud ;
-  /// Android : jamais annoncé à la médiathèque).
-  Future<Directory> privateRoot();
+  /// Android : jamais annoncé à la médiathèque). Créé seulement avec [create] : sinon son
+  /// chemin seul, le dossier peut ne pas exister (personne n'y a encore rien gardé).
+  Future<Directory> privateRoot({bool create = true});
 
   /// Enregistre le réglage `keepInApp` ; une erreur d'enregistrement le laisse comme avant.
-  Future<void> setKeepInApp(bool value);
+  /// [forgetFolder] : le dossier choisi est oublié en même temps (retour au dossier par
+  /// défaut, le dossier choisi ne répond plus).
+  Future<void> setKeepInApp(bool value, {bool forgetFolder = false});
 
   /// Sélecteur de dossier du système. Renvoie un candidat (sans changer de dossier),
   /// ou null si annulé. Lève [FolderNotLocalException] si le dossier n'est pas sur le
@@ -154,11 +157,12 @@ class ChannelDevice implements Device {
 
   String? _private; // dernier chemin du dossier privé rendu par le natif
 
-  /// Le natif crée le dossier et (iOS) le remarque exclu de la sauvegarde à chaque appel.
+  /// Avec [create], le natif crée le dossier et (iOS) le remarque exclu de la sauvegarde.
   @override
-  Future<Directory> privateRoot() async {
+  Future<Directory> privateRoot({bool create = true}) async {
     final path = (await _ch.invokeMethod<String>('privateRoot', {
       'excludeFromBackup': true,
+      'create': create,
     }))!;
     _private = path;
     return Directory(path);
@@ -169,21 +173,29 @@ class ChannelDevice implements Device {
     final known = _private;
     if (known != null) return known;
     try {
-      return (await privateRoot()).path;
+      // son chemin seul : rien n'est créé
+      return (await privateRoot(create: false)).path;
     } on Object {
       return null;
     }
   }
 
   @override
-  Future<void> setKeepInApp(bool value) async {
-    final before = settings.keepInApp;
+  Future<void> setKeepInApp(bool value, {bool forgetFolder = false}) async {
+    final before = settings.keepInApp, folder = settings.musicFolder;
     settings.keepInApp = value;
+    if (forgetFolder) settings.musicFolder = null;
     try {
       await saveSettings();
     } on Object {
-      settings.keepInApp = before;
+      settings
+        ..keepInApp = before
+        ..musicFolder = folder;
       rethrow;
+    }
+    if (forgetFolder) {
+      _chosen = null; // le dossier par défaut, tout de suite
+      _resolving = Future.value();
     }
   }
 

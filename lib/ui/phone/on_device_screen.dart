@@ -233,6 +233,19 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       ); // l'écran est parti pendant le choix : le candidat est abandonné
       return;
     }
+    // morceaux gardés dans l'appli : seul le dossier visible change, rien ne se déplace
+    if (app.settings?.keepInApp ?? false) {
+      try {
+        await device.commitFolder(c);
+      } on Object {
+        await _release(device);
+        say(messenger, s.folderMoveFailed);
+        return;
+      }
+      unawaited(app.localFolder?.rescan());
+      if (mounted) await _loadFolder();
+      return;
+    }
     // l'ancien dossier ne répond plus : rien à déplacer, on peut seulement adopter le nouveau
     var reachable = true;
     try {

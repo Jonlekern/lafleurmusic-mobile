@@ -20,12 +20,13 @@ class FakeDevice implements Device {
   Future<Directory> keptRoot() async =>
       keepInApp ? await privateRoot() : await visibleRoot();
   @override
-  Future<Directory> privateRoot() async {
+  Future<Directory> privateRoot({bool create = true}) async {
     rootReads++;
     return private!;
   }
   @override
-  Future<void> setKeepInApp(bool value) async => keepInApp = value;
+  Future<void> setKeepInApp(bool value, {bool forgetFolder = false}) async =>
+      keepInApp = value;
   @override
   Future<bool> rootReachable() async => keepInApp || reachable;
   @override

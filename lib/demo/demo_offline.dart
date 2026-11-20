@@ -86,6 +86,19 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
     return moveResult;
   }
 
+  /// Les changements demandés à [moveKept] : vrai = dans l'appli.
+  final keptMoves = <bool>[];
+
+  @override
+  Future<KeepResult> moveKept({required bool toApp}) async {
+    keptMoves.add(toApp);
+    await moveGate?.future;
+    return moveResult;
+  }
+
+  @override
+  Set<String> get movingFiles => const {};
+
   @override
   Future<KeepResult> keep(
     List<Track> tracks, {
@@ -290,12 +303,14 @@ class DemoDevice implements Device {
       keepInApp ? await privateRoot() : await visibleRoot();
 
   @override
-  Future<Directory> privateRoot() async => Directory(private ?? '$root.app');
+  Future<Directory> privateRoot({bool create = true}) async =>
+      Directory(private ?? '$root.app');
 
   @override
-  Future<void> setKeepInApp(bool value) async {
+  Future<void> setKeepInApp(bool value, {bool forgetFolder = false}) async {
     keepInApp = value;
     settings?.keepInApp = value;
+    if (forgetFolder) settings?.musicFolder = null;
   }
 
   @override

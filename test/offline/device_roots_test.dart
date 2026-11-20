@@ -188,7 +188,49 @@ void main() {
     final asks = calls.where((c) => c.method == 'privateRoot').toList();
     expect(asks, hasLength(2));
     for (final c in asks) {
-      expect(c.arguments, {'excludeFromBackup': true});
+      expect(c.arguments, {'excludeFromBackup': true, 'create': true});
     }
+  });
+
+  test('the private folder is made only to keep songs there: keys and '
+      'announces ask for its path alone', () async {
+    final d = device();
+    await d.keyFor('${def()}/Art/a.mp3');
+    await d.absolutePath('app://Art/a.mp3');
+    await d.announce('${def()}/Art/a.mp3');
+    await d.keptRoot();
+    final asks = calls.where((c) => c.method == 'privateRoot').toList();
+    expect(asks, isNotEmpty);
+    for (final c in asks) {
+      expect((c.arguments as Map)['create'], isFalse);
+    }
+    settings.keepInApp = true;
+    await d.keptRoot();
+    expect(
+      (calls.where((c) => c.method == 'privateRoot').last.arguments
+          as Map)['create'],
+      isTrue,
+    );
+  });
+
+  test('setKeepInApp with forgetFolder: back to the default folder at once, '
+      'both saved together; a failed save keeps both', () async {
+    final x = Directory('${tmp.path}/X')..createSync();
+    settings
+      ..musicFolder = x.path
+      ..keepInApp = true;
+    final d = device();
+    expect((await d.visibleRoot()).path, x.path);
+    save = () async => throw const FileSystemException('disk full');
+    await expectLater(
+      d.setKeepInApp(false, forgetFolder: true),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect((settings.keepInApp, settings.musicFolder), (true, x.path));
+    save = null;
+    await d.setKeepInApp(false, forgetFolder: true);
+    expect((settings.keepInApp, settings.musicFolder), (false, null));
+    expect((await d.visibleRoot()).path, def());
+    expect(await d.visibleReachable(), isTrue);
   });
 }

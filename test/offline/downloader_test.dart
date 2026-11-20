@@ -72,9 +72,9 @@ class _Device implements Device {
   @override
   Future<Directory> visibleRoot() async => root;
   @override
-  Future<Directory> privateRoot() async => root;
+  Future<Directory> privateRoot({bool create = true}) async => root;
   @override
-  Future<void> setKeepInApp(bool value) async {}
+  Future<void> setKeepInApp(bool value, {bool forgetFolder = false}) async {}
   @override
   Future<bool> visibleReachable() => rootReachable();
   @override

@@ -19,6 +19,7 @@ class LocalFolder {
     required this.device,
     required this.reader,
     this.inFlight,
+    this.moving,
   });
   final LibraryDb db;
   final Device device;
@@ -27,15 +28,17 @@ class LocalFolder {
   /// Le fichier que le téléchargeur est en train de ranger (Downloader.targetPath).
   final String? Function()? inFlight;
 
-  Future<bool>?
-  _access; // la permission n'est demandée qu'une fois par lancement
+  /// Les fichiers du déplacement en cours (Downloader.movingFiles) : un original pas encore
+  /// effacé n'est pas un fichier posé à la main.
+  final Set<String> Function()? moving;
+
+  Future<bool>? _access; // la permission n'est demandée qu'une fois par lancement
 
   Future<bool> _ensureAccess() async {
     try {
       return await (_access ??= device.ensureAccess(readOthers: true));
     } on Object {
-      _access =
-          null; // demande déjà en cours, plugin absent… : refusé cette fois
+      _access = null; // demande déjà en cours, plugin absent… : refusé cette fois
       return false;
     }
   }
@@ -78,6 +81,7 @@ class LocalFolder {
       for (final o in await db.offlineRows())
         if (o.filePath != null) p.join(kept.path, o.filePath!),
       ?inFlight?.call(),
+      ...?moving?.call(),
     };
     var ours = await oursNow();
     final known = <String, ({String abs, int mtime, int size})>{};

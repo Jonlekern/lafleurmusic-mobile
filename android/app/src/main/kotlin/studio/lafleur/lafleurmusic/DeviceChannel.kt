@@ -38,7 +38,8 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
             }
             "privateRoot" -> {
                 val dir = privateRoot()
-                dir.mkdirs()
+                // sans « create » : son chemin seul, rien n'est créé
+                if (call.argument<Boolean>("create") != false) dir.mkdirs()
                 result.success(dir.path)
             }
             "pickFolder" -> pickFolder(result)

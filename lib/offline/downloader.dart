@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show TableUpdateQuery;
@@ -27,7 +28,7 @@ const _freeMargin = 200 * 1024 * 1024;
 /// Taille comptée pour un morceau dont le serveur ne dit pas la taille.
 const unknownTrackSize = 10 * 1024 * 1024;
 
-/// Réponse de [Downloader.keep] et [Downloader.moveRoot].
+/// Réponse de [Downloader.keep], [Downloader.moveRoot] et [Downloader.moveKept].
 class KeepResult {
   const KeepResult.queued(this.count, this.bytes)
     : ok = true,
@@ -191,6 +192,11 @@ class Downloader extends ChangeNotifier {
   bool _sweeping = false; // resumeAtLaunch efface les .part : la boucle attend
   bool _wanted = false; // un start() a eu lieu depuis le début du tour
   bool _moving = false; // moveRoot en cours : la boucle ne tourne pas
+  final _movingFiles = <String>{};
+
+  /// Les fichiers (chemins absolus) que le déplacement en cours copie ou va effacer : ni
+  /// l'original ni sa copie ne sont des fichiers posés à la main ([LocalFolder]).
+  Set<String> get movingFiles => Set.unmodifiable(_movingFiles);
   bool _accessOk = false;
   bool _accessDenied = false;
   final _reserved =
@@ -563,7 +569,8 @@ class Downloader extends ChangeNotifier {
           _lastError = 'folder unavailable';
           break;
         }
-        if (!_accessOk) {
+        // le dossier privé de l'appli n'a besoin d'aucun droit
+        if (!_accessOk && !(await settings()).keepInApp) {
           if (!await device.ensureAccess()) {
             _accessDenied = true; // refusé : rien n'est marqué en échec
             notifyListeners();
@@ -1089,6 +1096,13 @@ class Downloader extends ChangeNotifier {
     required Directory from,
     required Directory to,
     Future<void> Function()? commit,
+  }) => _moveRoot(from, to, commit);
+
+  Future<KeepResult> _moveRoot(
+    Directory from,
+    Directory to,
+    Future<void> Function()? commit, {
+    bool? toApp,
   }) async {
     _moving = true;
     _active?.cancel();
@@ -1099,7 +1113,7 @@ class Downloader extends ChangeNotifier {
         await _releaseQuietly();
         return const KeepResult.failed();
       }
-      final r = await _move(from, to, commit);
+      final r = await _move(from, to, commit, toApp: toApp);
       if (!r.ok) await _releaseQuietly();
       return r;
     } catch (_) {
@@ -1107,6 +1121,7 @@ class Downloader extends ChangeNotifier {
       rethrow;
     } finally {
       _moving = false;
+      _movingFiles.clear();
       _reserved.clear();
       start();
     }
@@ -1121,8 +1136,9 @@ class Downloader extends ChangeNotifier {
   Future<KeepResult> _move(
     Directory from,
     Directory to,
-    Future<void> Function()? commit,
-  ) async {
+    Future<void> Function()? commit, {
+    bool? toApp,
+  }) async {
     final a = p.normalize(from.path), b = p.normalize(to.path);
     if (a == b) {
       await _releaseQuietly(); // rien à adopter
@@ -1145,49 +1161,71 @@ class Downloader extends ChangeNotifier {
       return const KeepResult.failed();
     }
 
+    // chaque copie et son nom dans [to] d'abord, sans rien écrire
+    final plan =
+        <({String track, String oldRel, String rel, File src, File dst})>[];
+    final taken = <String>{};
+    for (final r in rows) {
+      final src = _inside(from, r.filePath!);
+      if (src == null) continue;
+      if (!await src.exists()) {
+        // encore là, mais dans iCloud seulement : ni perdu, ni copiable
+        if (fileOrPlaceholderExists(src.path)) return const KeepResult.failed();
+        continue;
+      }
+      final rel = uniquePath(
+        r.filePath!,
+        (c) =>
+            taken.contains(c.toLowerCase()) ||
+            fileOrPlaceholderExists(p.join(to.path, c)),
+      );
+      final dst = _inside(to, rel);
+      if (dst == null) continue;
+      taken.add(rel.toLowerCase());
+      plan.add((
+        track: r.trackPath,
+        oldRel: r.filePath!,
+        rel: rel,
+        src: src,
+        dst: dst,
+      ));
+    }
+    _movingFiles.addAll([
+      for (final m in plan) ...[m.src.path, m.dst.path],
+    ]);
+    // entre le dossier visible et le dossier privé : noté avant la première copie, une appli
+    // tuée au milieu se remet d'aplomb au lancement suivant ([recoverMove])
+    File? journal;
+    if (toApp != null) {
+      try {
+        journal = await _writeJournal(toApp, from, to, plan);
+      } catch (_) {
+        return const KeepResult.failed();
+      }
+    }
+
     final created = <File>[]; // seulement ce que cette copie a créé
     final newRel = <String, String>{}; // trackPath -> chemin relatif dans [to]
-    final taken = <String>{};
     var bytes = 0;
     try {
-      for (final r in rows) {
-        final src = _inside(from, r.filePath!);
-        if (src == null) continue;
-        if (!await src.exists()) {
-          // encore là, mais dans iCloud seulement : ni perdu, ni copiable
-          if (fileOrPlaceholderExists(src.path)) {
-            throw const FileSystemException('not downloaded');
-          }
-          continue;
-        }
-        final rel = uniquePath(
-          r.filePath!,
-          (c) =>
-              taken.contains(c.toLowerCase()) ||
-              fileOrPlaceholderExists(p.join(to.path, c)),
-        );
-        final dst = _inside(to, rel);
-        if (dst == null) continue;
-        taken.add(rel.toLowerCase());
-        await dst.parent.create(recursive: true);
-        created.add(dst);
-        await src.copy(dst.path);
-        if (await dst.length() != await src.length()) {
+      for (final m in plan) {
+        await m.dst.parent.create(recursive: true);
+        created.add(m.dst);
+        await m.src.copy(m.dst.path);
+        if (await m.dst.length() != await m.src.length()) {
           throw const FileSystemException('size differs');
         }
-        newRel[r.trackPath] = rel;
-        bytes += await dst.length();
+        newRel[m.track] = m.rel;
+        bytes += await m.dst.length();
       }
     } catch (_) {
       await _dropCreated(to, created);
+      await _dropJournal(journal);
       return const KeepResult.failed();
     }
     // les lignes d'abord, en une transaction, puis le dossier : une ligne ne pointe
     // jamais vers un fichier qui n'est pas le nôtre, et jamais « ok » sans elles
-    final oldRel = {
-      for (final r in rows)
-        if (newRel.containsKey(r.trackPath)) r.trackPath: r.filePath!,
-    };
+    final oldRel = {for (final m in plan) m.track: m.oldRel};
     try {
       await db.applyOfflineMove(newRel, [
         for (final r in rows)
@@ -1195,31 +1233,33 @@ class Downloader extends ChangeNotifier {
       ]);
     } catch (_) {
       await _dropCreated(to, created);
+      await _dropJournal(journal);
       return const KeepResult.failed();
     }
     try {
       await commit?.call();
     } catch (_) {
+      var back = true;
       try {
         await db.applyOfflineMove(oldRel, const []); // l'ancien dossier reste
-      } catch (_) {}
+      } catch (_) {
+        back = false; // les lignes reviendront au prochain lancement (journal)
+      }
       await _dropCreated(to, created);
+      if (back) await _dropJournal(journal);
       return const KeepResult.failed();
     }
-    for (final r in rows) {
-      final rel = newRel[r.trackPath];
-      if (rel == null) continue;
-      await _announce(p.join(to.path, rel));
-      final src = _inside(from, r.filePath!);
-      if (src == null) continue;
-      await _drop(src);
-      await _announce(src.path);
-      _pruneEmpty(from, src.parent);
+    for (final m in plan) {
+      await _announce(m.dst.path);
+      await _drop(m.src);
+      await _announce(m.src.path);
+      _pruneEmpty(from, m.src.parent);
     }
     // nos .m3u8 quittent l'ancien dossier ; réécrits dans le nouveau
     try {
       await playlistFiles.leave(from);
     } catch (_) {}
+    await _dropJournal(journal);
     await _refreshPlaylists();
     return KeepResult.queued(newRel.length, bytes);
   }
@@ -1258,6 +1298,142 @@ class Downloader extends ChangeNotifier {
       _moving = false;
       _reserved.clear();
       start();
+    }
+  }
+
+  /// Les morceaux gardés passent dans le dossier privé de l'appli ([toApp]) ou en reviennent :
+  /// [moveRoot] du dossier visible (le dossier choisi, ou celui par défaut) vers le dossier
+  /// privé, puis `keepInApp` vrai ; au retour, vers le dossier choisi avant (le réglage
+  /// `musicFolder` est gardé), ou celui par défaut s'il ne répond plus (alors adopté). Les
+  /// `.m3u8` suivent. Les fichiers posés à la main ne bougent jamais. Refusé sans rien
+  /// toucher s'il manque de la place ([KeepResult.tooBig]) ou si le dossier choisi ne répond
+  /// plus au départ ([KeepResult.folderUnavailable]). Une appli tuée au milieu se remet
+  /// d'aplomb au lancement suivant ([recoverMove]).
+  Future<KeepResult> moveKept({required bool toApp}) async {
+    if ((await settings()).keepInApp == toApp) {
+      return const KeepResult.queued(0, 0);
+    }
+    if (toApp) {
+      // le dossier choisi ne répond plus : ses copies ne peuvent pas partir d'ici
+      if (!await device.visibleReachable()) {
+        return const KeepResult.folderUnavailable();
+      }
+      return _moveRoot(
+        await device.visibleRoot(),
+        await device.privateRoot(),
+        () => device.setKeepInApp(true),
+        toApp: true,
+      );
+    }
+    final chosenAnswers = await device.visibleReachable();
+    return _moveRoot(
+      await device.privateRoot(),
+      await device.visibleRoot(),
+      () => device.setKeepInApp(false, forgetFolder: !chosenAnswers),
+      toApp: false,
+    );
+  }
+
+  static const _journalName = '.move.json';
+
+  Future<File> _journalFile() async => File(
+    p.join((await device.privateRoot(create: false)).path, _journalName),
+  );
+
+  /// Écrit à côté puis renommé : jamais un journal à moitié écrit.
+  Future<File> _writeJournal(
+    bool toApp,
+    Directory from,
+    Directory to,
+    List<({String track, String oldRel, String rel, File src, File dst})> plan,
+  ) async {
+    final f = await _journalFile();
+    final tmp = File('${f.path}.tmp');
+    await tmp.writeAsString(
+      jsonEncode({
+        'toApp': toApp,
+        'visible': (toApp ? from : to).path,
+        'moves': [
+          for (final m in plan) [m.track, m.oldRel, m.rel],
+        ],
+      }),
+      flush: true,
+    );
+    await tmp.rename(f.path);
+    return f;
+  }
+
+  Future<void> _dropJournal(File? f) async {
+    if (f != null) await _drop(f);
+  }
+
+  /// Au lancement, avant toute relecture du dossier visible : un déplacement entre le dossier
+  /// visible et le dossier privé coupé par l'arrêt de l'appli est fini ou défait, selon que
+  /// `keepInApp` a été enregistré. Enregistré : les copies sont toutes là et les lignes y
+  /// pointent, les originaux partent. Pas encore : les lignes reprennent leurs anciens
+  /// chemins (l'ancien dossier a tous ses fichiers) et les copies partent. Un côté visible qui
+  /// n'est plus le même dossier (dossier choisi parti) n'est pas touché.
+  Future<void> recoverMove() async {
+    final File f;
+    final Map<String, Object?> j;
+    try {
+      f = await _journalFile();
+      if (!await f.exists()) return;
+      j = (jsonDecode(await f.readAsString()) as Map).cast<String, Object?>();
+    } catch (_) {
+      return; // pas de journal lisible : rien n'était en route
+    }
+    try {
+      final toApp = j['toApp'] == true;
+      final moves = [
+        for (final m in (j['moves'] as List? ?? const []))
+          if (m is List && m.length == 3)
+            (track: '${m[0]}', oldRel: '${m[1]}', rel: '${m[2]}'),
+      ];
+      final private = await device.privateRoot(create: false);
+      final visible = await device.visibleRoot();
+      final sameVisible = p.equals(visible.path, '${j['visible']}');
+      final from = toApp ? visible : private, to = toApp ? private : visible;
+      final fromOk = toApp ? sameVisible : true,
+          toOk = toApp ? true : sameVisible;
+      if ((await settings()).keepInApp == toApp) {
+        // fini : les copies vérifiées sont là, les lignes y pointent ; les originaux partent
+        if (fromOk) {
+          for (final m in moves) {
+            final src = _inside(from, m.oldRel), dst = _inside(to, m.rel);
+            if (src == null || dst == null) continue;
+            if (!await dst.exists() || !await src.exists()) continue;
+            await _drop(src);
+            await _announce(src.path);
+            _pruneEmpty(from, src.parent);
+          }
+          try {
+            await playlistFiles.leave(from);
+          } catch (_) {}
+        }
+      } else {
+        // défait : les lignes reviennent à l'ancien dossier, les copies partent
+        final back = <String, String>{};
+        for (final m in moves) {
+          if (m.rel == m.oldRel) continue;
+          final row = await db.offlineOf(m.track);
+          if (row?.filePath == m.rel) back[m.track] = m.oldRel;
+        }
+        if (back.isNotEmpty) await db.applyOfflineMove(back, const []);
+        if (toOk) {
+          for (final m in moves) {
+            final src = _inside(from, m.oldRel), dst = _inside(to, m.rel);
+            if (src == null || dst == null) continue;
+            // l'original est là : la copie (peut-être coupée) n'a jamais servi
+            if (!await src.exists()) continue;
+            await _drop(dst);
+            _pruneEmpty(to, dst.parent);
+          }
+        }
+      }
+      await _drop(f);
+    } catch (_) {
+      // base ou dossier illisible : le journal reste, le prochain lancement réessaie
     }
   }
 }

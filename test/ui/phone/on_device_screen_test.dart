@@ -473,6 +473,24 @@ void main() {
     );
 
     phoneTest(
+      'morceaux gardés dans l\'appli : seul le dossier visible change, rien ne bouge',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        await r.device.setKeepInApp(true);
+        r.device.reachable = false; // même l'ancien dossier parti : aucune question
+        r.device.picked = const PickedFolder('/x/Cloud/LAFLEURMUSIC', 'b64');
+        await choose(tester);
+        expect(find.text("L'ancien dossier est introuvable"), findsNothing);
+        expect(r.f.downloader.moves, isEmpty);
+        expect(r.f.downloader.adopted, 0);
+        expect(r.device.committed.single.path, '/x/Cloud/LAFLEURMUSIC');
+        expect(r.folder.rescans, 1);
+        expect(find.byType(SnackBar), findsNothing);
+      },
+    );
+
+    phoneTest(
       'ancien dossier indisponible : « Utiliser ce dossier » l\'adopte sans rien déplacer',
       TargetPlatform.iOS,
       (tester) async {
