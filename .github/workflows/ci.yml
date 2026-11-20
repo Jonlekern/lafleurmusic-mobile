@@ -106,8 +106,21 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs
-      # Signed with the debug key for now.
-      - run: flutter build apk --release
+      # Signed with the fixed release key (repository secrets), so each version
+      # installs over the previous one. Pull requests from forks get no secrets
+      # and fall back to the debug key.
+      - name: Build the release APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          fi
+          flutter build apk --release
+          rm -f "$RUNNER_TEMP/release.jks"
       - name: Rename the APK
         run: cp build/app/outputs/flutter-apk/app-release.apk LAFLEURMUSIC-android.apk
       - uses: actions/upload-artifact@v4
