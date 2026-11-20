@@ -426,82 +426,22 @@ class _CoverflowScreenState extends State<CoverflowScreen>
     );
   }
 
-  /// Téléphone (maquette 2, écran 5) : les voisines plus loin du centre, et les suivantes bien espacées
-  /// (l'éventail de trois pochettes de chaque côté ne s'entasse pas).
-  double _dx(CoverSlot slot) {
-    if (!widget.phone) return slot.dx;
-    final a = slot.dx.abs();
-    return slot.dx.sign * (a <= 270 ? a * 1.35 : 270 * 1.35 + (a - 270) * 1.9);
-  }
+  double _dx(CoverSlot slot) => widget.phone ? spreadDx(slot.dx) : slot.dx;
 
   Widget _cover(int i, double size, double k) {
     final slot = layout(_pos, i);
-    final b = slot.brightness;
-    final img = CoverImage(
-      trackPath: widget.albums[i].coverTrackPath,
-      size: size,
-      radius: 0,
-    );
-    return Transform(
+    return FlowCover(
       key: ValueKey(i),
-      alignment: Alignment.topCenter,
-      origin: Offset(0, size / 2), // pivote autour du milieu de la pochette
-      // décalage à plat, puis réduction (côtés plus petits que le centre, maquette 3), puis inclinaison en perspective
-      transform: Matrix4.translationValues(_dx(slot) * k, 0, 0)
-        ..multiply(Matrix4.diagonal3Values(slot.scale, slot.scale, 1))
-        ..multiply(Matrix4.identity()..setEntry(3, 2, 0.0006))
-        ..rotateY(slot.angle),
-      child: GestureDetector(
-        onTap: () => i == _current ? _play() : _goTo(i.toDouble()),
-        child: ColorFiltered(
-          colorFilter: ColorFilter.matrix([
-            b,
-            0,
-            0,
-            0,
-            0,
-            0,
-            b,
-            0,
-            0,
-            0,
-            0,
-            0,
-            b,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            0,
-          ]),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              img,
-              const SizedBox(height: 2),
-              // reflet : seulement le haut de la pochette retournée
-              ClipRect(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  heightFactor: widget.phone ? 0.2 : 0.42,
-                  child: ShaderMask(
-                    shaderCallback: (r) => LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [context.colors.shine, context.colors.shineFade],
-                      stops: [0, 0.9],
-                    ).createShader(r),
-                    blendMode: BlendMode.dstIn,
-                    child: Transform.flip(flipY: true, child: img),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+      slot: slot,
+      dx: _dx(slot) * k,
+      size: size,
+      image: CoverImage(
+        trackPath: widget.albums[i].coverTrackPath,
+        size: size,
+        radius: 0,
       ),
+      reflection: widget.phone ? 0.2 : 0.42,
+      onTap: () => i == _current ? _play() : _goTo(i.toDouble()),
     );
   }
 }

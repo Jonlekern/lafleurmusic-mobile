@@ -5,6 +5,7 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/demo/demo_offline.dart';
+import 'package:lafleurmusic/ui/classic/classic_coverflow.dart';
 import 'package:lafleurmusic/ui/classic/classic_now.dart';
 import 'package:lafleurmusic/ui/classic/classic_shell.dart';
 import 'package:lafleurmusic/ui/classic/click_wheel.dart';
@@ -65,6 +66,19 @@ void main() {
         debugDefaultTargetPlatformOverride = null;
       },
     );
+
+    // Maquette 18 A : le Cover Flow dans l'écran, la molette dessous
+    testWidgets(inMode(mode, '18 A : Cover Flow, la molette dessous'), (
+      tester,
+    ) async {
+      await start(tester);
+      await tester.tapAt(tester.getCenter(find.byType(ClickWheel)));
+      await settle(tester);
+      await tester.pumpAndSettle();
+      expect(find.byType(ClassicCoverflow), findsOneWidget);
+      await shot('18a-classic-coverflow');
+      debugDefaultTargetPlatformOverride = null;
+    });
 
     // Maquette 12 : En cours en Mode Classic et le choix du mode
     Future<void> openNow(WidgetTester tester) async {

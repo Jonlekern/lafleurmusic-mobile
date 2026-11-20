@@ -9,6 +9,7 @@ import 'package:lafleurmusic/demo/demo_library.dart';
 import 'package:lafleurmusic/l10n/strings.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/player/player.dart';
+import 'package:lafleurmusic/ui/classic/classic_coverflow.dart';
 import 'package:lafleurmusic/ui/classic/classic_menu.dart';
 import 'package:lafleurmusic/ui/classic/classic_now.dart';
 import 'package:lafleurmusic/ui/classic/classic_shell.dart';
@@ -308,39 +309,143 @@ void main() {
     Navigator.of(tester.element(find.byType(AccountsScreen))).pop();
     await tester.pumpAndSettle();
 
+    // maquette 18 : le Cover Flow dans l'écran, la molette dessous (plus de page plein écran)
     await rotateTo(tester, 'Cover Flow');
     await press(tester, 'select');
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 50)),
-    );
     await tester.pumpAndSettle();
-    expect(find.byType(CoverflowScreen), findsOneWidget);
+    expect(find.byType(CoverflowScreen), findsNothing);
+    expect(find.byType(ClassicCoverflow), findsOneWidget);
+    expect(find.byType(ClickWheel), findsOneWidget);
   });
 
   // Johnny 20.11 : ouvert depuis le menu, le Cover Flow n'avait aucune sortie sur iPhone
-  // (pas de molette, pas de retour) : bloqué, impossible de rejoindre Réglages.
+  // (pas de molette, pas de retour) : bloqué, impossible de rejoindre Réglages. Maquette 18 :
+  // il reste dans l'écran, la molette visible ; MENU ramène au menu (« ‹ Retour » : mode normal).
   testWidgets(
-    'Cover Flow du menu : « ‹ Retour » ramène au menu et à la molette',
+    'Cover Flow du menu : la molette reste, MENU ramène au menu et à Réglages',
     (tester) async {
       await pumpPhone(tester, home: const ClassicShell());
       await rotateTo(tester, 'Cover Flow');
       await press(tester, 'select');
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(CoverflowScreen), findsOneWidget);
-      expect(find.textContaining('Échap'), findsNothing);
-      await tester.tap(find.text('Retour'));
-      await tester.pumpAndSettle();
       expect(find.byType(CoverflowScreen), findsNothing);
+      expect(find.text('Retour'), findsNothing);
       expect(find.byType(ClickWheel), findsOneWidget);
+      await press(tester, 'menu');
+      expect(find.text('MUSIQUE'), findsOneWidget);
       await rotateTo(tester, 'Réglages');
       await press(tester, 'select');
       await tester.pumpAndSettle();
       expect(find.byType(AccountsScreen), findsOneWidget);
     },
   );
+
+  group('maquette 18 : le Cover Flow dans l\'écran, avec la molette', () {
+    Future<PhoneFixture> openFlow(WidgetTester tester) async {
+      final fx = await pumpPhone(tester, home: const ClassicShell());
+      expect(selected(tester), 'Cover Flow');
+      await press(tester, 'select');
+      return fx;
+    }
+
+    testWidgets(
+      'la ligne Cover Flow : dans l\'écran, sur l\'album en cours, la molette dessous',
+      (tester) async {
+        await openFlow(tester);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        expect(find.byType(ClassicCoverflow), findsOneWidget);
+        expect(find.byType(ClickWheel), findsOneWidget);
+        expect(find.text('COVER FLOW'), findsOneWidget);
+        expect(find.text('Studio Lafleur'), findsOneWidget); // l'album en cours
+        expect(find.text('2 sur 3'), findsOneWidget);
+        // la molette est sous l'écran, pas recouverte
+        expect(
+          tester.getRect(find.byType(ClassicCoverflow)).bottom,
+          lessThan(tester.getRect(find.byType(ClickWheel)).top),
+        );
+      },
+    );
+
+    testWidgets('tourner : album suivant / précédent, « n sur m » suit', (
+      tester,
+    ) async {
+      final h = tester.ensureSemantics();
+      await openFlow(tester);
+      await rotate(tester, 1);
+      await tester.pumpAndSettle();
+      expect(find.text('Summer Mix'), findsOneWidget);
+      expect(find.text('3 sur 3'), findsOneWidget);
+      await rotate(tester, 1); // le dernier : rien plus loin
+      await tester.pumpAndSettle();
+      expect(find.text('3 sur 3'), findsOneWidget);
+      await rotate(tester, -2);
+      await tester.pumpAndSettle();
+      expect(find.text('Lafleur Surf'), findsOneWidget);
+      expect(find.text('1 sur 3'), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byType(ClickWheel)),
+        isSemantics(label: 'Molette', value: 'Lafleur Surf'),
+      );
+      h.dispose();
+    });
+
+    testWidgets(
+      'milieu : l\'album dans le menu ; MENU revient au Cover Flow, puis au menu',
+      (tester) async {
+        await openFlow(tester);
+        await rotate(tester, 1);
+        await tester.pumpAndSettle();
+        await press(tester, 'select');
+        expect(find.byType(ClassicCoverflow), findsNothing);
+        expect(find.text('SUMMER MIX'), findsOneWidget);
+        expect(find.byType(CoverflowScreen), findsNothing);
+        await press(tester, 'menu');
+        await tester.pumpAndSettle();
+        expect(find.byType(ClassicCoverflow), findsOneWidget);
+        expect(find.text('Summer Mix'), findsOneWidget); // le même album
+        expect(find.text('3 sur 3'), findsOneWidget);
+        await press(tester, 'menu');
+        expect(find.byType(ClassicCoverflow), findsNothing);
+        expect(find.text('MUSIQUE'), findsOneWidget);
+        expect(selected(tester), 'Cover Flow');
+      },
+    );
+
+    testWidgets('▶︎❙❙ joue tout l\'album choisi', (tester) async {
+      final fx = await openFlow(tester);
+      await rotate(tester, -1);
+      await tester.pumpAndSettle();
+      expect(find.text('Lafleur Surf'), findsOneWidget);
+      await press(tester, 'play');
+      expect(fx.player.calls, ['play']);
+      expect(
+        fx.player.lastTracks!.map((t) => t.title),
+        DemoLibrary.surf.map((t) => t.title),
+      );
+      expect(fx.player.lastIndex, 0);
+      // on reste dans le Cover Flow
+      expect(find.byType(ClassicCoverflow), findsOneWidget);
+    });
+
+    testWidgets('glisser le doigt sur les pochettes change d\'album', (
+      tester,
+    ) async {
+      await openFlow(tester);
+      await tester.drag(find.byType(ClassicCoverflow), const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Summer Mix'), findsOneWidget);
+      await tester.drag(find.byType(ClassicCoverflow), const Offset(240, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Lafleur Surf'), findsOneWidget);
+    });
+
+    testWidgets('retour d\'Android : du Cover Flow au menu', (tester) async {
+      await openFlow(tester);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(ClassicCoverflow), findsNothing);
+      expect(find.text('MUSIQUE'), findsOneWidget);
+    });
+  });
 
   testWidgets('Android : retour remonte d\'un niveau', (tester) async {
     await pumpPhone(tester, home: const ClassicShell());
@@ -666,7 +771,9 @@ void main() {
       // la liste montre toujours plusieurs lignes, et la molette marche
       expect(find.text('Albums').hitTestable(), findsOneWidget);
       await press(tester, 'select');
-      expect(find.byType(CoverflowScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ClassicCoverflow), findsOneWidget);
+      expect(find.byType(CoverflowScreen), findsNothing);
     },
   );
 

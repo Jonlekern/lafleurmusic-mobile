@@ -6,15 +6,16 @@ import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
 import '../../l10n/strings.dart';
+import '../../library/merge.dart';
 import '../../library/models.dart';
 import '../../player/player.dart';
 import '../../theme/colors.dart';
-import '../coverflow_screen.dart';
 import '../keep_actions.dart' show onIphone, say;
 import '../phone/accounts_screen.dart';
 import '../phone/on_device_screen.dart';
 import '../phone/phone_shell.dart';
 import '../tablet.dart';
+import 'classic_coverflow.dart';
 import 'classic_frame.dart';
 import 'classic_now.dart';
 import 'click_wheel.dart';
@@ -55,8 +56,10 @@ class ClassicMenuController {
 /// Un niveau de menu : sa liste, la ligne choisie et où la liste était défilée. Les textes
 /// sont relus à chaque image ([Strings] : la langue peut changer).
 class _Level {
-  _Level(this.title, {this.chevron = true, this.empty});
+  _Level(this.title, {this.chevron = true, this.empty, this.flow = false});
   final String Function(Strings s) title;
+  // maquette 18 : le Cover Flow dans l'écran (des albums), pas des lignes
+  final bool flow;
   final bool chevron; // › : la ligne ouvre une autre liste
   // texte d'une liste vide (comme le mode normal), sinon rien
   final String Function(Strings s)? empty;
@@ -69,6 +72,8 @@ class _Level {
   bool Function(int i) playable = _yes;
   // l'élément de la ligne, pour le retrouver
   Object? Function(int i) key = _none;
+  // l'élément de la ligne lui-même (les albums du Cover Flow)
+  Object? Function(int i) item = _none;
   // pour « artiste · pas sur le téléphone »
   String Function(int i) artist = _empty;
   void Function(int i)? choose;
@@ -160,7 +165,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
     String name(Strings s, String n) => n.isEmpty ? s.unknownArtist : n;
     void openNow() => openClassicNow(context);
     final rows = <(String Function(Strings), VoidCallback?)>[
-      ((s) => s.coverFlow, _openCoverflow),
+      ((s) => s.coverFlow, () => _push(_coverflow())),
       (
         (s) => s.artists,
         () => _push(
@@ -246,15 +251,19 @@ class _ClassicMenuState extends State<ClassicMenu> {
     String Function(T item)? artist,
     bool chevron = true,
     String Function(Strings s)? empty,
+    int Function(List<T> items)? start,
+    bool flow = false,
   }) {
-    final level = _Level(title, chevron: chevron, empty: empty);
+    final level = _Level(title, chevron: chevron, empty: empty, flow: flow);
     level.sub = stream.listen((items) {
       if (!mounted) return;
       final was = level.loaded && level.count > 0
           ? level.key(level.selected)
           : null;
       setState(() {
-        var at = math.min(level.selected, math.max(0, items.length - 1));
+        var at = !level.loaded && start != null
+            ? start(items)
+            : math.min(level.selected, math.max(0, items.length - 1));
         if (was != null) {
           // le plus proche de l'ancien rang (un morceau peut revenir deux fois dans une playlist)
           var best = -1;
@@ -272,6 +281,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
           ..count = items.length
           ..label = ((s, i) => label(s, items[i]))
           ..key = ((i) => key(items[i]))
+          ..item = ((i) => items[i])
           ..dim = dim == null ? _Level._no : ((i) => dim(items[i]))
           ..playable = playable == null
               ? _Level._yes
@@ -364,13 +374,33 @@ class _ClassicMenuState extends State<ClassicMenu> {
     _push(_album(a));
   }
 
-  void _openCoverflow() => openCoverflow(
-    context,
-    // le Cover Flow se ferme lui-même, puis l'album s'ouvre dans le menu
-    onOpen: (a) => WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _push(_album(a));
-    }),
-  );
+  /// Maquette 18 : le Cover Flow dans l'écran, la molette dessous. Il part de l'album en cours
+  /// (sinon du premier) ; tourner change d'album, le milieu ouvre l'album dans le menu (MENU y
+  /// revient), ▶︎❙❙ joue l'album.
+  _Level _coverflow() {
+    final app = AppScope.of(context);
+    final now = app.player.current.track;
+    final playing = now == null ? null : albumKeyOf(now);
+    return _list<Album>(
+      (s) => s.coverFlow,
+      app.library.albums(),
+      label: (s, a) => a.name.isEmpty ? s.unknownArtist : a.name,
+      key: (a) => a.key,
+      choose: (l, i) => _push(_album(l[i])),
+      start: (l) => math.max(0, l.indexWhere((a) => a.key == playing)),
+      flow: true,
+    );
+  }
+
+  /// ▶︎❙❙ dans le Cover Flow : tout l'album choisi, depuis le début.
+  Future<void> _playAlbum() async {
+    final l = _current;
+    if (!l.flow || l.count == 0) return;
+    final album = l.item(l.selected)! as Album;
+    final app = AppScope.of(context);
+    final tracks = await app.library.albumTracks(album.key).first;
+    if (tracks.isNotEmpty) await app.player.playTracks(tracks, 0);
+  }
 
   // ---- navigation
 
@@ -459,6 +489,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
           level: level,
           scroll: _scroll,
           onTap: _tap,
+          onMove: _rotate,
         ),
         wheel: ClickWheel(
           onRotate: _rotate,
@@ -466,7 +497,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
           onMenu: _back,
           onPrevious: player.previous,
           onNext: player.next,
-          onPlayPause: player.toggle,
+          onPlayPause: level.flow ? _playAlbum : player.toggle,
           semanticLabel: app.strings.wheel,
           semanticValue: wheelValue(0),
           semanticIncreasedValue: wheelValue(1),
@@ -484,11 +515,13 @@ class _Screen extends StatelessWidget {
     required this.level,
     required this.scroll,
     required this.onTap,
+    required this.onMove,
   });
   final Strings strings;
   final _Level level;
   final ScrollController scroll;
   final void Function(int i) onTap;
+  final void Function(int steps) onMove;
 
   @override
   Widget build(BuildContext context) {
@@ -535,7 +568,14 @@ class _Screen extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: l.loaded && l.count == 0 && l.empty != null
+            child: l.flow
+                ? ClassicCoverflow(
+                    count: l.count,
+                    index: l.selected,
+                    album: (i) => l.item(i)! as Album,
+                    onMove: onMove,
+                  )
+                : l.loaded && l.count == 0 && l.empty != null
                 ? Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
