@@ -4,7 +4,7 @@ An iPod-style music player for Android and iPhone, in the LAFLEURSTUDIO style.
 It plays the music from your own server and keeps a copy of your favourites on the phone.
 The phone sibling of [LAFLEURMUSIC for desktop](https://github.com/Jonlekern/lafleurmusic-desktop).
 
-**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin), plan 5 (Plex), plan 6 (Classic mode: an iPod-style menu with a click wheel, chosen in Settings), plan 8 (queue and library) and plan 9 (editable playlists) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
+**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin), plan 5 (Plex), plan 6 (Classic mode: an iPod-style menu with a click wheel, chosen in Settings), plan 7 (light mode), plan 8 (queue and library) and plan 9 (editable playlists) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
 
 What works now:
 
@@ -37,6 +37,8 @@ What works now:
 - **No server needed:** the first screen has "Just the music on my iPhone". The app then starts with an
   empty Home that says where to put files (Files app › LAFLEURMUSIC) and offers to choose another folder or
   add an account later. Songs, queue, playlists and Classic mode all work with files only.
+- **Light mode:** the app follows the phone's light or dark setting by itself, right away, even
+  while a song plays: white background, black logo, pink details. Classic mode becomes a white iPod.
 - **Cover Flow** when the phone is turned sideways, and **tablets** (iPad, Android) get the columns of the
   desktop app side by side (both done).
 - **Queue:** swipe a song to the right to add it to the queue (a bubble offers Undo and View queue); to the

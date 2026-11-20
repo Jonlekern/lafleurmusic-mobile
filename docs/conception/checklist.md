@@ -1,14 +1,14 @@
 # LAFLEURMUSIC mobile — liste de contrôle
 
-Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décider ou à faire.
+Mise à jour : 20.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décider ou à faire.
 
 ## Étapes
 - ✅ Idées (brainstorm)
 - ✅ Écrans : reprendre ceux du Mac, empilés
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
-- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes », 4 « Jellyfin », 5 « Plex » et 6 « Mode Classic » écrits et codés ; plan 8 « file et bibliothèque » et plan 9 « playlists modifiables » codés ; plan 7 ensuite
-- ⬜ Code (plans 1, 2, 3, 4, 5, 6, 8 et 9 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
+- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes », 4 « Jellyfin », 5 « Plex » et 6 « Mode Classic » écrits et codés ; plan 8 « file et bibliothèque » et plan 9 « playlists modifiables » codés ; plan 7 « mode clair » codé
+- ⬜ Code (plans 1 à 9 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 
@@ -80,6 +80,8 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Mode clair : fond blanc, logo en noir, détails rose
 - ✅ Maquette du mode clair validée (`maquettes/5-mode-clair.png`, 18.11.2026)
 - ✅ Automatique : suit le réglage clair / sombre du téléphone
+- ✅ Plan 7 fait : tous les écrans en clair, le mode sombre n'a pas bougé ; Mode Classic = un iPod blanc
+- ✅ Captures de tous les écrans en clair montrées à Johnny et validées (20.11.2026)
 
 ## Icône
 - ✅ Jour : fond blanc, fleur noire · Nuit : fond noir, fleur rose (`maquettes/8-icones.png`)
