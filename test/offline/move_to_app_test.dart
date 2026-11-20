@@ -64,7 +64,14 @@ class _Reader implements TagReader {
 class _Phone implements Device {
   _Phone(this.settings, this.byDefault, this.private);
   final AppSettings settings;
-  final Directory byDefault, private;
+
+  /// Moved together when the app's container moves (an iOS update).
+  Directory byDefault, private;
+
+  /// Documents, for `docs://` keys (only while [docsKeys], as on an iPhone): the parent of
+  /// the default folder.
+  String get docs => byDefault.parent.path;
+  bool docsKeys = false;
   bool chosenAnswers = true;
   int free = 100 * 1024 * _mb;
   int accessAsks = 0;
@@ -118,11 +125,15 @@ class _Phone implements Device {
   @override
   Future<String> absolutePath(String key) async => key.startsWith(appScheme)
       ? '${private.path}/${key.substring(appScheme.length)}'
+      : docsKeys && key.startsWith(docsScheme)
+      ? '$docs/${key.substring(docsScheme.length)}'
       : key;
 
   @override
   Future<String> keyFor(String a) async => a.startsWith('${private.path}/')
       ? '$appScheme${a.substring(private.path.length + 1)}'
+      : docsKeys && a.startsWith('$docs/')
+      ? '$docsScheme${a.substring(docs.length + 1)}'
       : a;
 
   @override
@@ -536,6 +547,73 @@ void main() {
         await expectSound(songs);
       });
     }
+
+    test('a copy of another size never costs its original', () async {
+      final d = await keptSongs();
+      phone.after = () =>
+          Completer<void>().future; // setting saved, then killed
+      unawaited(d.moveKept(toApp: true));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      phone.after = null;
+      File('${private.path}/Art/Alb/01 Song 1.mp3').writeAsBytesSync([1]);
+      await make().recoverMove();
+      expect(settings.keepInApp, isTrue);
+      expect(
+        File('${byDefault.path}/Art/Alb/01 Song 1.mp3').existsSync(),
+        isTrue,
+      );
+      expect(
+        File('${byDefault.path}/Art/Alb/02 Song 2.mp3').existsSync(),
+        isFalse,
+      );
+    });
+
+    test('the app container moved by an update: still finished', () async {
+      phone.docsKeys = true;
+      final d = await keptSongs();
+      final songs = _files(byDefault);
+      phone.after = () => Completer<void>().future;
+      unawaited(d.moveKept(toApp: true));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      phone.after = null;
+      // iOS gives the app a new container path: every folder moves with it
+      final moved = Directory('${tmp.path}-updated');
+      tmp.renameSync(moved.path);
+      tmp = moved;
+      byDefault = phone.byDefault = Directory(
+        '${tmp.path}/Documents/LAFLEURMUSIC',
+      );
+      private = phone.private = Directory('${tmp.path}/Library/LAFLEURMUSIC');
+      await relaunch();
+      expect(settings.keepInApp, isTrue);
+      await expectSound(songs);
+    });
+
+    test('a journal that cannot be erased is never acted on again', () async {
+      final d = await keptSongs();
+      phone.after = () => Completer<void>().future;
+      unawaited(d.moveKept(toApp: true));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      phone.after = null;
+      final journal = File('${private.path}/.move.json');
+      expect(journal.existsSync(), isTrue);
+      // the private folder refuses deletes: the journal stays, marked done
+      Process.runSync('chmod', ['555', private.path]);
+      try {
+        await make().recoverMove();
+      } finally {
+        Process.runSync('chmod', ['755', private.path]);
+      }
+      expect(journal.existsSync(), isTrue);
+      expect(byDefault.existsSync() ? _files(byDefault) : [], isEmpty);
+      // later, a file of the same size put by hand where a kept song was
+      final byHand = File('${byDefault.path}/Art/Alb/01 Song 1.mp3')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([1, 2, 3, 4]);
+      await make().recoverMove();
+      expect(byHand.existsSync(), isTrue);
+      expect(journal.existsSync(), isFalse);
+    });
 
     test('a copy cut short is not kept', () async {
       final (d, songs) = await () async {

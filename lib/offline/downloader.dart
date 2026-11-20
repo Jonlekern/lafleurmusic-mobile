@@ -1352,7 +1352,9 @@ class Downloader extends ChangeNotifier {
     await tmp.writeAsString(
       jsonEncode({
         'toApp': toApp,
-        'visible': (toApp ? from : to).path,
+        // une clé (`docs://…`) plutôt que le chemin : le conteneur iOS change avec une mise
+        // à jour ; les chemins des fichiers sont relatifs à chaque dossier
+        'visible': await device.keyFor((toApp ? from : to).path),
         'moves': [
           for (final m in plan) [m.track, m.oldRel, m.rel],
         ],
@@ -1363,8 +1365,16 @@ class Downloader extends ChangeNotifier {
     return f;
   }
 
+  /// Plus rien à reprendre : le journal est d'abord réécrit « fini », puis effacé. S'il ne
+  /// peut pas être effacé, les lancements suivants ne refont rien ([recoverMove]).
   Future<void> _dropJournal(File? f) async {
-    if (f != null) await _drop(f);
+    if (f == null) return;
+    try {
+      if (await f.exists()) {
+        await f.writeAsString(jsonEncode({'done': true}), flush: true);
+      }
+    } catch (_) {}
+    await _drop(f);
   }
 
   /// Au lancement, avant toute relecture du dossier visible : un déplacement entre le dossier
@@ -1383,6 +1393,7 @@ class Downloader extends ChangeNotifier {
     } catch (_) {
       return; // pas de journal lisible : rien n'était en route
     }
+    if (j['done'] == true) return _dropJournal(f); // déjà repris
     try {
       final toApp = j['toApp'] == true;
       final moves = [
@@ -1392,7 +1403,10 @@ class Downloader extends ChangeNotifier {
       ];
       final private = await device.privateRoot(create: false);
       final visible = await device.visibleRoot();
-      final sameVisible = p.equals(visible.path, '${j['visible']}');
+      final sameVisible = p.equals(
+        visible.path,
+        await device.absolutePath('${j['visible']}'),
+      );
       final from = toApp ? visible : private, to = toApp ? private : visible;
       final fromOk = toApp ? sameVisible : true,
           toOk = toApp ? true : sameVisible;
@@ -1403,6 +1417,8 @@ class Downloader extends ChangeNotifier {
             final src = _inside(from, m.oldRel), dst = _inside(to, m.rel);
             if (src == null || dst == null) continue;
             if (!await dst.exists() || !await src.exists()) continue;
+            // la copie vérifiée a la taille de l'original ; sinon ce n'est pas elle
+            if (await dst.length() != await src.length()) continue;
             await _drop(src);
             await _announce(src.path);
             _pruneEmpty(from, src.parent);
@@ -1431,7 +1447,7 @@ class Downloader extends ChangeNotifier {
           }
         }
       }
-      await _drop(f);
+      await _dropJournal(f);
     } catch (_) {
       // base ou dossier illisible : le journal reste, le prochain lancement réessaie
     }
