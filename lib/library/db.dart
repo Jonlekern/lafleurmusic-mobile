@@ -1493,7 +1493,7 @@ class LibraryDb extends _$LibraryDb {
       'WHERE i.account_id = p.account_id AND i.playlist_id = p.remote_id) AS present, '
       '(SELECT COUNT(*) FROM playlist_items i JOIN tracks t ON t.path = i.track_path '
       'WHERE i.account_id = p.account_id AND i.playlist_id = p.remote_id '
-      'AND NOT $_hasDoneCopy) AS uncopied, '
+      "AND t.account_id <> 'local' AND NOT $_hasDoneCopy) AS uncopied, "
       'EXISTS (SELECT 1 FROM kept_playlists k WHERE k.account_id = p.account_id '
       'AND k.playlist_id = p.remote_id) AS rec, '
       '0 AS grp, a.position AS apos, p.position AS ppos '
@@ -1507,7 +1507,7 @@ class LibraryDb extends _$LibraryDb {
       'ON t.path = $_phoneShown WHERE pi.playlist_id = pp.id) AS present, '
       '(SELECT COUNT(*) FROM phone_playlist_items pi JOIN tracks t '
       'ON t.path = $_phoneShown WHERE pi.playlist_id = pp.id '
-      'AND NOT $_hasDoneCopy) AS uncopied, '
+      "AND t.account_id <> 'local' AND NOT $_hasDoneCopy) AS uncopied, "
       "EXISTS (SELECT 1 FROM kept_playlists k WHERE k.account_id = '$phonePlaylistAccount' "
       'AND k.playlist_id = CAST(pp.id AS TEXT)) AS rec, '
       '1 AS grp, 0 AS apos, 0 AS ppos FROM phone_playlists pp '

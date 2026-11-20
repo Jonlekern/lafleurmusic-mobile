@@ -2467,8 +2467,12 @@ void main() {
       await d.whenIdle();
       final f = m3u(root, 'Local.m3u8');
       expect(songs(f), ['../Mine.mp3', '../Other.mp3']);
-      // the user's own files are never touched
+      // the user's own files are never touched, and « Retirer » has nothing of them to remove
       expect(mine.existsSync() && other.existsSync(), isTrue);
+      expect(
+        await d.playlistSongsToForget(phonePlaylistAccount, '${ref.id}'),
+        isEmpty,
+      );
       other.deleteSync();
       await d.syncPlaylists();
       expect(songs(f), ['../Mine.mp3']);

@@ -421,7 +421,11 @@ class Downloader extends ChangeNotifier {
     String playlistId,
   ) async => toForgetFrom(
     KeepOrigin.playlist(accountId, playlistId),
-    await db.playlistPaths(accountId, playlistId),
+    // files put by hand have no copy to remove: they are not counted
+    [
+      for (final p in await db.playlistPaths(accountId, playlistId))
+        if (parseRemoteKey(p) != null) p,
+    ],
   );
 
   /// « Retirer » une playlist : son `.m3u8` (le nôtre) part, puis ses morceaux qui n'ont plus
