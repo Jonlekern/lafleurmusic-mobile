@@ -36,6 +36,8 @@ class AppSettings {
     this.albumSort = AlbumSort.name,
     this.classicMode = false,
     this.localOnly = false,
+    this.lastUpdateCheck,
+    this.dismissedUpdate,
     List<String>? customAccounts,
   }) : customAccounts = customAccounts ?? [],
        equalizer = equalizer ?? Equalizer.named('flat');
@@ -66,6 +68,8 @@ class AppSettings {
   AlbumSort albumSort; // tri de la liste des albums
   bool confirmRemove; // « Retirer du téléphone » demande d'abord confirmation
   bool localOnly; // « Juste la musique de mon iPhone » : pas de compte, l'écran du compte ne revient pas au lancement
+  int? lastUpdateCheck; // dernier essai de recherche de mise à jour (ms epoch)
+  String? dismissedUpdate; // version dont le bandeau a été écarté
   bool classicMode; // téléphone : Mode Classic (menu et molette) au lieu du mode normal
 
   static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
@@ -125,6 +129,12 @@ class AppSettings {
           ),
           classicMode: j['classicMode'] == true,
           localOnly: j['localOnly'] == true,
+          lastUpdateCheck: j['lastUpdateCheck'] is int
+              ? j['lastUpdateCheck']! as int
+              : null,
+          dismissedUpdate: j['dismissedUpdate'] is String
+              ? j['dismissedUpdate']! as String
+              : null,
           customAccounts: j['customAccounts'] is List
               ? [
                   for (final a in j['customAccounts']! as List)
@@ -173,6 +183,8 @@ class AppSettings {
         'albumSort': albumSort.name,
         'classicMode': classicMode,
         'localOnly': localOnly,
+        'lastUpdateCheck': lastUpdateCheck,
+        'dismissedUpdate': dismissedUpdate,
       }),
     );
     await tmp.rename(f.path);
