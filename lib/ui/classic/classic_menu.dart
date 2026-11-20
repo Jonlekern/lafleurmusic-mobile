@@ -15,6 +15,8 @@ import '../phone/accounts_screen.dart';
 import '../phone/on_device_screen.dart';
 import '../phone/phone_shell.dart';
 import '../tablet.dart';
+import '../update_sheet.dart';
+import '../../update/update_service.dart';
 import 'classic_coverflow.dart';
 import 'classic_frame.dart';
 import 'classic_now.dart';
@@ -95,6 +97,9 @@ class _ClassicMenuState extends State<ClassicMenu> {
   Listenable? _service;
   StreamSubscription<PlayerState>? _playing;
   bool _idle = false; // rien en cours : « En cours » est estompé
+  // maquette 19 : « Mise à jour » en haut de la racine tant qu'une nouvelle version existe
+  ValueListenable<UpdateInfo?>? _update;
+  int Function() _rootCount = () => 0;
 
   _Level get _current => _levels.last;
 
@@ -127,7 +132,11 @@ class _ClassicMenuState extends State<ClassicMenu> {
         if (mounted && idle != _idle) setState(() => _idle = idle);
       });
     }
-    if (_levels.isEmpty) _levels.add(_root());
+    if (_levels.isEmpty) {
+      _update = AppScope.of(context).update?.available;
+      _update?.addListener(_updateChanged);
+      _levels.add(_root());
+    }
     // copies ou comptes changés : « jouable ? » se relit (comme PhoneTrackRows)
     if (_service == null) {
       _service = AppScope.of(context).accountService;
@@ -138,6 +147,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
   @override
   void dispose() {
     _service?.removeListener(_accountsChanged);
+    _update?.removeListener(_updateChanged);
     _playing?.cancel();
     final c = widget.controller;
     if (c != null && identical(c._menu, this)) c._menu = null;
@@ -157,6 +167,23 @@ class _ClassicMenuState extends State<ClassicMenu> {
     });
   }
 
+  /// La ligne « Mise à jour » arrive ou part : la racine garde la même ligne choisie.
+  void _updateChanged() {
+    if (!mounted || _levels.isEmpty) return;
+    final root = _levels.first;
+    final n = _rootCount();
+    if (n == root.count) return;
+    setState(() {
+      root.selected = (root.selected + n - root.count).clamp(0, n - 1);
+      root.count = n;
+    });
+    if (identical(root, _current)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && identical(root, _current)) _reveal();
+      });
+    }
+  }
+
   // ---- niveaux
 
   _Level _root() {
@@ -164,7 +191,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
     final lib = app.library;
     String name(Strings s, String n) => n.isEmpty ? s.unknownArtist : n;
     void openNow() => openClassicNow(context);
-    final rows = <(String Function(Strings), VoidCallback?)>[
+    final base = <(String Function(Strings), VoidCallback?)>[
       ((s) => s.coverFlow, () => _push(_coverflow())),
       (
         (s) => s.artists,
@@ -228,14 +255,26 @@ class _ClassicMenuState extends State<ClassicMenu> {
         () => pushPhone(context, const AccountsScreen()),
       ),
     ];
+    // une nouvelle version (non écartée) : « Mise à jour » en premier, qui ouvre la feuille
+    final update = _update;
+    List<(String Function(Strings), VoidCallback?)> rows() => [
+      if (update?.value case final info?)
+        ((s) => s.classicUpdate, () => showUpdateSheet(context, info)),
+      ...base,
+    ];
+    _rootCount = () => rows().length;
     // sans effet : sans téléchargeur, ou « En cours » quand rien n'est en cours
-    bool off(int i) => rows[i].$2 == null || (_idle && rows[i].$2 == openNow);
+    bool off(int i) {
+      final r = rows()[i];
+      return r.$2 == null || (_idle && r.$2 == openNow);
+    }
+
     return _Level((s) => s.classicMusic)
       ..loaded = true
-      ..count = rows.length
-      ..label = ((s, i) => rows[i].$1(s))
+      ..count = rows().length
+      ..label = ((s, i) => rows()[i].$1(s))
       ..dim = off
-      ..choose = ((i) => off(i) ? null : rows[i].$2?.call());
+      ..choose = ((i) => off(i) ? null : rows()[i].$2?.call());
   }
 
   /// Une liste qui suit [stream] (les mêmes flux que le mode normal). Quand la liste change,

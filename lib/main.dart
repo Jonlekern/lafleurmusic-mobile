@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:mpv_audio_kit/mpv_audio_kit.dart' show MpvAudioKit;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -35,6 +36,8 @@ import 'tags/tag_reader.dart';
 import 'theme/lafleur_theme.dart';
 import 'ui/phone/phone_shell.dart';
 import 'ui/tablet.dart';
+import 'ui/update_sheet.dart' show UpdateHooks;
+import 'update/update_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +57,14 @@ Future<void> main() async {
   final support = override != null && override.isNotEmpty
       ? Directory(override)
       : await getApplicationSupportDirectory();
-  runApp(await buildLafleurApp(support: support, secrets: SecureSecretStore()));
+  runApp(
+    await buildLafleurApp(
+      support: support,
+      secrets: SecureSecretStore(),
+      // mise à jour depuis l'appli : iPhone et Android seulement
+      checkUpdates: isMobilePlatform(defaultTargetPlatform),
+    ),
+  );
 }
 
 /// L'appli entière (base, comptes, lecteur…) rangée dans [support], secrets dans [secrets].
@@ -63,6 +73,8 @@ Future<LafleurApp> buildLafleurApp({
   required Directory support,
   required SecretStore secrets,
   PlexLink Function(String clientId)? plexLink, // tests: a fake plex.tv
+  bool checkUpdates =
+      false, // GitHub une fois par jour (les essais de bout en bout : non)
 }) async {
   // réglages (égaliseur) : rechargés, appliqués tout de suite, enregistrés à chaque changement
   final settingsFile = File(p.join(support.path, 'settings.json'));
@@ -226,6 +238,24 @@ Future<LafleurApp> buildLafleurApp({
   )..enabled = settings.equalVolume;
   player.gainOf =
       loudness.gainOf; // le 2e lecteur du fondu démarre au bon niveau
+  // une nouvelle version sur GitHub : sans retarder le lancement, l'APK du lancement
+  // d'avant effacé, puis au plus un essai par jour
+  UpdateService? update;
+  if (checkUpdates) {
+    final service = update = UpdateService(
+      client: http.Client(),
+      settings: settings,
+      saveSettings: () => settings.save(settingsFile),
+    );
+    unawaited(() async {
+      try {
+        await UpdateService.clearDownloads(await UpdateHooks.cacheDir());
+      } on Object {
+        // pas de cache : rien à effacer
+      }
+      await service.checkDaily();
+    }());
+  }
   return LafleurApp(
     db: db,
     library: library,
@@ -248,6 +278,7 @@ Future<LafleurApp> buildLafleurApp({
     settings: settings,
     saveSettings: () => settings.save(settingsFile),
     strings: Strings.of(PlatformDispatcher.instance.locale),
+    update: update,
   );
 }
 
@@ -275,6 +306,7 @@ class LafleurApp extends StatefulWidget {
     required this.home,
     required this.topKeeper,
     required this.topSub,
+    this.update,
   });
   final LoudnessService loudness;
   final MediaResolver resolver;
@@ -291,6 +323,7 @@ class LafleurApp extends StatefulWidget {
   final HomeState home;
   final TopKeeper topKeeper;
   final StreamSubscription<Object?> topSub;
+  final UpdateService? update; // iPhone et Android seulement
   final AppSettings settings;
   final VoidCallback saveSettings;
   final ValueNotifier<bool> artistGrid;
@@ -366,6 +399,7 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
     device: widget.device,
     localFolder: widget.localFolder,
     home: widget.home,
+    update: widget.update,
     // clair ou sombre : le réglage du téléphone, suivi en direct
     child: lafleurMaterialApp(
       home: const AdaptiveHome(), // téléphone : la vue téléphone ; tablette, ordinateur : les colonnes du Mac

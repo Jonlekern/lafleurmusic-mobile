@@ -858,6 +858,48 @@ class Strings {
     'Classic mode: a menu like the iPod and a wheel you turn with your finger. Your music and your queue stay the same.',
   );
 
+  // plan 11 : mise à jour depuis l'appli (maquette 19)
+  String updateNewVersion(String v) =>
+      _t('Nouvelle version $v', 'New version $v');
+  String get updateTapToSee =>
+      _t('Touche pour voir ce qui change', 'Tap to see what’s new');
+  String get updateNow => _t('Mettre à jour', 'Update');
+  String get updateHide => _t('Masquer', 'Hide');
+  String updateTitle(String v) => 'LAFLEURMUSIC $v';
+  String updateYouHave(String v) => _t('Tu as la $v', 'You have $v');
+  String updateDownload(int? bytes) => bytes == null
+      ? _t('Télécharger et installer', 'Download and install')
+      : _t(
+          'Télécharger et installer · ${size(bytes)}',
+          'Download and install · ${size(bytes)}',
+        );
+  String get updateInstall => _t('Installer', 'Install');
+  String updateProgress(int percent) => _t(
+    '$percent % — puis Android demande « Installer ? ».',
+    '$percent % — then Android asks “Install?”.',
+  );
+  String get updateKeeps => _t(
+    'Ta musique, tes playlists et tes comptes restent.',
+    'Your music, playlists and accounts stay.',
+  );
+  String get updateFailed => _t(
+    'Le téléchargement a échoué. Réessaie.',
+    'The download failed. Try again.',
+  );
+  String get updateOpenDownload =>
+      _t('Ouvrir le téléchargement', 'Open the download');
+  String get updateSafariNote => _t(
+    "Le fichier s'ouvre dans Safari. Signe-le avec Signulous comme d'habitude.",
+    'The file opens in Safari. Sign it with Signulous as usual.',
+  );
+  String updateVersion(String v) => 'Version $v';
+  String get updateCheck => _t('Chercher une mise à jour', 'Check for updates');
+  String get updateLatest =>
+      _t('Tu as la dernière version', 'You have the latest version');
+  String get updateOffline =>
+      _t('Pas de réseau, réessaie plus tard', 'No network, try again later');
+  String get classicUpdate => _t('Mise à jour', 'Update');
+
   /// Taille lisible : Mo en dessous d'un Go, sinon Go à une décimale (virgule en français).
   String size(int bytes) {
     const mb = 1024 * 1024, gb = 1024 * mb;

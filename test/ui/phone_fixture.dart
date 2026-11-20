@@ -18,6 +18,7 @@ import 'package:lafleurmusic/sources/accounts.dart';
 import 'package:lafleurmusic/theme/colors.dart';
 import 'package:lafleurmusic/theme/lafleur_theme.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
+import 'package:lafleurmusic/update/update_service.dart';
 
 import '../sources/fake_secret_store.dart';
 import 'fake_player.dart';
@@ -91,6 +92,7 @@ Future<PhoneFixture> pumpPhone(
   PlaylistStore Function(LibraryDb db)? playlists,
   Future<void> Function(LibraryDb db, Accounts accounts)? seed,
   Brightness brightness = Brightness.dark,
+  UpdateService? update,
 }) async {
   phoneSize(tester);
   phoneBrightness(tester, brightness);
@@ -150,6 +152,7 @@ Future<PhoneFixture> pumpPhone(
       accounts: accounts,
       playlists: playlists?.call(db),
       downloader: downloader,
+      update: update,
       child: lafleurTestApp(home),
     ),
   );

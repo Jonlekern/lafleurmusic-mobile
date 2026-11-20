@@ -12,6 +12,7 @@ import '../../theme/colors.dart';
 import '../cover_image.dart';
 import '../coverflow_screen.dart';
 import '../track_menu.dart';
+import '../update_sheet.dart';
 import 'accounts_screen.dart';
 import 'album_screen.dart';
 import 'display_choice.dart';
@@ -104,6 +105,8 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           children: [
+            // maquette 19 A : une nouvelle version (iOS et Android seulement)
+            if (app.update case final update?) UpdateBanner(service: update),
             const _AccountChips(),
             const SizedBox(height: 10),
             TextField(

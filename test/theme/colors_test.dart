@@ -63,6 +63,7 @@ void main() {
       'jellyfin': c.jellyfin,
       'plex': c.plex,
       'coverEdge': c.coverEdge,
+      'banner': c.banner,
     };
     final expected = <String, Color>{
       'bg': const Color(0xFF0D0D0D),
@@ -114,6 +115,7 @@ void main() {
       'jellyfin': const Color(0xFF7AA7FF),
       'plex': const Color(0xFFE5A00D),
       'coverEdge': const Color(0x00000000),
+      'banner': const Color(0xFF2A1530),
     };
     expect(actual.keys, expected.keys);
     for (final k in expected.keys) {
@@ -173,6 +175,7 @@ void main() {
       'jellyfin': c.jellyfin,
       'plex': c.plex,
       'coverEdge': c.coverEdge,
+      'banner': c.banner,
     };
     const expected = <String, int>{
       'bg': 0xFFFFFFFF,
@@ -224,6 +227,7 @@ void main() {
       'jellyfin': 0xFF3D74D9,
       'plex': 0xFFE5A00D,
       'coverEdge': 0xFFE4E4E4,
+      'banner': 0xFFFDF0FD,
     };
     expect(actual.keys, expected.keys);
     for (final k in expected.keys) {

@@ -16,6 +16,7 @@ import 'player/player.dart';
 import 'settings.dart';
 import 'sources/account_service.dart';
 import 'sources/accounts.dart';
+import 'update/update_service.dart';
 
 /// Les services de l'appli, accessibles depuis tous les écrans.
 class AppScope extends InheritedWidget {
@@ -39,6 +40,7 @@ class AppScope extends InheritedWidget {
     this.localFolder,
     this.home,
     this.libraryView,
+    this.update,
     required super.child,
   }) : _eq = equalizer;
   final LibraryDb db;
@@ -80,6 +82,9 @@ class AppScope extends InheritedWidget {
   /// La bibliothèque comme les écrans la montrent : les comptes du mode d'affichage et les
   /// fichiers du téléphone, un morceau présent sur plusieurs comptes une seule fois.
   final LibraryView? libraryView;
+
+  /// Mise à jour depuis l'appli (iOS et Android seulement) ; sans : ni bandeau, ni feuille, ni ligne.
+  final UpdateService? update;
 
   /// [libraryView], ou sans elle (tests, Mac) tous les comptes.
   LibraryView get library => libraryView ?? LibraryView.of(db);

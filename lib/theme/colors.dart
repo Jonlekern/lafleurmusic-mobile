@@ -53,6 +53,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     required this.jellyfin,
     required this.plex,
     required this.coverEdge,
+    required this.banner,
   });
 
   /// Fond de l'écran.
@@ -203,6 +204,9 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
   /// Filet autour des pochettes (transparent : pas de filet).
   final Color coverEdge;
 
+  /// Fond du bandeau « Nouvelle version » (maquette 19), bordé de rose.
+  final Color banner;
+
   /// Mode sombre : les valeurs d'origine.
   static const dark = LafleurColors(
     bg: Color(0xFF0D0D0D),
@@ -254,6 +258,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     jellyfin: Color(0xFF7AA7FF),
     plex: Color(0xFFE5A00D),
     coverEdge: Color(0x00000000),
+    banner: Color(0xFF2A1530),
   );
 
   /// Mode clair : maquette 5 (fond blanc, texte #111, détails rose).
@@ -307,6 +312,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     jellyfin: Color(0xFF3D74D9),
     plex: Color(0xFFE5A00D),
     coverEdge: Color(0xFFE4E4E4),
+    banner: Color(0xFFFDF0FD),
   );
 
   @override
@@ -360,6 +366,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     Color? jellyfin,
     Color? plex,
     Color? coverEdge,
+    Color? banner,
   }) {
     return LafleurColors(
       bg: bg ?? this.bg,
@@ -411,6 +418,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
       jellyfin: jellyfin ?? this.jellyfin,
       plex: plex ?? this.plex,
       coverEdge: coverEdge ?? this.coverEdge,
+      banner: banner ?? this.banner,
     );
   }
 
@@ -467,6 +475,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
       jellyfin: Color.lerp(jellyfin, other.jellyfin, t)!,
       plex: Color.lerp(plex, other.plex, t)!,
       coverEdge: Color.lerp(coverEdge, other.coverEdge, t)!,
+      banner: Color.lerp(banner, other.banner, t)!,
     );
   }
 }

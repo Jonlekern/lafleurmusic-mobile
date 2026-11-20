@@ -9,6 +9,7 @@ import '../../sources/account_service.dart';
 import '../../sources/accounts.dart';
 import '../tablet.dart';
 import '../../theme/colors.dart';
+import '../update_sheet.dart';
 import 'account_form.dart';
 import 'display_choice.dart';
 import 'phone_shell.dart';
@@ -202,6 +203,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     ),
                     style: phoneHint(context),
                   ),
+                  // maquette 19 A : la version et « Chercher une mise à jour » (iOS, Android)
+                  if (app.update case final update?) ...[
+                    const SizedBox(height: 22),
+                    UpdateCheckRow(service: update),
+                  ],
                 ],
               ),
             ),
