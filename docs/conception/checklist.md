@@ -8,7 +8,7 @@ Mise à jour : 20.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
 - ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes », 4 « Jellyfin », 5 « Plex » et 6 « Mode Classic » écrits et codés ; plan 8 « file et bibliothèque », plan 9 « playlists modifiables » et plan 10 « musique dans l'appli » codés ; plan 7 « mode clair » codé
-- ⬜ Code (plans 1 à 10 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
+- ⬜ Code (plans 1 à 10 faits, essais de bout en bout dans le simulateur)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 

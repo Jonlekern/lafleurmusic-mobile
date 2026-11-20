@@ -4,7 +4,7 @@ An iPod-style music player for Android and iPhone, in the LAFLEURSTUDIO style.
 It plays the music from your own server and keeps a copy of your favourites on the phone.
 The phone sibling of [LAFLEURMUSIC for desktop](https://github.com/Jonlekern/lafleurmusic-desktop).
 
-**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin), plan 5 (Plex), plan 6 (Classic mode: an iPod-style menu with a click wheel, chosen in Settings), plan 7 (light mode), plan 8 (queue and library), plan 9 (editable playlists) and plan 10 (keep songs inside the app) are done. Plan 2 (offline) is done except the "On my iPhone" settings screen (space limit, folder choice): the engine supports both, the screen is coming.
+**Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin), plan 5 (Plex), plan 6 (Classic mode: an iPod-style menu with a click wheel, chosen in Settings), plan 7 (light mode), plan 8 (queue and library), plan 9 (editable playlists) and plan 10 (keep songs inside the app) are done. Plan 2 (offline) is done, with its "On my iPhone" settings screen (space limit, folder choice).
 
 What works now:
 
@@ -52,8 +52,8 @@ What works now:
   reach; what isn't on the phone is greyed out. A download queue resumes after an interruption and
   respects a space limit (10 GB for now).
 - **Your folder:** the copies go to Files → On My iPhone → LAFLEURMUSIC (iPhone) or Music/LAFLEURMUSIC
-  (Android). Choosing another folder (iCloud Drive included) and moving the copies there is built into the
-  engine; its screen is coming.
+  (Android). In "On my iPhone" you can choose another folder (iCloud Drive included);
+  the copies move there.
 - **Inside the app only:** "Where to keep the music" in "On my iPhone" can keep the downloaded songs in a
   private folder inside the app instead of the visible LAFLEURMUSIC folder. Switching moves the kept songs
   (after asking, with the space checked first) and back again. In the app they leave with it when you delete
