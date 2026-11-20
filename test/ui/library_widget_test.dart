@@ -11,6 +11,7 @@ import 'package:lafleurmusic/library/covers.dart';
 import 'package:lafleurmusic/library/db.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/player/player.dart';
+import 'package:lafleurmusic/theme/colors.dart';
 import 'package:lafleurmusic/theme/lafleur_theme.dart';
 import 'package:lafleurmusic/ui/library_screen.dart';
 import 'package:lafleurmusic/ui/track_list.dart';
@@ -65,8 +66,9 @@ final demo = [
 
 Future<(LibraryDb, FakePlayer)> pump(
   WidgetTester tester,
-  List<Track> tracks,
-) async {
+  List<Track> tracks, {
+  Brightness mode = Brightness.dark,
+}) async {
   desktopSize(tester);
   final db = LibraryDb(
     DatabaseConnection(
@@ -91,7 +93,7 @@ Future<(LibraryDb, FakePlayer)> pump(
       covers: covers,
       strings: Strings.of(const Locale('fr')),
       child: MaterialApp(
-        theme: lafleurTheme(),
+        theme: lafleurTheme(mode),
         home: const LibraryScreen(tablet: false),
       ),
     ),
@@ -182,28 +184,52 @@ void main() {
     expect(find.textContaining('NAS introuvable'), findsOneWidget);
   });
 
-  testWidgets('vue en colonnes comme la maquette 2', (tester) async {
-    final (_, player) = await pump(tester, demo);
-    player.queue = null;
-    await player.playTracks(demo, 1);
-    player.show(
-      PlayerState(
-        track: demo[1],
-        position: const Duration(seconds: 93),
-        duration: const Duration(seconds: 245),
-        playing: true,
-      ),
-    );
-    await tester.pump();
-    await precacheAssets(tester, [
-      'assets/fleur-tile.png',
-      'assets/logo-texte-grand.png',
-    ]);
-    await expectLater(
-      find.byType(LibraryScreen),
-      matchesGoldenFile('goldens/2-colonnes.png'),
-    );
-  }, tags: ['golden']);
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, 'vue en colonnes comme la maquette 2'), (
+      tester,
+    ) async {
+      final (_, player) = await pump(tester, demo, mode: mode);
+      player.queue = null;
+      await player.playTracks(demo, 1);
+      player.show(
+        PlayerState(
+          track: demo[1],
+          position: const Duration(seconds: 93),
+          duration: const Duration(seconds: 245),
+          playing: true,
+        ),
+      );
+      await tester.pump();
+      await precacheAssets(tester, ['assets/fleur-tile.png', ...logos]);
+      await expectLater(
+        find.byType(LibraryScreen),
+        matchesGoldenFile('goldens/2-colonnes$sfx.png'),
+      );
+    }, tags: ['golden']);
+  }
+  testWidgets(
+    'clair : ▶︎ du lecteur se voit (icône claire sur le rond foncé)',
+    (tester) async {
+      await pump(tester, demo, mode: Brightness.light);
+      final round = tester.widget<Container>(
+        find.descendant(
+          of: find.byKey(const Key('playpause')),
+          matching: find.byType(Container),
+        ),
+      );
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const Key('playpause')),
+          matching: find.byType(Icon),
+        ),
+      );
+      expect(
+        (round.decoration! as BoxDecoration).color,
+        LafleurColors.light.text,
+      );
+      expect(icon.color, LafleurColors.light.bg);
+    },
+  );
 
   testWidgets('Artistes : liste des noms, puis leurs morceaux', (tester) async {
     await pump(tester, demo);

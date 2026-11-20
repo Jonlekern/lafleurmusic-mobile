@@ -24,30 +24,35 @@ void main() {
   Future<void> precacheLogo(WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     final ctx = tester.element(find.byType(Scaffold));
-    await tester.runAsync(
-      () => precacheImage(const AssetImage('assets/logo-texte-grand.png'), ctx),
-    );
+    await tester.runAsync(() async {
+      for (final logo in logos) {
+        await precacheImage(AssetImage(logo), ctx);
+      }
+    });
   }
 
-  for (final (name, file, localOnly) in [
-    ('16 A premier lancement', 'phone-16a.png', false),
-    ('16 B Accueil sans musique', 'phone-16b.png', true),
-  ]) {
-    testWidgets(name, (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      await precacheLogo(tester);
-      await pumpAccounts(
-        tester,
-        seed: const [],
-        device: DemoDevice(),
-        configure: (s) => s.localOnly = localOnly,
-        home: () => const PhoneShell(),
-      );
-      await expectLater(
-        find.byType(PhoneShell),
-        matchesGoldenFile('goldens/$file'),
-      );
-      debugDefaultTargetPlatformOverride = null;
-    });
+  for (final (mode, sfx) in goldenModes) {
+    for (final (name, file, localOnly) in [
+      ('16 A premier lancement', 'phone-16a', false),
+      ('16 B Accueil sans musique', 'phone-16b', true),
+    ]) {
+      testWidgets(inMode(mode, name), (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        await precacheLogo(tester);
+        await pumpAccounts(
+          tester,
+          brightness: mode,
+          seed: const [],
+          device: DemoDevice(),
+          configure: (s) => s.localOnly = localOnly,
+          home: () => const PhoneShell(),
+        );
+        await expectLater(
+          find.byType(PhoneShell),
+          matchesGoldenFile('goldens/$file$sfx.png'),
+        );
+        debugDefaultTargetPlatformOverride = null;
+      });
+    }
   }
 }

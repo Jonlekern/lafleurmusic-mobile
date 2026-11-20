@@ -7,9 +7,6 @@ import 'package:lafleurmusic/theme/lafleur_theme.dart';
 
 /// Fichiers où une couleur littérale reste permise, avec la raison.
 const _allowed = <String, String>{
-  'lib/ui/classic/classic_menu.dart': 'écran de l\'iPod Classic : look fixe',
-  'lib/ui/classic/classic_now.dart': 'écran de l\'iPod Classic : look fixe',
-  'lib/ui/classic/click_wheel.dart': 'molette de l\'iPod Classic : look fixe',
   'lib/theme/colors.dart': 'la définition des jetons',
 };
 
@@ -33,6 +30,7 @@ void main() {
       'scrim': c.scrim,
       'toastShade': c.toastShade,
       'thumb': c.thumb,
+      'sliderThumb': c.sliderThumb,
       'textBright': c.textBright,
       'textBody': c.textBody,
       'textLabel': c.textLabel,
@@ -83,6 +81,7 @@ void main() {
       'scrim': const Color.from(alpha: 0.5, red: 0, green: 0, blue: 0),
       'toastShade': const Color(0x99000000),
       'thumb': const Color(0xFFFFFFFF),
+      'sliderThumb': const Color(0xFFFFFFFF),
       'textBright': const Color(0xFFDDDDDD),
       'textBody': const Color(0xFFCCCCCC),
       'textLabel': const Color(0xFFBBBBBB),
@@ -141,6 +140,7 @@ void main() {
       'scrim': c.scrim,
       'toastShade': c.toastShade,
       'thumb': c.thumb,
+      'sliderThumb': c.sliderThumb,
       'textBright': c.textBright,
       'textBody': c.textBody,
       'textLabel': c.textLabel,
@@ -191,6 +191,7 @@ void main() {
       'scrim': 0x40000000,
       'toastShade': 0x33000000,
       'thumb': 0xFFFFFFFF,
+      'sliderThumb': 0xFFF26EF2,
       'textBright': 0xFF222222,
       'textBody': 0xFF333333,
       'textLabel': 0xFF555555,
@@ -219,7 +220,7 @@ void main() {
       'shine': 0x47FFFFFF,
       'shineFade': 0x00FFFFFF,
       'danger': 0xFFD64545,
-      'ok': 0xFF2E9E43,
+      'ok': 0xFF237D3A,
       'jellyfin': 0xFF3D74D9,
       'plex': 0xFFE5A00D,
       'coverEdge': 0xFFE4E4E4,

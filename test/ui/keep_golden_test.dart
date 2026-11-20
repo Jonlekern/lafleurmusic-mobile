@@ -38,84 +38,82 @@ void main() {
     await done(tester);
   }
 
-  testWidgets('8 Sélectionner → Garder sur mon iPhone', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpKeep(
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, '8 Sélectionner → Garder sur mon iPhone'), (
       tester,
-      images: true,
-      home: const KeepScreen(preselect: {'Studio Lafleur', 'Summer Mix'}),
-    );
-    await done(tester);
-    await expectLater(
-      find.byType(KeepScreen),
-      matchesGoldenFile('goldens/phone-8.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpKeep(
+        tester,
+        brightness: mode,
+        images: true,
+        home: const KeepScreen(preselect: {'Studio Lafleur', 'Summer Mix'}),
+      );
+      await done(tester);
+      await expectLater(
+        find.byType(KeepScreen),
+        matchesGoldenFile('goldens/phone-8$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('1 Accueil, ⬇ rose après « Lafleur Surf »', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpKeep(tester, images: true);
-    await done(tester);
-    await expectLater(
-      find.byType(PhoneShell),
-      matchesGoldenFile('goldens/phone-1-gardes.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    testWidgets(inMode(mode, '1 Accueil, ⬇ rose après « Lafleur Surf »'), (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpKeep(tester, brightness: mode, images: true);
+      await done(tester);
+      await expectLater(
+        find.byType(PhoneShell),
+        matchesGoldenFile('goldens/phone-1-gardes$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('2 Album, ⬇ rond et « Night Swim » grisé', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpKeep(tester, images: true);
-    await open(tester);
-    await expectLater(
-      find.byType(PhoneShell),
-      matchesGoldenFile('goldens/phone-2-grise.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    testWidgets(inMode(mode, '2 Album, ⬇ rond et « Night Swim » grisé'), (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpKeep(tester, brightness: mode, images: true);
+      await open(tester);
+      await expectLater(
+        find.byType(PhoneShell),
+        matchesGoldenFile('goldens/phone-2-grise$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('4 Appui long sur « Night Swim »', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpKeep(tester, images: true);
-    await open(tester);
-    await tester.longPress(find.text('Night Swim'));
-    await done(tester);
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/phone-4.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    testWidgets(inMode(mode, '4 Appui long sur « Night Swim »'), (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpKeep(tester, brightness: mode, images: true);
+      await open(tester);
+      await tester.longPress(find.text('Night Swim'));
+      await done(tester);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/phone-4$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('clair : 4 Appui long sur « Night Swim » (maquette 5)', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpKeep(tester, images: true, brightness: Brightness.light);
-    await open(tester);
-    await tester.longPress(find.text('Night Swim'));
-    await done(tester);
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/phone-4-light.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('12 Retirer du téléphone : confirmation', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpKeep(tester, images: true);
-    await tester.tap(find.text('Lafleur Surf').first);
-    await done(tester);
-    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
-    await done(tester);
-    await tester.tap(find.text('Retirer du téléphone'));
-    await done(tester);
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/phone-12.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    testWidgets(inMode(mode, '12 Retirer du téléphone : confirmation'), (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpKeep(tester, brightness: mode, images: true);
+      await tester.tap(find.text('Lafleur Surf').first);
+      await done(tester);
+      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await done(tester);
+      await tester.tap(find.text('Retirer du téléphone'));
+      await done(tester);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/phone-12$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
 }

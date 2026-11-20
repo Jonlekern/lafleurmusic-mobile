@@ -41,26 +41,28 @@ void main() {
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
 
-  testWidgets('9 Sur mon iPhone, haut', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpOnDevice(tester, images: true);
-    await done(tester);
-    await expectLater(
-      at2x(tester),
-      matchesGoldenFile('goldens/phone-9.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, '9 Sur mon iPhone, haut'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpOnDevice(tester, brightness: mode,  images: true);
+      await done(tester);
+      await expectLater(
+        at2x(tester),
+        matchesGoldenFile('goldens/phone-9$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('9 Sur mon iPhone, en bas', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpOnDevice(tester, images: true);
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
-    await done(tester);
-    await expectLater(
-      at2x(tester),
-      matchesGoldenFile('goldens/phone-9-bas.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    testWidgets(inMode(mode, '9 Sur mon iPhone, en bas'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpOnDevice(tester, brightness: mode,  images: true);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
+      await done(tester);
+      await expectLater(
+        at2x(tester),
+        matchesGoldenFile('goldens/phone-9-bas$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
 }

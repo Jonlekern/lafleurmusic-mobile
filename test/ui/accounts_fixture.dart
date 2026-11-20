@@ -130,6 +130,7 @@ Future<AccountsFixture> pumpAccounts(
   configure, // réglages au départ (avant le premier affichage)
   Device? device,
   LocalFolder? localFolder,
+  Brightness brightness = Brightness.dark,
 }) async {
   phoneSize(tester);
   final db = LibraryDb(
@@ -208,7 +209,7 @@ Future<AccountsFixture> pumpAccounts(
       device: device,
       localFolder: localFolder,
       child: MaterialApp(
-        theme: lafleurTheme(),
+        theme: lafleurTheme(brightness),
         home: home?.call() ?? const PhoneShell(),
       ),
     ),

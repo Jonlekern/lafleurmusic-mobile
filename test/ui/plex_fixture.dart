@@ -24,8 +24,10 @@ Future<AccountsFixture> pumpWithPlex(
   Widget Function()? home,
   List<SeedAccount> seed = const [],
   Map<String, TestResult> Function(List<Account>)? results,
+  Brightness brightness = Brightness.dark,
 }) => pumpAccounts(
   tester,
+  brightness: brightness,
   seed: seed,
   results: results,
   home: home ?? () => const AccountsScreen(),

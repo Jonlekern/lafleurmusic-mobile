@@ -57,80 +57,92 @@ void main() {
     ),
   );
 
-  testWidgets('A « + » à côté du titre', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpPhone(tester, images: true, home: const NowScreen());
-    await tester.pumpAndSettle();
-    await expectLater(
-      find.byType(NowScreen),
-      matchesGoldenFile('goldens/playlist-a-plus.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('B cocher plusieurs playlists', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    late PlaylistStore store;
-    await pumpPhone(
-      tester,
-      images: true,
-      home: Builder(
-        builder: (ctx) => Scaffold(
-          body: TextButton(
-            onPressed: () => showAddToPlaylist(ctx, [DemoLibrary.playing]),
-            child: const Text('go'),
-          ),
-        ),
-      ),
-      playlists: (db) => store = make(db),
-      seed: seed,
-    );
-    await tester.runAsync(() async {
-      final sport = await store.create('Sport');
-      await store.add(sport, [for (final t in DemoLibrary.studio) t.path]);
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, 'A « + » à côté du titre'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpPhone(
+        tester,
+        brightness: mode,
+        images: true,
+        home: const NowScreen(),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(NowScreen),
+        matchesGoldenFile('goldens/playlist-a-plus$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
     });
-    await tester.tap(find.text('go'));
-    await settle(tester);
-    await tester.pumpAndSettle();
-    await settle(tester);
-    await tester.tap(find.text('Road Trip'));
-    await tester.tap(find.text('Été 2026'));
-    await tester.pump();
-    await expectLater(
-      find.byType(AddToPlaylistScreen),
-      matchesGoldenFile('goldens/playlist-b-cocher.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
 
-  testWidgets('C donner un nom', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpPhone(
-      tester,
-      images: true,
-      home: Builder(
-        builder: (ctx) => Scaffold(
-          body: TextButton(
-            onPressed: () => showAddToPlaylist(ctx, [DemoLibrary.playing]),
-            child: const Text('go'),
+    testWidgets(inMode(mode, 'B cocher plusieurs playlists'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      late PlaylistStore store;
+      await pumpPhone(
+        tester,
+        brightness: mode,
+        images: true,
+        home: Builder(
+          builder: (ctx) => Scaffold(
+            body: TextButton(
+              onPressed: () => showAddToPlaylist(ctx, [DemoLibrary.playing]),
+              child: const Text('go'),
+            ),
           ),
         ),
-      ),
-      playlists: make,
-      seed: seed,
-    );
-    await tester.tap(find.text('go'));
-    await settle(tester);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('addNew')));
-    await tester.pumpAndSettle();
-    await settle(tester);
-    await tester.enterText(find.byKey(const Key('newPlaylistName')), 'Soirée');
-    await tester.pump();
-    await expectLater(
-      find.byType(Navigator).first,
-      matchesGoldenFile('goldens/playlist-c-nom.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+        playlists: (db) => store = make(db),
+        seed: seed,
+      );
+      await tester.runAsync(() async {
+        final sport = await store.create('Sport');
+        await store.add(sport, [for (final t in DemoLibrary.studio) t.path]);
+      });
+      await tester.tap(find.text('go'));
+      await settle(tester);
+      await tester.pumpAndSettle();
+      await settle(tester);
+      await tester.tap(find.text('Road Trip'));
+      await tester.tap(find.text('Été 2026'));
+      await tester.pump();
+      await expectLater(
+        find.byType(AddToPlaylistScreen),
+        matchesGoldenFile('goldens/playlist-b-cocher$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, 'C donner un nom'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpPhone(
+        tester,
+        brightness: mode,
+        images: true,
+        home: Builder(
+          builder: (ctx) => Scaffold(
+            body: TextButton(
+              onPressed: () => showAddToPlaylist(ctx, [DemoLibrary.playing]),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+        playlists: make,
+        seed: seed,
+      );
+      await tester.tap(find.text('go'));
+      await settle(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('addNew')));
+      await tester.pumpAndSettle();
+      await settle(tester);
+      await tester.enterText(
+        find.byKey(const Key('newPlaylistName')),
+        'Soirée',
+      );
+      await tester.pump();
+      await expectLater(
+        find.byType(Navigator).first,
+        matchesGoldenFile('goldens/playlist-c-nom$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
 }

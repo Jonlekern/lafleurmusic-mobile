@@ -152,7 +152,7 @@ class _PlaybackCardState extends State<PlaybackCard> {
                         trackHeight: 4,
                         activeTrackColor: context.colors.pink,
                         inactiveTrackColor: context.colors.border,
-                        thumbColor: context.colors.thumb,
+                        thumbColor: context.colors.sliderThumb,
                         overlayShape: RoundSliderOverlayShape(
                           overlayRadius: 12,
                         ),

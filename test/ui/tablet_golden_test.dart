@@ -22,29 +22,36 @@ void main() {
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
 
-  Future<void> shot(WidgetTester tester, Size size, String name) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    try {
-      await pumpPlaylists(tester, images: true, home: const AdaptiveHome());
-      tester.view.physicalSize = size;
-      tester.view.padding = FakeViewPadding.zero;
-      tester.view.viewPadding = FakeViewPadding.zero;
-      await tester.pump();
-      await done(tester);
-      await expectLater(
-        find.byType(LibraryScreen),
-        matchesGoldenFile('goldens/$name.png'),
-      );
-    } finally {
-      debugDefaultTargetPlatformOverride = null;
+  for (final (mode, sfx) in goldenModes) {
+    Future<void> shot(WidgetTester tester, Size size, String name) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        await pumpPlaylists(
+          tester,
+          brightness: mode,
+          images: true,
+          home: const AdaptiveHome(),
+        );
+        tester.view.physicalSize = size;
+        tester.view.padding = FakeViewPadding.zero;
+        tester.view.viewPadding = FakeViewPadding.zero;
+        await tester.pump();
+        await done(tester);
+        await expectLater(
+          find.byType(LibraryScreen),
+          matchesGoldenFile('goldens/$name$sfx.png'),
+        );
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
     }
+
+    testWidgets(inMode(mode, 'iPad debout'), (tester) async {
+      await shot(tester, const Size(768, 1024), 'tablet-debout');
+    });
+
+    testWidgets(inMode(mode, 'iPad couché'), (tester) async {
+      await shot(tester, const Size(1024, 768), 'tablet-couche');
+    });
   }
-
-  testWidgets('iPad debout', (tester) async {
-    await shot(tester, const Size(768, 1024), 'tablet-debout');
-  });
-
-  testWidgets('iPad couché', (tester) async {
-    await shot(tester, const Size(1024, 768), 'tablet-couche');
-  });
 }

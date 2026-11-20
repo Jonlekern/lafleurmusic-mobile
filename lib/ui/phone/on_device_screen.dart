@@ -576,7 +576,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
               trackHeight: 4,
               activeTrackColor: context.colors.pink,
               inactiveTrackColor: context.colors.divider,
-              thumbColor: context.colors.thumb,
+              thumbColor: context.colors.sliderThumb,
               thumbShape: const RoundSliderThumbShape(
                 enabledThumbRadius: 11,
                 elevation: 0,

@@ -40,8 +40,10 @@ Future<KeepFixture> pumpPlaylists(
   AppSettings? settings,
   bool images = false,
   Widget home = const PhoneShell(),
+  Brightness brightness = Brightness.dark,
 }) => pumpKeep(
   tester,
+  brightness: brightness,
   seed: seedPlaylists,
   addAccount: false,
   settings: settings,

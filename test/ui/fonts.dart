@@ -26,3 +26,19 @@ Future<void> precacheAssets(WidgetTester tester, List<String> assets) async {
   });
   await tester.pumpAndSettle();
 }
+
+/// Chaque golden dans les deux modes : sombre (le fichier d'origine) et clair (même nom + `-light`).
+const goldenModes = <(Brightness, String)>[
+  (Brightness.dark, ''),
+  (Brightness.light, '-light'),
+];
+
+/// Le nom du test : inchangé en sombre, « clair : » devant en clair.
+String inMode(Brightness mode, String name) =>
+    mode == Brightness.light ? 'clair : $name' : name;
+
+/// Les deux logos (blanc en sombre, noir en clair), à décoder avant l'écran.
+const logos = [
+  'assets/logo-texte-grand.png',
+  'assets/logo-texte-grand-noir.png',
+];

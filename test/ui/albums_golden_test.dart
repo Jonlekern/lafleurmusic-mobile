@@ -20,27 +20,37 @@ void main() {
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
 
-  testWidgets('B Albums : écoutés récemment et tri « Ajout récent »', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(
+      inMode(mode, 'B Albums : écoutés récemment et tri « Ajout récent »'),
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
-    final f = await pumpPhone(tester, images: true, home: const AlbumsScreen());
-    final plays = [
-      DemoLibrary.studio.first.path,
-      DemoLibrary.surf.first.path,
-      DemoLibrary.summer.first.path,
-    ];
-    for (final (i, p) in plays.indexed) {
-      await tester.runAsync(() => f.db.addPlay(p, DateTime(2026, 1, 1 + i)));
-    }
-    await settle(tester);
-    await tester.tap(find.byKey(const Key('sort-recent')));
-    await settle(tester);
-    await expectLater(
-      find.byType(AlbumsScreen),
-      matchesGoldenFile('goldens/albums-b-tri-recents.png'),
+        final f = await pumpPhone(
+          tester,
+          brightness: mode,
+          images: true,
+          home: const AlbumsScreen(),
+        );
+        final plays = [
+          DemoLibrary.studio.first.path,
+          DemoLibrary.surf.first.path,
+          DemoLibrary.summer.first.path,
+        ];
+        for (final (i, p) in plays.indexed) {
+          await tester.runAsync(
+            () => f.db.addPlay(p, DateTime(2026, 1, 1 + i)),
+          );
+        }
+        await settle(tester);
+        await tester.tap(find.byKey(const Key('sort-recent')));
+        await settle(tester);
+        await expectLater(
+          find.byType(AlbumsScreen),
+          matchesGoldenFile('goldens/albums-b-tri-recents$sfx.png'),
+        );
+        debugDefaultTargetPlatformOverride = null;
+      },
     );
-    debugDefaultTargetPlatformOverride = null;
-  });
+  }
 }

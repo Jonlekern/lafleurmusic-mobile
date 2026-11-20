@@ -59,6 +59,7 @@ pumpOnDevice(
   bool images = false,
   int? free,
   Object? freeError,
+  Brightness brightness = Brightness.dark,
 }) async {
   final settings = withSettings ?? AppSettings();
   final device = DemoDevice(settings: settings);
@@ -70,6 +71,7 @@ pumpOnDevice(
   final f = await pumpKeep(
     tester,
     images: images,
+    brightness: brightness,
     seed: (db) async {
       await seedOnDeviceDemo(db);
       await also?.call(db);

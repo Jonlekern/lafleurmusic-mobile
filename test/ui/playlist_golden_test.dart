@@ -28,32 +28,36 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('10 Accueil : playlists du serveur', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpPlaylists(tester, images: true);
-    await done(tester);
-    await tester.scrollUntilVisible(
-      find.text('Chill du dimanche'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await done(tester);
-    await expectLater(
-      find.byType(PhoneShell),
-      matchesGoldenFile('goldens/phone-10.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, '10 Accueil : playlists du serveur'), (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpPlaylists(tester, brightness: mode, images: true);
+      await done(tester);
+      await tester.scrollUntilVisible(
+        find.text('Chill du dimanche'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await done(tester);
+      await expectLater(
+        find.byType(PhoneShell),
+        matchesGoldenFile('goldens/phone-10$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('11 Une playlist du serveur', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpPlaylists(tester, images: true);
-    await done(tester);
-    await openSoiree(tester);
-    await expectLater(
-      find.byType(PhoneShell),
-      matchesGoldenFile('goldens/phone-11.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    testWidgets(inMode(mode, '11 Une playlist du serveur'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpPlaylists(tester, brightness: mode, images: true);
+      await done(tester);
+      await openSoiree(tester);
+      await expectLater(
+        find.byType(PhoneShell),
+        matchesGoldenFile('goldens/phone-11$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
 }

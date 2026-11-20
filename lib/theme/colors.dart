@@ -20,6 +20,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     required this.scrim,
     required this.toastShade,
     required this.thumb,
+    required this.sliderThumb,
     required this.textBright,
     required this.textBody,
     required this.textLabel,
@@ -101,6 +102,10 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
 
   /// Pouce des curseurs et interrupteurs.
   final Color thumb;
+
+  /// Rond des curseurs posés sur le fond (blanc en sombre, rose en clair : un rond blanc
+  /// disparaîtrait sur le blanc).
+  final Color sliderThumb;
 
   /// Texte très clair.
   final Color textBright;
@@ -216,6 +221,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     scrim: Color.from(alpha: 0.5, red: 0, green: 0, blue: 0),
     toastShade: Color(0x99000000),
     thumb: Color(0xFFFFFFFF),
+    sliderThumb: Color(0xFFFFFFFF),
     textBright: Color(0xFFDDDDDD),
     textBody: Color(0xFFCCCCCC),
     textLabel: Color(0xFFBBBBBB),
@@ -268,6 +274,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     scrim: Color.from(alpha: 0.25, red: 0, green: 0, blue: 0),
     toastShade: Color(0x33000000),
     thumb: Color(0xFFFFFFFF),
+    sliderThumb: Color(0xFFF26EF2),
     textBright: Color(0xFF222222),
     textBody: Color(0xFF333333),
     textLabel: Color(0xFF555555),
@@ -296,7 +303,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     shine: Color(0x47FFFFFF),
     shineFade: Color(0x00FFFFFF),
     danger: Color(0xFFD64545),
-    ok: Color(0xFF2E9E43),
+    ok: Color(0xFF237D3A),
     jellyfin: Color(0xFF3D74D9),
     plex: Color(0xFFE5A00D),
     coverEdge: Color(0xFFE4E4E4),
@@ -320,6 +327,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     Color? scrim,
     Color? toastShade,
     Color? thumb,
+    Color? sliderThumb,
     Color? textBright,
     Color? textBody,
     Color? textLabel,
@@ -370,6 +378,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
       scrim: scrim ?? this.scrim,
       toastShade: toastShade ?? this.toastShade,
       thumb: thumb ?? this.thumb,
+      sliderThumb: sliderThumb ?? this.sliderThumb,
       textBright: textBright ?? this.textBright,
       textBody: textBody ?? this.textBody,
       textLabel: textLabel ?? this.textLabel,
@@ -425,6 +434,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
       scrim: Color.lerp(scrim, other.scrim, t)!,
       toastShade: Color.lerp(toastShade, other.toastShade, t)!,
       thumb: Color.lerp(thumb, other.thumb, t)!,
+      sliderThumb: Color.lerp(sliderThumb, other.sliderThumb, t)!,
       textBright: Color.lerp(textBright, other.textBright, t)!,
       textBody: Color.lerp(textBody, other.textBody, t)!,
       textLabel: Color.lerp(textLabel, other.textLabel, t)!,
@@ -461,6 +471,68 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
   }
 }
 
+/// Mode Classic (décision T3a) : l'iPod noir en sombre (les couleurs d'avant), l'iPod blanc en
+/// clair : écran clair au texte foncé, molette blanche aux libellés gris. Le rose ne change pas ;
+/// l'anneau et le rond du milieu de la molette suivent `bar` et `bg`.
+class ClassicColors {
+  const ClassicColors({
+    required this.screen,
+    required this.title,
+    required this.notOnPhone,
+    required this.artist,
+    required this.album,
+    required this.barTrack,
+    required this.volume,
+    required this.wheelEdge,
+    required this.wheelLabel,
+  });
+
+  /// Fond de l'écran façon iPod.
+  final Color screen;
+
+  /// Titre de la liste, ▶︎ et pile, EN COURS, n sur m, temps, haut-parleurs.
+  final Color title;
+
+  /// Morceau pas sur le téléphone (grisé, comme PhoneTrackRow).
+  final Color notOnPhone;
+
+  /// Artiste et album dans En cours.
+  final Color artist;
+  final Color album;
+
+  /// Fond des barres de progression et de volume, et la barre du volume.
+  final Color barTrack;
+  final Color volume;
+
+  /// Bord de l'anneau et du rond du milieu, libellés de la molette (MENU, ⏮ ⏭ ▶︎❙❙).
+  final Color wheelEdge;
+  final Color wheelLabel;
+
+  static const dark = ClassicColors(
+    screen: Color(0xFF111111),
+    title: Color(0xFF999999),
+    notOnPhone: Color(0xFF555555),
+    artist: Color(0xFFBBBBBB),
+    album: Color(0xFF888888),
+    barTrack: Color(0xFF2A2A2A),
+    volume: Color(0xFFDDDDDD),
+    wheelEdge: Color(0xFF2A2A2A),
+    wheelLabel: Color(0xFFDDDDDD),
+  );
+
+  static const light = ClassicColors(
+    screen: Color(0xFFF3F3F3),
+    title: Color(0xFF6E6E6E),
+    notOnPhone: Color(0xFF9A9A9A),
+    artist: Color(0xFF555555),
+    album: Color(0xFF6E6E6E),
+    barTrack: Color(0xFFCFCFCF),
+    volume: Color(0xFF555555),
+    wheelEdge: Color(0xFFCFCFCF),
+    wheelLabel: Color(0xFF6E6E6E),
+  );
+}
+
 extension LafleurColorsX on BuildContext {
   /// Les couleurs du mode courant. Un `MaterialApp` nu (anciens tests) n'en porte pas : le sombre.
   /// Un thème LAFLEUR (primaire rose) sans ses couleurs est une erreur : le sombre muet cacherait
@@ -478,6 +550,10 @@ extension LafleurColorsX on BuildContext {
 
   /// Le mode clair est-il affiché (fond clair) ? Logo noir, barres du système foncées.
   bool get lightColors => colors.bg.computeLuminance() > .5;
+
+  /// Les couleurs du Mode Classic : iPod noir en sombre, iPod blanc en clair.
+  ClassicColors get classicColors =>
+      lightColors ? ClassicColors.light : ClassicColors.dark;
 
   /// Le logo LAFLEURMUSIC : blanc en sombre, noir en clair.
   String get logoAsset => lightColors

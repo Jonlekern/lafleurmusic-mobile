@@ -12,13 +12,7 @@ import '../phone/phone_shell.dart';
 import 'classic_frame.dart';
 import 'click_wheel.dart';
 
-// Maquette 12 A / B (maquettes/src/12-classic.html, .np)
-const _screenBg = Color(0xFF111111);
-const _grey = Color(0xFF999999); // titre, n sur m, temps, haut-parleurs
-const _artist = Color(0xFFBBBBBB);
-const _album = Color(0xFF888888);
-const _track = Color(0xFF2A2A2A); // fond des deux barres
-const _volume = Color(0xFFDDDDDD); // la barre blanche du volume
+// Maquette 12 A / B (maquettes/src/12-classic.html, .np) ; couleurs : context.classicColors
 
 /// Ouvre En cours du Mode Classic (debout, comme l'En cours du mode normal).
 Future<void> openClassicNow(BuildContext context) => pushPhone(
@@ -261,14 +255,6 @@ class _Card extends StatelessWidget {
   final double volume; // 0–1
   final bool scrub;
 
-  static const _head = TextStyle(
-    color: _grey,
-    fontSize: 11,
-    letterSpacing: 1,
-    fontWeight: FontWeight.w700,
-  );
-  static const _time = TextStyle(color: _grey, fontSize: 12);
-
   @override
   Widget build(BuildContext context) {
     final s = strings;
@@ -278,11 +264,20 @@ class _Card extends StatelessWidget {
         ? (position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
     final rest = total - position;
+    final classic = context.classicColors;
+    final grey = classic.title; // titre, n sur m, temps, haut-parleurs
+    final head = TextStyle(
+      color: grey,
+      fontSize: 11,
+      letterSpacing: 1,
+      fontWeight: FontWeight.w700,
+    );
+    final time = TextStyle(color: grey, fontSize: 12);
     return Container(
       clipBehavior: Clip.hardEdge,
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
       decoration: BoxDecoration(
-        color: _screenBg,
+        color: classic.screen,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -290,10 +285,10 @@ class _Card extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(s.classicNowPlaying.toUpperCase(), style: _head),
+              Text(s.classicNowPlaying.toUpperCase(), style: head),
               const Spacer(),
               if (where case (final n, final m))
-                Text(s.classicPosition(n, m), style: _head),
+                Text(s.classicPosition(n, m), style: head),
             ],
           ),
           const SizedBox(height: 14),
@@ -320,12 +315,12 @@ class _Card extends StatelessWidget {
                           : t.artist.isEmpty
                           ? s.unknownArtist
                           : t.artist,
-                      const TextStyle(fontSize: 13, color: _artist),
+                      TextStyle(fontSize: 13, color: classic.artist),
                     ),
                     const SizedBox(height: 3),
                     _line(
                       t?.album ?? '',
-                      const TextStyle(fontSize: 13, color: _album),
+                      TextStyle(fontSize: 13, color: classic.album),
                     ),
                   ],
                 ),
@@ -349,9 +344,9 @@ class _Card extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              Text(clock(position), style: _time),
+              Text(clock(position), style: time),
               const Spacer(),
-              Text('−${clock(rest)}', style: _time),
+              Text('−${clock(rest)}', style: time),
             ],
           ),
           const SizedBox(height: 18),
@@ -370,12 +365,8 @@ class _Card extends StatelessWidget {
           else
             Row(
               children: [
-                const ExcludeSemantics(
-                  child: Icon(
-                    Icons.volume_mute_rounded,
-                    size: 14,
-                    color: _grey,
-                  ),
+                ExcludeSemantics(
+                  child: Icon(Icons.volume_mute_rounded, size: 14, color: grey),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -386,14 +377,14 @@ class _Card extends StatelessWidget {
                     value: '${(volume * 100).round()} %',
                     child: _Bar(
                       fraction: volume,
-                      color: _volume,
+                      color: classic.volume,
                       fillKey: const Key('classic-now-volume'),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                const ExcludeSemantics(
-                  child: Icon(Icons.volume_up_rounded, size: 14, color: _grey),
+                ExcludeSemantics(
+                  child: Icon(Icons.volume_up_rounded, size: 14, color: grey),
                 ),
               ],
             ),
@@ -429,7 +420,7 @@ class _Bar extends StatelessWidget {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: _track,
+                color: context.classicColors.barTrack,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),

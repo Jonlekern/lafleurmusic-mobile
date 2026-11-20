@@ -41,6 +41,7 @@ late FakePlayer player;
 Future<Map<String, File>> pump(
   WidgetTester tester, {
   bool empty = false,
+  Brightness mode = Brightness.dark,
 }) async {
   desktopSize(tester);
   final dir = Directory.systemTemp.createTempSync('top');
@@ -93,7 +94,7 @@ Future<Map<String, File>> pump(
       covers: ReadyCovers(files),
       strings: Strings.of(const Locale('fr')),
       child: MaterialApp(
-        theme: lafleurTheme(),
+        theme: lafleurTheme(mode),
         home: const Scaffold(body: TopScreen()),
       ),
     ),
@@ -155,18 +156,20 @@ void main() {
     );
   });
 
-  testWidgets('maquette 9a', (tester) async {
-    await pump(tester);
-    // laisse les pochettes se décoder (hors horloge simulée)
-    for (var i = 0; i < 6; i++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, 'maquette 9a'), (tester) async {
+      await pump(tester, mode: mode);
+      // laisse les pochettes se décoder (hors horloge simulée)
+      for (var i = 0; i < 6; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+      await expectLater(
+        find.byType(TopScreen),
+        matchesGoldenFile('goldens/9a-top-100$sfx.png'),
       );
-      await tester.pump();
-    }
-    await expectLater(
-      find.byType(TopScreen),
-      matchesGoldenFile('goldens/9a-top-100.png'),
-    );
-  }, tags: ['golden']);
+    }, tags: ['golden']);
+  }
 }

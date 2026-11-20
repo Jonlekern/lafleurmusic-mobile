@@ -29,75 +29,83 @@ void main() {
   Future<void> precacheLogo(WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     final ctx = tester.element(find.byType(Scaffold));
-    await tester.runAsync(
-      () => precacheImage(const AssetImage('assets/logo-texte-grand.png'), ctx),
-    );
+    await tester.runAsync(() async {
+      for (final logo in logos) {
+        await precacheImage(AssetImage(logo), ctx);
+      }
+    });
   }
 
-  testWidgets('6 Réglages → Comptes', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    final f = await pumpAccounts(
-      tester,
-      home: () => const AccountsScreen(),
-      results: (l) => {l[1].id: TestResult.unreachable},
-    );
-    // comme la maquette : Perso, Navidrome et Jellyfin cochés, Plex non
-    await tester.tap(find.text('Perso'));
-    await settle(tester);
-    final plex = (await f.list(tester))[2].id;
-    await tester.tap(find.byKey(ValueKey('check-$plex')));
-    await settle(tester);
-    await expectLater(
-      find.byType(AccountsScreen),
-      matchesGoldenFile('goldens/phone-6.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, '6 Réglages → Comptes'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      final f = await pumpAccounts(
+        tester,
+        brightness: mode,
+        home: () => const AccountsScreen(),
+        results: (l) => {l[1].id: TestResult.unreachable},
+      );
+      // comme la maquette : Perso, Navidrome et Jellyfin cochés, Plex non
+      await tester.tap(find.text('Perso'));
+      await settle(tester);
+      final plex = (await f.list(tester))[2].id;
+      await tester.tap(find.byKey(ValueKey('check-$plex')));
+      await settle(tester);
+      await expectLater(
+        find.byType(AccountsScreen),
+        matchesGoldenFile('goldens/phone-6$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('1 Accueil, « Un compte » : la puce du compte est rose', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    await pumpAccounts(
-      tester,
-      seed: mockupAccounts.take(2).toList(),
-      home: () => const HomeScreen(),
+    testWidgets(
+      inMode(mode, '1 Accueil, « Un compte » : la puce du compte est rose'),
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        await precacheLogo(tester);
+        await pumpAccounts(
+          tester,
+          brightness: mode,
+          seed: mockupAccounts.take(2).toList(),
+          home: () => const HomeScreen(),
+        );
+        await tester.tap(find.text('Jellyfin de Max'));
+        await settle(tester);
+        await expectLater(
+          find.byType(HomeScreen),
+          matchesGoldenFile('goldens/phone-1-one-account$sfx.png'),
+        );
+        debugDefaultTargetPlatformOverride = null;
+      },
     );
-    await tester.tap(find.text('Jellyfin de Max'));
-    await settle(tester);
-    await expectLater(
-      find.byType(HomeScreen),
-      matchesGoldenFile('goldens/phone-1-one-account.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
 
-  testWidgets('7 Ajouter un compte', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    await pumpAccounts(
-      tester,
-      seed: const [],
-      home: () => const AccountFormScreen(
-        initial: AccountDraft(
-          name: 'Navidrome maison',
-          address: 'http://192.168.1.20:4533',
-          user: 'johnny',
-          password: 'motdepas',
-          headers: {'CF-Access-Client-Id': 'abc123…'},
+    testWidgets(inMode(mode, '7 Ajouter un compte'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      await pumpAccounts(
+        tester,
+        brightness: mode,
+        seed: const [],
+        home: () => const AccountFormScreen(
+          initial: AccountDraft(
+            name: 'Navidrome maison',
+            address: 'http://192.168.1.20:4533',
+            user: 'johnny',
+            password: 'motdepas',
+            headers: {'CF-Access-Client-Id': 'abc123…'},
+          ),
         ),
-      ),
-    );
-    // l'adresse en cours de saisie : contour rose, comme la maquette
-    await tester.tap(find.byKey(const ValueKey('account-address')));
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.pump(const Duration(milliseconds: 300)); // contour animé
-    await expectLater(
-      find.byType(AccountFormScreen),
-      matchesGoldenFile('goldens/phone-7.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+      );
+      // l'adresse en cours de saisie : contour rose, comme la maquette
+      await tester.tap(find.byKey(const ValueKey('account-address')));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 300)); // contour animé
+      await expectLater(
+        find.byType(AccountFormScreen),
+        matchesGoldenFile('goldens/phone-7$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
 }

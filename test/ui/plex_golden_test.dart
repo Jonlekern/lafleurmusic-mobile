@@ -35,174 +35,197 @@ void main() {
   Future<void> precacheLogo(WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     final ctx = tester.element(find.byType(Scaffold));
-    await tester.runAsync(
-      () => precacheImage(const AssetImage('assets/logo-texte-grand.png'), ctx),
-    );
+    await tester.runAsync(() async {
+      for (final logo in logos) {
+        await precacheImage(AssetImage(logo), ctx);
+      }
+    });
   }
 
-  testWidgets('14 A onglet Plex', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    await pumpWithPlex(
-      tester,
-      FakePlexTv(),
-      home: () => const AccountFormScreen(),
-    );
-    await tester.tap(find.text('Plex'));
-    await settle(tester);
-    await tester.enterText(
-      find.byKey(const ValueKey('account-name')),
-      'Plex maison',
-    );
-    FocusManager.instance.primaryFocus?.unfocus();
-    await settle(tester);
-    await expectLater(
-      find.byType(AccountFormScreen),
-      matchesGoldenFile('goldens/phone-14a.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('14 B le code', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    await pumpWithPlex(
-      tester,
-      FakePlexTv()..validateAfter = null,
-      home: () => const PlexLinkScreen(),
-    );
-    await tester.pump(const Duration(milliseconds: 300));
-    await expectLater(
-      find.byType(PlexLinkScreen),
-      matchesGoldenFile('goldens/phone-14b.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('14 C choisir le serveur', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    await pumpWithPlex(
-      tester,
-      FakePlexTv(),
-      home: () => const PlexLinkScreen(),
-    );
-    await settle(tester);
-    await expectLater(
-      find.byType(PlexLinkScreen),
-      matchesGoldenFile('goldens/phone-14c.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('14 D À reconnecter', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    final f = await pumpWithPlex(
-      tester,
-      FakePlexTv(),
-      seed: [mockupAccounts.first, ...plexSeed],
-      results: (l) => {l[1].id: TestResult.tokenRevoked},
-    );
-    final plex = (await f.list(tester))[1].id;
-    f.secrets.data[PlexSource.serverKey(plex)] = jsonEncode(
-      PlexServer.fromResource(resourceJson(homeResource))!.toJson(),
-    );
-    await settle(tester);
-    await expectLater(
-      find.byType(AccountsScreen),
-      matchesGoldenFile('goldens/phone-14d.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  // états hors maquette, montrés à Johnny pour accord (correction 1)
-  testWidgets('14 E code expiré', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    await pumpWithPlex(
-      tester,
-      FakePlexTv()
-        ..validateAfter = null
-        ..expiresIn = 60,
-      home: () => const PlexLinkScreen(),
-    );
-    await tester.pump(const Duration(seconds: 61));
-    await settle(tester);
-    await expectLater(
-      find.byType(PlexLinkScreen),
-      matchesGoldenFile('goldens/phone-14e.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('14 F plex.tv ne répond pas', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    await pumpWithPlex(
-      tester,
-      FakePlexTv()..down = true,
-      home: () => const PlexLinkScreen(),
-    );
-    await settle(tester);
-    await expectLater(
-      find.byType(PlexLinkScreen),
-      matchesGoldenFile('goldens/phone-14f.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('14 G C\'est bon ✓, je cherche tes serveurs', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    final tv = FakePlexTv()..resources = [homeResource];
-    tv.pms.delay = {homeLocal: const Duration(seconds: 3)};
-    await pumpWithPlex(tester, tv, home: () => const PlexLinkScreen());
-    await tester.pump(const Duration(milliseconds: 300));
-    await expectLater(
-      find.byType(PlexLinkScreen),
-      matchesGoldenFile('goldens/phone-14g.png'),
-    );
-    for (var i = 0; i < 3; i++) {
-      await tester.pump(const Duration(seconds: 4));
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, '14 A onglet Plex'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      await pumpWithPlex(
+        tester,
+        brightness: mode,
+        FakePlexTv(),
+        home: () => const AccountFormScreen(),
+      );
+      await tester.tap(find.text('Plex'));
       await settle(tester);
-    }
-    debugDefaultTargetPlatformOverride = null;
-  });
+      await tester.enterText(
+        find.byKey(const ValueKey('account-name')),
+        'Plex maison',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await settle(tester);
+      await expectLater(
+        find.byType(AccountFormScreen),
+        matchesGoldenFile('goldens/phone-14a$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('14 H un serveur ne répond pas', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    final tv = FakePlexTv();
-    tv.pms.down = {officeRemote};
-    await pumpWithPlex(tester, tv, home: () => const PlexLinkScreen());
-    await settle(tester);
-    await expectLater(
-      find.byType(PlexLinkScreen),
-      matchesGoldenFile('goldens/phone-14h.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    testWidgets(inMode(mode, '14 B le code'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      await pumpWithPlex(
+        tester,
+        brightness: mode,
+        FakePlexTv()..validateAfter = null,
+        home: () => const PlexLinkScreen(),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await expectLater(
+        find.byType(PlexLinkScreen),
+        matchesGoldenFile('goldens/phone-14b$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
 
-  testWidgets('14 I fiche du compte Plex', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await precacheLogo(tester);
-    late Account acc;
-    await pumpWithPlex(
+    testWidgets(inMode(mode, '14 C choisir le serveur'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      await pumpWithPlex(
+        tester,
+        brightness: mode,
+        FakePlexTv(),
+        home: () => const PlexLinkScreen(),
+      );
+      await settle(tester);
+      await expectLater(
+        find.byType(PlexLinkScreen),
+        matchesGoldenFile('goldens/phone-14c$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, '14 D À reconnecter'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      final f = await pumpWithPlex(
+        tester,
+        brightness: mode,
+        FakePlexTv(),
+        seed: [mockupAccounts.first, ...plexSeed],
+        results: (l) => {l[1].id: TestResult.tokenRevoked},
+      );
+      final plex = (await f.list(tester))[1].id;
+      f.secrets.data[PlexSource.serverKey(plex)] = jsonEncode(
+        PlexServer.fromResource(resourceJson(homeResource))!.toJson(),
+      );
+      await settle(tester);
+      await expectLater(
+        find.byType(AccountsScreen),
+        matchesGoldenFile('goldens/phone-14d$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    // états hors maquette, montrés à Johnny pour accord (correction 1)
+    testWidgets(inMode(mode, '14 E code expiré'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      await pumpWithPlex(
+        tester,
+        brightness: mode,
+        FakePlexTv()
+          ..validateAfter = null
+          ..expiresIn = 60,
+        home: () => const PlexLinkScreen(),
+      );
+      await tester.pump(const Duration(seconds: 61));
+      await settle(tester);
+      await expectLater(
+        find.byType(PlexLinkScreen),
+        matchesGoldenFile('goldens/phone-14e$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, '14 F plex.tv ne répond pas'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      await pumpWithPlex(
+        tester,
+        brightness: mode,
+        FakePlexTv()..down = true,
+        home: () => const PlexLinkScreen(),
+      );
+      await settle(tester);
+      await expectLater(
+        find.byType(PlexLinkScreen),
+        matchesGoldenFile('goldens/phone-14f$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, '14 G C\'est bon ✓, je cherche tes serveurs'), (
       tester,
-      FakePlexTv(),
-      seed: plexSeed,
-      results: (l) {
-        acc = l.single;
-        return const {};
-      },
-      home: () => AccountFormScreen(editing: acc),
-    );
-    await settle(tester);
-    await expectLater(
-      find.byType(AccountFormScreen),
-      matchesGoldenFile('goldens/phone-14i.png'),
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      final tv = FakePlexTv()..resources = [homeResource];
+      tv.pms.delay = {homeLocal: const Duration(seconds: 3)};
+      await pumpWithPlex(
+        tester,
+        brightness: mode,
+        tv,
+        home: () => const PlexLinkScreen(),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await expectLater(
+        find.byType(PlexLinkScreen),
+        matchesGoldenFile('goldens/phone-14g$sfx.png'),
+      );
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 4));
+        await settle(tester);
+      }
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, '14 H un serveur ne répond pas'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      final tv = FakePlexTv();
+      tv.pms.down = {officeRemote};
+      await pumpWithPlex(
+        tester,
+        brightness: mode,
+        tv,
+        home: () => const PlexLinkScreen(),
+      );
+      await settle(tester);
+      await expectLater(
+        find.byType(PlexLinkScreen),
+        matchesGoldenFile('goldens/phone-14h$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, '14 I fiche du compte Plex'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await precacheLogo(tester);
+      late Account acc;
+      await pumpWithPlex(
+        tester,
+        brightness: mode,
+        FakePlexTv(),
+        seed: plexSeed,
+        results: (l) {
+          acc = l.single;
+          return const {};
+        },
+        home: () => AccountFormScreen(editing: acc),
+      );
+      await settle(tester);
+      await expectLater(
+        find.byType(AccountFormScreen),
+        matchesGoldenFile('goldens/phone-14i$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
 }

@@ -60,9 +60,6 @@ const _hubRadius = 50.0;
 /// Près du centre exact, l'angle du doigt n'a plus de sens : on n'y compte rien.
 const _deadRadius = 20.0;
 
-const _edge = Color(0xFF2A2A2A);
-const _label = Color(0xFFDDDDDD);
-
 class _ClickWheelState extends State<ClickWheel> {
   int? _pointer;
   Offset _down = Offset.zero;
@@ -203,6 +200,8 @@ class _ClickWheelState extends State<ClickWheel> {
               ring: context.colors.bar,
               hub: context.colors.bg,
               pink: context.colors.pink,
+              edge: context.classicColors.wheelEdge,
+              label: context.classicColors.wheelLabel,
             ),
             size: const Size.square(ClickWheel.size),
             child: SizedBox.square(
@@ -218,12 +217,12 @@ class _ClickWheelState extends State<ClickWheel> {
                         child: Text(
                           s.wheelMenu,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Inter',
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                             letterSpacing: 1,
-                            color: _label,
+                            color: context.classicColors.wheelLabel,
                             decoration: TextDecoration.none,
                           ),
                         ),
@@ -271,15 +270,17 @@ class _WheelPainter extends CustomPainter {
     required this.ring,
     required this.hub,
     required this.pink,
+    required this.edge,
+    required this.label,
   });
-  final Color ring, hub, pink;
+  final Color ring, hub, pink, edge, label;
 
   static const _c = Offset(_radius, _radius);
 
   @override
   void paint(Canvas canvas, Size size) {
     final edge = Paint()
-      ..color = _edge
+      ..color = this.edge
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     canvas
@@ -301,7 +302,7 @@ class _WheelPainter extends CustomPainter {
         ..strokeWidth = 3,
     );
 
-    final ink = Paint()..color = _label;
+    final ink = Paint()..color = label;
     // ⏮ / ⏭ : une barre et deux triangles, 14 × 8, à 26 du bord
     void skip(double left, bool next) {
       const w = 14.0, h = 8.0, top = _radius - h / 2;
@@ -346,5 +347,9 @@ class _WheelPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WheelPainter old) =>
-      old.ring != ring || old.hub != hub || old.pink != pink;
+      old.ring != ring ||
+      old.hub != hub ||
+      old.pink != pink ||
+      old.edge != edge ||
+      old.label != label;
 }

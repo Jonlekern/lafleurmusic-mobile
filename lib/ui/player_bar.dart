@@ -125,7 +125,11 @@ class _PlayerBarState extends State<PlayerBar> {
                                 st.playing
                                     ? Icons.pause_rounded
                                     : Icons.play_arrow_rounded,
-                                color: context.colors.ink,
+                                // rond couleur du texte : icône claire en clair (#111 sur #111
+                                // ne se verrait pas), ink en sombre comme avant
+                                color: context.lightColors
+                                    ? context.colors.bg
+                                    : context.colors.ink,
                               ),
                             ),
                           ),

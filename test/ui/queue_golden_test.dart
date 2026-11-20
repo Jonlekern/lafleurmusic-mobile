@@ -24,69 +24,77 @@ void main() {
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
 
-  testWidgets('A Album : bandeau « Ajouter à la file » et la bulle', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpPhone(tester, images: true);
-    await tester.tap(find.text('Studio Lafleur'));
-    await tester.pumpAndSettle();
-    await settle(tester);
-    final g = await tester.startGesture(
-      tester.getCenter(find.text('Night Swim')),
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(
+      inMode(mode, 'A Album : bandeau « Ajouter à la file » et la bulle'),
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        await pumpPhone(tester, brightness: mode, images: true);
+        await tester.tap(find.text('Studio Lafleur'));
+        await tester.pumpAndSettle();
+        await settle(tester);
+        final g = await tester.startGesture(
+          tester.getCenter(find.text('Night Swim')),
+        );
+        for (var i = 0; i < 8; i++) {
+          await g.moveBy(const Offset(25, 0));
+          await tester.pump();
+        }
+        // la bulle de l'ajout précédent, comme sur la maquette (le doigt est encore posé)
+        showQueueToast(
+          tester.element(find.byType(AlbumScreen)),
+          count: 1,
+          onUndo: () {},
+          onShowQueue: () {},
+        );
+        await tester.pump();
+        await expectLater(
+          find.byType(PhoneShell),
+          matchesGoldenFile('goldens/queue-a-glisser-droite$sfx.png'),
+        );
+        await g.cancel();
+        await tester.pumpAndSettle(const Duration(seconds: 5));
+        debugDefaultTargetPlatformOverride = null;
+      },
     );
-    for (var i = 0; i < 8; i++) {
-      await g.moveBy(const Offset(25, 0));
-      await tester.pump();
-    }
-    // la bulle de l'ajout précédent, comme sur la maquette (le doigt est encore posé)
-    showQueueToast(
-      tester.element(find.byType(AlbumScreen)),
-      count: 1,
-      onUndo: () {},
-      onShowQueue: () {},
-    );
-    await tester.pump();
-    await expectLater(
-      find.byType(PhoneShell),
-      matchesGoldenFile('goldens/queue-a-glisser-droite.png'),
-    );
-    await g.cancel();
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-    debugDefaultTargetPlatformOverride = null;
-  });
 
-  testWidgets('C À suivre : « Vider » et la fenêtre « Vider tes ajouts ? »', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    final f = await pumpPhone(tester, images: true);
-    // la maquette : deux ajouts
-    f.player.queue!.enqueue([DemoLibrary.tracks.first]);
-    await tester.tap(find.byType(MiniPlayer));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Vider'));
-    await tester.pumpAndSettle();
-    await expectLater(
-      find.byType(Overlay).first,
-      matchesGoldenFile('goldens/queue-c-vider.png'),
+    testWidgets(
+      inMode(
+        mode,
+        'C À suivre : « Vider » et la fenêtre « Vider tes ajouts ? »',
+      ),
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        final f = await pumpPhone(tester, brightness: mode, images: true);
+        // la maquette : deux ajouts
+        f.player.queue!.enqueue([DemoLibrary.tracks.first]);
+        await tester.tap(find.byType(MiniPlayer));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Vider'));
+        await tester.pumpAndSettle();
+        await expectLater(
+          find.byType(Overlay).first,
+          matchesGoldenFile('goldens/queue-c-vider$sfx.png'),
+        );
+        debugDefaultTargetPlatformOverride = null;
+      },
     );
-    debugDefaultTargetPlatformOverride = null;
-  });
 
-  testWidgets('D En cours : le menu ⋯ « Aller à l\'album / l\'artiste »', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await pumpPhone(tester, images: true);
-    await tester.tap(find.byType(MiniPlayer));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
-    await tester.pumpAndSettle();
-    await expectLater(
-      find.byType(Overlay).first,
-      matchesGoldenFile('goldens/queue-d-aller-a.png'),
+    testWidgets(
+      inMode(mode, 'D En cours : le menu ⋯ « Aller à l\'album / l\'artiste »'),
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        await pumpPhone(tester, brightness: mode, images: true);
+        await tester.tap(find.byType(MiniPlayer));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+        await tester.pumpAndSettle();
+        await expectLater(
+          find.byType(Overlay).first,
+          matchesGoldenFile('goldens/queue-d-aller-a$sfx.png'),
+        );
+        debugDefaultTargetPlatformOverride = null;
+      },
     );
-    debugDefaultTargetPlatformOverride = null;
-  });
+  }
 }

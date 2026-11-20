@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -8,9 +10,16 @@ import 'package:lafleurmusic/ui/cover_image.dart';
 import 'package:lafleurmusic/ui/phone/album_screen.dart';
 
 import '../ui/fonts.dart';
+import '../ui/phone/on_device_screen_test.dart' show pumpOnDevice;
 import '../ui/phone_fixture.dart';
 
 /// Mode clair (plan 7, tâche 2) : l'appli suit le réglage du téléphone.
+/// Rapport de contraste WCAG entre deux couleurs.
+double contrast(Color a, Color b) {
+  final (x, y) = (a.computeLuminance(), b.computeLuminance());
+  return (math.max(x, y) + .05) / (math.min(x, y) + .05);
+}
+
 void main() {
   setUpAll(loadFonts);
 
@@ -62,11 +71,33 @@ void main() {
     expect(LafleurColors.dark.coverEdge.a, 0); // sombre : pas de filet
   });
 
-  test('texte sur rose : #111 dans les deux modes', () {
+  test('texte sur rose : #111 en clair, #1F1F1F en sombre (décision T2a)', () {
     expect(LafleurColors.light.onPink, const Color(0xFF111111));
-    expect(LafleurColors.dark.onPink, const Color(0xFF111111));
     expect(LafleurColors.light.ink, const Color(0xFF111111));
+    // sombre : la plupart des lignes roses gardent ink #1F1F1F (goldens sombres inchangés)
+    expect(LafleurColors.dark.ink, const Color(0xFF1F1F1F));
+    expect(LafleurColors.dark.onPink, const Color(0xFF111111));
   });
+
+  test(
+    'vert « ok » clair : lisible en petit texte (AA 4,5:1 sur fond et champ)',
+    () {
+      const c = LafleurColors.light;
+      expect(contrast(c.ok, c.bg), greaterThanOrEqualTo(4.5));
+      expect(contrast(c.ok, c.field), greaterThanOrEqualTo(4.5));
+    },
+  );
+
+  test(
+    'curseur clair : le rond se voit sur le blanc, le sombre reste blanc',
+    () {
+      expect(LafleurColors.dark.sliderThumb, const Color(0xFFFFFFFF));
+      const c = LafleurColors.light;
+      expect(c.sliderThumb, c.pink);
+      expect(contrast(c.sliderThumb, c.bg), greaterThan(2));
+      expect(contrast(c.sliderThumb, c.divider), greaterThan(1.5));
+    },
+  );
 
   test('un thème par mode, le sombre par défaut', () {
     final light = lafleurTheme(Brightness.light);
@@ -170,6 +201,17 @@ void main() {
     await pumpPhone(tester, brightness: Brightness.light);
     // l'album en cours est surligné en rose sur l'Accueil
     expect(textColor(tester, 'Studio Lafleur'), const Color(0xFF111111));
+  });
+
+  testWidgets('Sur mon iPhone, clair : le rond du curseur de limite est rose', (
+    tester,
+  ) async {
+    await pumpOnDevice(tester, brightness: Brightness.light);
+    final slider = find.byKey(const Key('limitSlider'), skipOffstage: false);
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
+    final ctx = tester.element(slider);
+    expect(SliderTheme.of(ctx).thumbColor, LafleurColors.light.sliderThumb);
   });
 
   testWidgets('un test clair voit bien les couleurs claires', (tester) async {

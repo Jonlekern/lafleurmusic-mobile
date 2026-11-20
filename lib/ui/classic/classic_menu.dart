@@ -19,12 +19,7 @@ import 'classic_frame.dart';
 import 'classic_now.dart';
 import 'click_wheel.dart';
 
-// Maquette 6 A (maquettes/src/6-molette.html, .ipodscr)
-const _screenBg = Color(0xFF111111);
-const _titleColor = Color(0xFF999999);
-const _notOnPhone = Color(
-  0xFF555555,
-); // PhoneTrackRow, morceau pas sur le téléphone
+// Maquette 6 A (maquettes/src/6-molette.html, .ipodscr) ; couleurs : context.classicColors
 const _rowHeight = 37.0; // padding 9 + une ligne de texte de 15 px
 const _titleHeight = 19.0; // une ligne de 11 px + 6 dessous
 const _screenPad = 8.0; // en haut et en bas de l'écran
@@ -498,11 +493,12 @@ class _Screen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = level;
+    final classic = context.classicColors;
     return Container(
       clipBehavior: Clip.hardEdge,
       padding: const EdgeInsets.symmetric(vertical: _screenPad),
       decoration: BoxDecoration(
-        color: _screenBg,
+        color: classic.screen,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -519,8 +515,8 @@ class _Screen extends StatelessWidget {
                       l.title(strings).toUpperCase(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _titleColor,
+                      style: TextStyle(
+                        color: classic.title,
                         fontSize: 11,
                         letterSpacing: 1,
                         fontWeight: FontWeight.w700,
@@ -528,10 +524,10 @@ class _Screen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const ExcludeSemantics(
+                  ExcludeSemantics(
                     child: CustomPaint(
-                      size: Size(35, 10),
-                      painter: _StatusPainter(),
+                      size: const Size(35, 10),
+                      painter: _StatusPainter(classic.title),
                     ),
                   ),
                 ],
@@ -616,7 +612,7 @@ class ClassicRow extends StatelessWidget {
           ? context.colors.ink
           : playable
           ? context.colors.text
-          : _notOnPhone,
+          : context.classicColors.notOnPhone,
       fontSize: 15,
       fontWeight: FontWeight.w700,
     );
@@ -659,11 +655,12 @@ class ClassicRow extends StatelessWidget {
 
 /// « ▶︎ ▮▮▮ » à droite du titre (maquette 6 A) : un triangle et la pile en trois barres.
 class _StatusPainter extends CustomPainter {
-  const _StatusPainter();
+  const _StatusPainter(this.color);
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final ink = Paint()..color = _titleColor;
+    final ink = Paint()..color = color;
     canvas.drawPath(
       Path()
         ..moveTo(0, 0)
@@ -678,5 +675,5 @@ class _StatusPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_StatusPainter old) => false;
+  bool shouldRepaint(_StatusPainter old) => old.color != color;
 }

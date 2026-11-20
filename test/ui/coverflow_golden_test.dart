@@ -39,7 +39,11 @@ final names = [
   'Palm',
 ];
 
-Future<FakePlayer> pump(WidgetTester tester, {int count = 7}) async {
+Future<FakePlayer> pump(
+  WidgetTester tester, {
+  int count = 7,
+  Brightness mode = Brightness.dark,
+}) async {
   desktopSize(tester);
   final db = LibraryDb(
     DatabaseConnection(
@@ -107,7 +111,7 @@ Future<FakePlayer> pump(WidgetTester tester, {int count = 7}) async {
       covers: covers,
       strings: Strings.of(const Locale('fr')),
       child: MaterialApp(
-        theme: lafleurTheme(),
+        theme: lafleurTheme(mode),
         home: CoverflowScreen(albums: albums, initial: count > 3 ? 3 : 0),
       ),
     ),
@@ -124,16 +128,17 @@ Future<FakePlayer> pump(WidgetTester tester, {int count = 7}) async {
 void main() {
   setUpAll(loadFonts);
 
-  testWidgets('Cover Flow comme la maquette 3', (tester) async {
-    await pump(tester);
-    await precacheAssets(tester, ['assets/logo-texte-grand.png']);
-    expect(find.text('Studio Lafleur'), findsOneWidget);
-    await expectLater(
-      find.byType(CoverflowScreen),
-      matchesGoldenFile('goldens/3-coverflow.png'),
-    );
-  }, tags: ['golden']);
-
+  for (final (mode, sfx) in goldenModes) {
+    testWidgets(inMode(mode, 'Cover Flow comme la maquette 3'), (tester) async {
+      await pump(tester, mode: mode);
+      await precacheAssets(tester, logos);
+      expect(find.text('Studio Lafleur'), findsOneWidget);
+      await expectLater(
+        find.byType(CoverflowScreen),
+        matchesGoldenFile('goldens/3-coverflow$sfx.png'),
+      );
+    }, tags: ['golden']);
+  }
   testWidgets('flèche droite : album suivant', (tester) async {
     await pump(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
