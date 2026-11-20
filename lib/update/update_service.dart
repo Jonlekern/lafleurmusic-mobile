@@ -33,6 +33,36 @@ class UpdateInfo {
   final int? apkSize;
   final String? apkSha256; // hexadécimal, minuscules
   final String? ipaUrl;
+
+  Map<String, Object?> toJson() => {
+    'version': version,
+    'notes': notes,
+    'pageUrl': pageUrl,
+    'apkUrl': apkUrl,
+    'apkSize': apkSize,
+    'apkSha256': apkSha256,
+    'ipaUrl': ipaUrl,
+  };
+
+  /// null si le JSON n'a pas la bonne forme.
+  static UpdateInfo? fromJson(Object? j) {
+    try {
+      if (j is! Map) return null;
+      final v = j['version'], page = j['pageUrl'], notes = j['notes'];
+      if (v is! String || page is! String || notes is! List) return null;
+      return UpdateInfo(
+        version: v,
+        notes: [for (final n in notes) n as String],
+        pageUrl: page,
+        apkUrl: j['apkUrl'] as String?,
+        apkSize: j['apkSize'] as int?,
+        apkSha256: j['apkSha256'] as String?,
+        ipaUrl: j['ipaUrl'] as String?,
+      );
+    } on Object {
+      return null;
+    }
+  }
 }
 
 enum UpdateCheck { newer, upToDate, offline }
@@ -174,6 +204,14 @@ class UpdateService {
     if (last != null &&
         last <= nowMs &&
         nowMs - last < const Duration(hours: 24).inMilliseconds) {
+      if (available.value == null && _latest == null) {
+        // après un relancement : la version trouvée la dernière fois
+        final saved = UpdateInfo.fromJson(settings.lastFoundUpdate);
+        if (saved != null && isNewerVersion(saved.version, current)) {
+          _latest = saved;
+          _publish(saved);
+        }
+      }
       return available.value;
     }
     settings.lastUpdateCheck = nowMs;
@@ -183,7 +221,10 @@ class UpdateService {
       // pas grave
     }
     final (ok, info) = await _fetch();
-    if (ok) _latest = info;
+    if (ok) {
+      _latest = info;
+      await _remember(info);
+    }
     _publish(info);
     return available.value;
   }
@@ -193,10 +234,21 @@ class UpdateService {
     final (ok, info) = await _fetch();
     if (!ok) return UpdateCheck.offline;
     _latest = info;
+    await _remember(info);
     final newer = info != null && isNewerVersion(info.version, current);
     available.value = null;
     _publish(info);
     return newer ? UpdateCheck.newer : UpdateCheck.upToDate;
+  }
+
+  Future<void> _remember(UpdateInfo? info) async {
+    final newer = info != null && isNewerVersion(info.version, current);
+    settings.lastFoundUpdate = newer ? info.toJson() : null;
+    try {
+      await _save();
+    } on Object {
+      // pas grave
+    }
   }
 
   void dismiss(UpdateInfo u) {

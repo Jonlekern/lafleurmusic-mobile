@@ -38,6 +38,7 @@ class AppSettings {
     this.localOnly = false,
     this.lastUpdateCheck,
     this.dismissedUpdate,
+    this.lastFoundUpdate,
     List<String>? customAccounts,
   }) : customAccounts = customAccounts ?? [],
        equalizer = equalizer ?? Equalizer.named('flat');
@@ -70,6 +71,7 @@ class AppSettings {
   bool localOnly; // « Juste la musique de mon iPhone » : pas de compte, l'écran du compte ne revient pas au lancement
   int? lastUpdateCheck; // dernier essai de recherche de mise à jour (ms epoch)
   String? dismissedUpdate; // version dont le bandeau a été écarté
+  Map<String, Object?>? lastFoundUpdate; // dernière version trouvée (JSON de UpdateInfo), pour le bandeau entre deux recherches
   bool classicMode; // téléphone : Mode Classic (menu et molette) au lieu du mode normal
 
   static const defaultStorageLimitBytes = 10 * 1024 * 1024 * 1024;
@@ -132,6 +134,9 @@ class AppSettings {
           lastUpdateCheck: j['lastUpdateCheck'] is int
               ? j['lastUpdateCheck']! as int
               : null,
+          lastFoundUpdate: j['lastFoundUpdate'] is Map
+              ? (j['lastFoundUpdate']! as Map).cast<String, Object?>()
+              : null,
           dismissedUpdate: j['dismissedUpdate'] is String
               ? j['dismissedUpdate']! as String
               : null,
@@ -185,6 +190,7 @@ class AppSettings {
         'localOnly': localOnly,
         'lastUpdateCheck': lastUpdateCheck,
         'dismissedUpdate': dismissedUpdate,
+        'lastFoundUpdate': lastFoundUpdate,
       }),
     );
     await tmp.rename(f.path);

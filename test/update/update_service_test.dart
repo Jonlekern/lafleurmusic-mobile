@@ -209,6 +209,62 @@ void main() {
       expect(settings.lastUpdateCheck, clock.millisecondsSinceEpoch);
     });
 
+    group('after a relaunch', () {
+      Future<void> found() async {
+        await make(ok(release())).checkDaily();
+        expect(settings.lastFoundUpdate, isNotNull);
+        clock = clock.add(const Duration(minutes: 10));
+      }
+
+      MockClient noHttp() => MockClient((r) async => fail('no request'));
+
+      test('same release restored without request', () async {
+        await found();
+        final s = make(noHttp());
+        final u = await s.checkDaily();
+        expect(u?.version, '0.11.0');
+        expect(u?.apkSha256, apkSha);
+        expect(u?.notes, hasLength(2));
+        expect(s.available.value?.version, '0.11.0');
+        expect(s.latest?.version, '0.11.0');
+      });
+
+      test('survives a settings file round-trip', () async {
+        await found();
+        final f = File('${dir.path}/s.json');
+        await settings.save(f);
+        settings = await AppSettings.load(f);
+        expect((await make(noHttp()).checkDaily())?.version, '0.11.0');
+      });
+
+      test('dismissed: null', () async {
+        await found();
+        settings.dismissedUpdate = '0.11.0';
+        expect(await make(noHttp()).checkDaily(), isNull);
+      });
+
+      test('app already updated: null', () async {
+        await found();
+        expect(await make(noHttp(), current: '0.11.0').checkDaily(), isNull);
+      });
+
+      test('broken saved JSON ignored', () async {
+        await found();
+        for (final bad in <Map<String, Object?>>[
+          {'version': 3},
+          {
+            'version': '0.11.0',
+            'pageUrl': 'p',
+            'notes': [1],
+          },
+          {},
+        ]) {
+          settings.lastFoundUpdate = bad;
+          expect(await make(noHttp()).checkDaily(), isNull);
+        }
+      });
+    });
+
     test('checkNow: newer / upToDate / offline', () async {
       final s = make(ok(release()));
       expect(await s.checkNow(), UpdateCheck.newer);
