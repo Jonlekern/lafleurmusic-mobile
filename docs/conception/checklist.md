@@ -7,8 +7,8 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Écrans : reprendre ceux du Mac, empilés
 - ✅ Maquettes 1 et 2 validées (la molette aura sa propre maquette)
 - ✅ Spec écrite et validée (18.11.2026)
-- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes », 4 « Jellyfin », 5 « Plex » et 6 « Mode Classic » écrits et codés ; plan 8 « file et bibliothèque » codé ; plans 7 et 9 ensuite
-- ⬜ Code (plans 1, 2, 3, 4, 5, 6 et 8 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
+- ✅ Plans 1 « écouter son serveur », 2 « hors ligne », 3 « plusieurs comptes », 4 « Jellyfin », 5 « Plex » et 6 « Mode Classic » écrits et codés ; plan 8 « file et bibliothèque » et plan 9 « playlists modifiables » codés ; plan 7 ensuite
+- ⬜ Code (plans 1, 2, 3, 4, 5, 6, 8 et 9 faits, essais de bout en bout dans le simulateur ; l'écran « Sur mon iPhone » attend la maquette)
 - ⬜ Essais : simulateur iPhone sur le Mac, Android construit par GitHub
 - ✅ Dépôt GitHub créé dès le début (privé au départ) ; accord de Johnny avant chaque envoi
 
@@ -69,6 +69,11 @@ Mise à jour : 19.11.2026. ✅ = décidé avec Johnny · ⬜ = encore à décide
 - ✅ Plan 8 fait : glisser vers la droite = Ajouter à la file (bulle « Ajouté à la file » avec Annuler et Voir la file) ; « Vider » ne retire que tes ajouts, après confirmation, la suite de l'album reste
 - ✅ Plan 8 fait : écran Albums (ligne « Albums » de l'Accueil, ou le titre ALBUMS) avec « Écoutés récemment » et le tri Nom, Artiste, Ajout récent, Plus écouté, gardé dans les réglages ; « Aller à l'album » et « Aller à l'artiste » dans le menu ⋯ de En cours
 - ✅ Plan 8 essayé de bout en bout dans le simulateur, avec des fichiers posés à la main (le premier compte demandé vient d'un faux serveur) : glisser, bulle, Annuler, Vider, Aller à l'album, tri gardé
+- ✅ Plan 9 fait : « Ajouter à une playlist » sur n'importe quel morceau (une ou plusieurs playlists, ou une nouvelle) ; « Déjà dans … » quand le morceau y est déjà
+- ✅ Plan 9 fait : l'écran d'une playlist a « Ajouter · Modifier · Trier » ; Modifier = nom, pochette, retirer, déplacer, supprimer (avec question) ; sur un serveur (Navidrome, Jellyfin, Plex) le changement est écrit sur le serveur
+- ✅ Plan 9 fait : des playlists qui restent sur le téléphone, avec des morceaux de tous les comptes et des fichiers posés à la main ; « Garder » écrit leur `.m3u8`, qui suit chaque changement
+- ✅ Plan 9 fait : l'appli marche sans aucun serveur (« Juste la musique de mon iPhone ») : un Accueil vide qui dit où mettre ses fichiers
+- ✅ Plan 9 essayé de bout en bout dans le simulateur : sans compte (playlist du téléphone, `.m3u8` écrit, renommé, supprimé, le morceau reste) et avec un faux Navidrome (créer, ajouter, doublon refusé, trier, relire)
 
 ## Mode clair
 - ✅ L'affichage actuel = mode sombre
