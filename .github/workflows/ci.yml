@@ -156,6 +156,8 @@ jobs:
         run: |
           flutter build apk --debug -t integration_test/playlists_phone_test.dart
           cp build/app/outputs/flutter-apk/app-debug.apk playlists-phone-debug.apk
+          flutter build apk --debug -t integration_test/keep_in_app_test.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk keep-in-app-debug.apk
           flutter build apk --debug -t integration_test/sound_proof_test.dart
       - uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -181,6 +183,9 @@ jobs:
             # permission; a test cannot answer that dialog, so it is granted at install
             adb install -r -t -g playlists-phone-debug.apk
             flutter test integration_test/playlists_phone_test.dart
+            # plan 10: kept songs move into the app and back (the visible folder is read too)
+            adb install -r -t -g keep-in-app-debug.apk
+            flutter test integration_test/keep_in_app_test.dart
 
   # Android 9 (API 28): storage still asks for the write permission at run time
   # (until API 29). The app must start without it (end-to-end run, nothing
@@ -225,6 +230,8 @@ jobs:
           cp build/app/outputs/flutter-apk/app-debug.apk playlists-phone-debug.apk
           flutter build apk --debug -t integration_test/playlists_server_test.dart
           cp build/app/outputs/flutter-apk/app-debug.apk playlists-server-debug.apk
+          flutter build apk --debug -t integration_test/keep_in_app_test.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk keep-in-app-debug.apk
           flutter build apk --debug -t integration_test/app_test.dart
       - uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -245,6 +252,8 @@ jobs:
             flutter test integration_test/playlists_phone_test.dart
             adb install -r -t -g playlists-server-debug.apk
             flutter test integration_test/playlists_server_test.dart
+            adb install -r -t -g keep-in-app-debug.apk
+            flutter test integration_test/keep_in_app_test.dart
 
   # Contract with a real Navidrome (plan 1, task 10): a throw-away server whose
   # music folder is test/fixtures/, its admin created through the API, then
