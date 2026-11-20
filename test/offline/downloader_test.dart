@@ -2438,6 +2438,47 @@ void main() {
       ]);
     });
 
+    test('a phone playlist of files put by hand (no account): kept, its .m3u8 '
+        'lists them; a file taken away is no longer in it', () async {
+      root.createSync(recursive: true);
+      final mine = File('${root.path}/Mine.mp3')..writeAsBytesSync([1, 2, 3]);
+      final other = File('${root.path}/Other.mp3')..writeAsBytesSync([4, 5]);
+      for (final f in [mine, other]) {
+        await add(
+          Track(
+            path: f.path,
+            title: f.path.split('/').last.split('.').first,
+            artist: 'Me',
+            album: 'Mine',
+            durationMs: 1000,
+            hasCover: false,
+            size: f.lengthSync(),
+          ),
+        );
+      }
+      final store = PlaylistStore(db);
+      final ref = await store.create(
+        'Local',
+        songs: [mine.path, other.path],
+      ) as PhonePlaylistRef;
+      final d = make()..followPlaylists();
+      final r = await d.keepPlaylist(phonePlaylistAccount, '${ref.id}');
+      expect(r.ok, isTrue);
+      await d.whenIdle();
+      final f = m3u(root, 'Local.m3u8');
+      expect(songs(f), ['../Mine.mp3', '../Other.mp3']);
+      // the user's own files are never touched
+      expect(mine.existsSync() && other.existsSync(), isTrue);
+      other.deleteSync();
+      await d.syncPlaylists();
+      expect(songs(f), ['../Mine.mp3']);
+      // deleted: our .m3u8 goes, the files stay
+      await store.delete(ref);
+      await settled(d);
+      expect(f.existsSync(), isFalse);
+      expect(mine.existsSync(), isTrue);
+    });
+
     test('a kept phone playlist: edited, its .m3u8 follows (a new song kept); '
         'deleted, its .m3u8 goes and its songs stay kept for themselves '
         '(Q6)', () async {

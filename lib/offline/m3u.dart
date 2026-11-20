@@ -86,7 +86,9 @@ class PlaylistFiles {
         continue;
       }
       final paths = await db.playlistPaths(k.accountId, k.playlistId);
-      if (!await db.anyKept(paths)) {
+      // files put by hand in the folder are on the phone already: they need no copy
+      final locals = await _localFiles(root, paths);
+      if (locals.isEmpty && !await db.anyKept(paths)) {
         await _delete(root, k.fileName);
         await db.dropKeptPlaylist(k.accountId, k.playlistId);
         // plus gardée : sa raison ne retient plus rien (un album retiré plus tard)
@@ -97,7 +99,7 @@ class PlaylistFiles {
       final entries = <M3uEntry>[];
       for (final path in paths) {
         final c = copies[path];
-        final rel = c?.filePath;
+        final rel = c?.filePath ?? locals[path];
         if (rel == null) continue;
         if (!fileOrPlaceholderExists(p.join(root.path, rel))) continue;
         final t = await db.trackByPath(path);
@@ -165,6 +167,23 @@ class PlaylistFiles {
         ours.remove(renamedFrom.toLowerCase());
       }
     }
+  }
+
+  /// The songs among [paths] that are files of the phone's folder (scanned, not copied by the
+  /// app) and still there: path → file name relative to [root].
+  Future<Map<String, String>> _localFiles(
+    Directory root,
+    List<String> paths,
+  ) async {
+    final out = <String, String>{};
+    for (final path in {...paths}) {
+      final t = await db.trackByPath(path);
+      if (t == null || t.accountId != 'local') continue;
+      final abs = await device.absolutePath(path);
+      if (!p.isWithin(root.path, abs) || !File(abs).existsSync()) continue;
+      out[path] = p.relative(abs, from: root.path);
+    }
+    return out;
   }
 
   /// [fileName] is the one made for a playlist called [name] (`Name.m3u8`, or `Name (2).m3u8`
