@@ -82,6 +82,11 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   bool _moving = false; // le déplacement tourne (le bouton le dit)
   bool? _keepingInApp; // les morceaux gardés partent vers l'appli (vrai) ou en reviennent
   bool _busy = false; // sélecteur ouvert ou déplacement : un seul à la fois
+  Downloader? _downloader;
+  bool _downloaderMoving = false;
+
+  /// Occupé ici, ou un déplacement lancé avant (écran fermé puis rouvert) tourne encore.
+  bool get _locked => _busy || _downloaderMoving;
   bool _loadingSpace = false;
 
   @override
@@ -93,11 +98,26 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       if (mounted) setState(() => _data = d);
       unawaited(_loadSpace(d.used));
     });
+    _downloader = AppScope.of(context).downloader?..addListener(_onDownloader);
+    _downloaderMoving = _downloader?.isMoving ?? false;
     unawaited(_loadFolder());
+  }
+
+  /// Un déplacement qui finit pendant que l'écran est ouvert : le mode et le dossier ont
+  /// peut-être changé.
+  void _onDownloader() {
+    final moving = _downloader?.isMoving ?? false;
+    if (moving == _downloaderMoving || !mounted) return;
+    setState(() => _downloaderMoving = moving);
+    if (!moving) {
+      unawaited(_loadFolder());
+      unawaited(_loadSpace(_data.used));
+    }
   }
 
   @override
   void dispose() {
+    _downloader?.removeListener(_onDownloader);
     _sub?.cancel();
     super.dispose();
   }
@@ -196,7 +216,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   }
 
   Future<void> _chooseFolder() async {
-    if (_busy) return;
+    if (_locked) return;
     setState(() => _busy = true);
     try {
       await _pickAndMove();
@@ -281,8 +301,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     }
     if (r != null && r.ok) {
       // un dossier adopté sans copie à déplacer ne prévient personne tout seul
-      await app.accountService?.refreshRoot();
-      unawaited(app.localFolder?.rescan());
+      await _follow(app);
       if (mounted) await _loadFolder();
     } else {
       await _release(
@@ -290,7 +309,9 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
       ); // déjà fait par le téléchargeur ; sans effet la deuxième fois
       say(
         messenger,
-        r != null && r.neededBytes > 0
+        r != null && r.busy
+            ? s.moveAlreadyRunning
+            : r != null && r.neededBytes > 0
             ? s.notEnoughSpace(s.size(r.neededBytes))
             : s.folderMoveFailed,
       );
@@ -410,6 +431,21 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     if (mounted) await _loadFolder();
     say(messenger, s.relinked);
     if (mounted) setState(() => _moving = false);
+  }
+
+  /// Après un déplacement réussi : la lecture et la liste des fichiers posés à la main
+  /// suivent le nouveau dossier. Une erreur ici ne défait pas le déplacement.
+  Future<void> _follow(AppScope app) async {
+    try {
+      await app.accountService?.refreshRoot();
+    } on Object {
+      // la racine sera relue au prochain lancement
+    }
+    try {
+      unawaited(app.localFolder?.rescan().catchError((Object _) {}));
+    } on Object {
+      // idem
+    }
   }
 
   Future<void> _release(Device device) async {
@@ -936,7 +972,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   /// quand elle est choisie.
   Widget _whereCard(Strings s, {required bool inApp, required bool chosen}) {
     final c = context.colors;
-    final going = _keepingInApp == inApp;
+    final going =
+        (_keepingInApp ??
+            (_downloaderMoving ? _downloader?.movingKeptToApp : null)) ==
+        inApp;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -948,7 +987,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: chosen || _busy ? null : () => _switchKeep(inApp),
+          onTap: chosen || _locked ? null : () => _switchKeep(inApp),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -1020,13 +1059,16 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   /// Changer de façon de garder : la question d'abord (maquette 17 B) ; « Annuler » ne
   /// déplace rien. Puis les morceaux gardés passent d'un dossier à l'autre.
   Future<void> _switchKeep(bool toApp) async {
-    if (_busy) return;
+    if (_locked) return;
     final app = AppScope.of(context);
     final downloader = app.downloader;
     if (downloader == null) return;
     final s = app.strings;
     final messenger = ScaffoldMessenger.of(context);
     final size = s.size(_data.used);
+    // le retour va au dossier choisi s'il répond encore, sinon à celui par défaut
+    if (!toApp) await _loadFolder();
+    if (!mounted) return;
     final yes = await _askMove(
       s,
       toApp ? s.moveIntoAppTitle : s.moveToVisibleTitle,
@@ -1037,7 +1079,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
               _folder ?? s.defaultFolder(onIphone, tablet: onTablet),
             ),
     );
-    if (!yes || !mounted || _busy) return;
+    if (!yes || !mounted || _locked) return;
     setState(() {
       _busy = true;
       _keepingInApp = toApp;
@@ -1050,9 +1092,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
         r = null;
       }
       if (r != null && r.ok) {
-        // la lecture et la liste des fichiers posés à la main suivent le nouveau dossier
-        await app.accountService?.refreshRoot();
-        unawaited(app.localFolder?.rescan());
+        await _follow(app);
         if (mounted) await _loadFolder();
         if (mounted) unawaited(_loadSpace(_data.used));
       } else {
@@ -1060,6 +1100,8 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           messenger,
           r == null
               ? s.keptMoveFailed
+              : r.busy
+              ? s.moveAlreadyRunning
               : r.neededBytes > 0
               ? s.notEnoughSpace(s.size(r.neededBytes))
               : r.folderUnavailable
@@ -1159,7 +1201,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     borderRadius: BorderRadius.circular(9),
     child: InkWell(
       borderRadius: BorderRadius.circular(9),
-      onTap: _busy ? null : _chooseFolder,
+      onTap: _locked ? null : _chooseFolder,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         child: Row(
@@ -1190,13 +1232,13 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   Widget _folderButton(Strings s) => Padding(
     padding: const EdgeInsets.only(top: 8),
     child: Opacity(
-      opacity: _busy ? 0.5 : 1,
+      opacity: _locked ? 0.5 : 1,
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           key: const Key('chooseFolder'),
           borderRadius: BorderRadius.circular(20),
-          onTap: _busy ? null : _chooseFolder,
+          onTap: _locked ? null : _chooseFolder,
           child: Container(
             alignment: Alignment.center,
             padding: const EdgeInsets.all(9),
@@ -1205,7 +1247,11 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              _moving ? s.moving : s.chooseTheFolder,
+              _moving ||
+                      (_downloaderMoving &&
+                          _downloader?.movingKeptToApp == null)
+                  ? s.moving
+                  : s.chooseTheFolder,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
           ),

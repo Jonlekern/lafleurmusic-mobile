@@ -646,6 +646,8 @@ class Strings {
     "La musique n'a pas pu être déplacée. Rien n'a bougé.",
     "The music couldn't be moved. Nothing moved.",
   );
+  String get moveAlreadyRunning =>
+      _t('Un déplacement est déjà en cours.', 'A move is already under way.');
   String get keptFolderUnavailable => _t(
     "Le dossier LAFLEURMUSIC ne répond pas. Rien n'a bougé.",
     "The LAFLEURMUSIC folder isn't answering. Nothing moved.",

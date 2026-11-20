@@ -33,14 +33,16 @@ class KeepResult {
   const KeepResult.queued(this.count, this.bytes)
     : ok = true,
       neededBytes = 0,
-      folderUnavailable = false;
+      folderUnavailable = false,
+      busy = false;
 
   /// Refusé : il manque [neededBytes] (le plus grand écart avec la limite ou la place libre).
   const KeepResult.tooBig(this.neededBytes)
     : ok = false,
       count = 0,
       bytes = 0,
-      folderUnavailable = false;
+      folderUnavailable = false,
+      busy = false;
 
   /// Une erreur au milieu : rien n'a changé.
   const KeepResult.failed()
@@ -48,7 +50,8 @@ class KeepResult {
       neededBytes = 0,
       count = 0,
       bytes = 0,
-      folderUnavailable = false;
+      folderUnavailable = false,
+      busy = false;
 
   /// Refusé : le dossier choisi ne répond plus (jamais de copie dans le dossier par défaut).
   const KeepResult.folderUnavailable()
@@ -56,9 +59,19 @@ class KeepResult {
       neededBytes = 0,
       count = 0,
       bytes = 0,
-      folderUnavailable = true;
+      folderUnavailable = true,
+      busy = false;
 
-  final bool ok, folderUnavailable;
+  /// Refusé sans rien toucher : un autre déplacement des morceaux gardés est en cours.
+  const KeepResult.busy()
+    : ok = false,
+      neededBytes = 0,
+      count = 0,
+      bytes = 0,
+      folderUnavailable = false,
+      busy = true;
+
+  final bool ok, folderUnavailable, busy;
   final int count, bytes, neededBytes;
 }
 
@@ -197,6 +210,21 @@ class Downloader extends ChangeNotifier {
   /// Les fichiers (chemins absolus) que le déplacement en cours copie ou va effacer : ni
   /// l'original ni sa copie ne sont des fichiers posés à la main ([LocalFolder]).
   Set<String> get movingFiles => Set.unmodifiable(_movingFiles);
+
+  /// Un déplacement (ou une adoption) de dossier tourne : un seul à la fois, même si
+  /// l'écran qui l'a lancé a été fermé puis rouvert.
+  bool get isMoving => _moving;
+
+  /// Pendant [moveKept] : vers l'appli (vrai) ou vers le dossier visible ; null sinon.
+  bool? get movingKeptToApp => _movingKeptToApp;
+  bool? _movingKeptToApp;
+
+  void _setMoving(bool v, {bool? toApp}) {
+    _moving = v;
+    _movingKeptToApp = v ? toApp : null;
+    notifyListeners();
+  }
+
   bool _accessOk = false;
   bool _accessDenied = false;
   final _reserved =
@@ -1104,7 +1132,8 @@ class Downloader extends ChangeNotifier {
     Future<void> Function()? commit, {
     bool? toApp,
   }) async {
-    _moving = true;
+    if (_moving) return const KeepResult.busy();
+    _setMoving(true, toApp: toApp);
     _active?.cancel();
     try {
       await whenIdle();
@@ -1120,7 +1149,7 @@ class Downloader extends ChangeNotifier {
       await _releaseQuietly();
       rethrow;
     } finally {
-      _moving = false;
+      _setMoving(false);
       _movingFiles.clear();
       _reserved.clear();
       start();
@@ -1278,7 +1307,8 @@ class Downloader extends ChangeNotifier {
   Future<KeepResult> adoptRoot({
     required Future<void> Function() commit,
   }) async {
-    _moving = true;
+    if (_moving) return const KeepResult.busy();
+    _setMoving(true);
     _active?.cancel();
     try {
       await whenIdle();
@@ -1295,7 +1325,7 @@ class Downloader extends ChangeNotifier {
       await _releaseQuietly();
       return const KeepResult.failed();
     } finally {
-      _moving = false;
+      _setMoving(false);
       _reserved.clear();
       start();
     }
@@ -1310,6 +1340,7 @@ class Downloader extends ChangeNotifier {
   /// plus au départ ([KeepResult.folderUnavailable]). Une appli tuée au milieu se remet
   /// d'aplomb au lancement suivant ([recoverMove]).
   Future<KeepResult> moveKept({required bool toApp}) async {
+    if (_moving) return const KeepResult.busy();
     if ((await settings()).keepInApp == toApp) {
       return const KeepResult.queued(0, 0);
     }

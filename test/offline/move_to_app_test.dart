@@ -482,6 +482,38 @@ void main() {
     expect(await db.localTracks(), isEmpty);
   });
 
+  test(
+    'one move at a time: a second one is refused, the first one ends well',
+    () async {
+      final d = await keptSongs();
+      final songs = _files(byDefault);
+      final hold = Completer<void>();
+      db.holdMove = hold.future;
+      final first = d.moveKept(toApp: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(d.isMoving, isTrue);
+      expect(d.movingKeptToApp, isTrue);
+      final again = await d.moveKept(toApp: true);
+      expect((again.ok, again.busy), (false, true));
+      final back = await d.moveKept(toApp: false);
+      expect(back.busy, isTrue);
+      final root = await d.moveRoot(from: byDefault, to: chosen);
+      expect(root.busy, isTrue);
+      final adopt = await d.adoptRoot(commit: () async {});
+      expect(adopt.busy, isTrue);
+      db.holdMove = null;
+      hold.complete();
+      final r = await first;
+      expect(r.ok, isTrue);
+      expect(d.isMoving, isFalse);
+      expect(d.movingKeptToApp, isNull);
+      expect(settings.keepInApp, isTrue);
+      expect(_files(private), songs);
+      expect(_files(chosen), isEmpty);
+      await expectKeptWhereTheSettingSays();
+    },
+  );
+
   group('3. the app killed during the move', () {
     /// The first app is stuck (killed) at a point; a new one starts on the same files.
     Future<void> relaunch() async {

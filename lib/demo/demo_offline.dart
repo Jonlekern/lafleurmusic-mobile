@@ -94,11 +94,26 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
 
   @override
   Future<KeepResult> moveKept({required bool toApp}) async {
+    if (isMoving) return const KeepResult.busy();
     keptMoves.add(toApp);
-    await moveGate?.future;
-    if (moveResult.ok) await commitKept?.call(toApp);
-    return moveResult;
+    isMoving = true;
+    movingKeptToApp = toApp;
+    notifyListeners();
+    try {
+      await moveGate?.future;
+      if (moveResult.ok) await commitKept?.call(toApp);
+      return moveResult;
+    } finally {
+      isMoving = false;
+      movingKeptToApp = null;
+      notifyListeners();
+    }
   }
+
+  @override
+  bool isMoving = false;
+  @override
+  bool? movingKeptToApp;
 
   @override
   Set<String> get movingFiles => const {};

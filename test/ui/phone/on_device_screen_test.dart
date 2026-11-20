@@ -28,8 +28,13 @@ List<String> pathsOf(String album) => [
 
 class _FolderSpy implements LocalFolder {
   int rescans = 0;
+  bool fail = false;
   @override
-  Future<void> rescan() async => rescans++;
+  Future<void> rescan() async {
+    rescans++;
+    if (fail) throw const FileSystemException('rescan');
+  }
+
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
@@ -37,8 +42,12 @@ class _FolderSpy implements LocalFolder {
 class _CountingService extends DemoAccountService {
   _CountingService(super.accounts, {required super.db});
   int refreshes = 0;
+  bool fail = false;
   @override
-  Future<void> refreshRoot() async => refreshes++;
+  Future<void> refreshRoot() async {
+    refreshes++;
+    if (fail) throw StateError('refreshRoot');
+  }
 }
 
 /// L'écran seul, sur les données de la démo (maquette 4).
@@ -96,7 +105,9 @@ pumpOnDevice(
     },
   );
   // comme le vrai téléchargeur : un déplacement réussi enregistre le mode
-  f.downloader.commitKept = device.setKeepInApp;
+  // (au retour, un dossier choisi qui ne répond plus est oublié : celui par défaut)
+  f.downloader.commitKept = (toApp) =>
+      device.setKeepInApp(toApp, forgetFolder: !toApp && !device.reachable);
   await done(tester);
   return (
     f: f,
@@ -938,6 +949,132 @@ void main() {
         expect(borderOf(tester, 'keepVisible'), const Color(0xFFF26EF2));
       });
     }
+
+    phoneTest(
+      'rouvert pendant un déplacement : occupé, puis à jour quand il finit',
+      TargetPlatform.iOS,
+      (tester) async {
+        // le déplacement a été lancé depuis l'écran d'avant, fermé depuis
+        final d = DemoDownloader()
+          ..isMoving = true
+          ..movingKeptToApp = true;
+        final r = await pumpOnDevice(tester, downloader: d);
+        await scrollTo(tester, find.byKey(const Key('keepInApp')));
+        expect(find.text('Déplacement…'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('keepInApp')),
+            matching: find.text('Déplacement…'),
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const Key('keepInApp')));
+        await done(tester);
+        expect(find.byType(Dialog), findsNothing, reason: 'pas de 2e question');
+        await tester.tap(find.byKey(const Key('chooseFolder')));
+        await done(tester);
+        expect(r.device.picks, 0, reason: 'pas de sélecteur non plus');
+        // le premier déplacement finit
+        await r.device.setKeepInApp(true);
+        d
+          ..isMoving = false
+          ..movingKeptToApp = null
+          ..notifyListeners();
+        await done(tester);
+        expect(find.text('Déplacement…'), findsNothing);
+        expect(borderOf(tester, 'keepInApp'), const Color(0xFFF26EF2));
+        expect(find.byKey(const Key('chooseFolder')), findsNothing);
+      },
+    );
+
+    phoneTest(
+      'déjà en cours : le message, rien ne change',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        r.f.downloader.moveResult = const KeepResult.busy();
+        await tapCard(tester, 'keepInApp');
+        await tester.tap(find.text('Déplacer'));
+        await done(tester);
+        expect(find.text('Un déplacement est déjà en cours.'), findsOneWidget);
+        expect(r.services.single.refreshes, 0);
+        expect(r.folder.rescans, 0);
+      },
+    );
+
+    phoneTest(
+      'la relecture rate après un déplacement réussi : il reste réussi',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        r.services.single.fail = true;
+        r.folder.fail = true;
+        await tapCard(tester, 'keepInApp');
+        await tester.tap(find.text('Déplacer'));
+        await done(tester);
+        expect(tester.takeException(), isNull);
+        expect(r.settings.keepInApp, isTrue);
+        expect(r.folder.rescans, 1);
+        expect(find.byType(SnackBar), findsNothing);
+        expect(borderOf(tester, 'keepInApp'), const Color(0xFFF26EF2));
+      },
+    );
+
+    phoneTest(
+      'dans l\'appli, dossier choisi parti : le retour va au dossier par défaut et le sélecteur revient',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(
+          tester,
+          keepInApp: true,
+          withSettings: AppSettings()..musicFolder = '/x/Cloud/LAFLEURMUSIC',
+        );
+        r.device.reachable = false;
+        await tapCard(tester, 'keepVisible');
+        expect(
+          find.text(
+            "Les 4,2 Go gardés quittent l'appli et retournent dans Sur mon iPhone › LAFLEURMUSIC.",
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Déplacer'));
+        await done(tester);
+        expect(r.f.downloader.keptMoves, [false]);
+        expect(r.settings.keepInApp, isFalse);
+        expect(r.settings.musicFolder, isNull);
+        await scrollTo(tester, find.byKey(const Key('chooseFolder')));
+        expect(find.text('Sur mon iPhone › LAFLEURMUSIC'), findsOneWidget);
+        r.device.reachable = true;
+        r.device.picked = null;
+        await tester.tap(find.byKey(const Key('chooseFolder')));
+        await done(tester);
+        expect(r.device.picks, 1);
+      },
+    );
+
+    phoneTest(
+      'passé dans l\'appli pendant le sélecteur : seul le dossier visible change',
+      TargetPlatform.iOS,
+      (tester) async {
+        final r = await pumpOnDevice(tester);
+        final gate = r.device.pickGate = Completer<void>();
+        r.device.reachable =
+            false; // même l'ancien dossier parti : aucune question
+        r.device.picked = const PickedFolder('/x/Cloud/LAFLEURMUSIC', 'b64');
+        await scrollTo(tester, find.byKey(const Key('chooseFolder')));
+        await tester.tap(find.byKey(const Key('chooseFolder')));
+        await tester.pump();
+        await r.device.setKeepInApp(true); // un déplacement fini entre-temps
+        gate.complete();
+        await done(tester);
+        expect(find.text("L'ancien dossier est introuvable"), findsNothing);
+        expect(r.f.downloader.moves, isEmpty);
+        expect(r.f.downloader.adopted, 0);
+        expect(r.device.committed.single.path, '/x/Cloud/LAFLEURMUSIC');
+        expect(r.folder.rescans, 1);
+        expect(find.byType(SnackBar), findsNothing);
+      },
+    );
 
     testWidgets('en anglais', (tester) async {
       final en = Strings.of(const Locale('en'));

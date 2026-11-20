@@ -66,7 +66,8 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
 
-    // maquette 17 : où garder la musique (A comme aujourd'hui, B la question, C après)
+    // maquette 17 : où garder la musique. A (comme aujourd'hui) est phone-9-bas plus haut :
+    // la section finit l'écran, la même image. B la question, C après.
     Future<void> toWhere(WidgetTester tester) async {
       await tester.scrollUntilVisible(
         find.text('OÙ GARDER LA MUSIQUE'),
@@ -80,17 +81,6 @@ void main() {
       );
       await done(tester);
     }
-
-    testWidgets(inMode(mode, '17a où garder la musique'), (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      await pumpOnDevice(tester, brightness: mode, images: true);
-      await toWhere(tester);
-      await expectLater(
-        at2x(tester, of: find.byType(MaterialApp)),
-        matchesGoldenFile('goldens/phone-17a$sfx.png'),
-      );
-      debugDefaultTargetPlatformOverride = null;
-    });
 
     testWidgets(inMode(mode, '17b la question'), (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
