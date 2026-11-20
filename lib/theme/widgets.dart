@@ -117,7 +117,7 @@ class TitleBar extends StatelessWidget {
       children: [
         Align(
           alignment: logoAlignment,
-          child: Image.asset('assets/logo-texte-grand.png', height: 20),
+          child: Image.asset(context.logoAsset, height: 20),
         ),
         if (trailing != null)
           Align(alignment: Alignment.centerRight, child: trailing),

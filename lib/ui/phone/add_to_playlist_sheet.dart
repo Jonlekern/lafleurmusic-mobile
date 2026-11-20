@@ -268,7 +268,7 @@ class _AddToPlaylistScreenState extends State<AddToPlaylistScreen> {
                           Padding(
                             padding: const EdgeInsets.only(left: 40),
                             child: Image.asset(
-                              'assets/logo-texte-grand.png',
+                              context.logoAsset,
                               height: 11,
                             ),
                           ),

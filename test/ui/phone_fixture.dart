@@ -15,6 +15,7 @@ import 'package:lafleurmusic/player/player.dart';
 import 'package:lafleurmusic/player/queue.dart';
 import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
+import 'package:lafleurmusic/theme/colors.dart';
 import 'package:lafleurmusic/theme/lafleur_theme.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 
@@ -30,6 +31,25 @@ void phoneSize(WidgetTester tester) {
   tester.view.padding = pad;
   tester.view.viewPadding = pad;
   addTearDown(tester.view.reset);
+}
+
+/// Le réglage clair / sombre du téléphone pour ce test (remis à zéro après).
+void phoneBrightness(WidgetTester tester, Brightness brightness) {
+  tester.platformDispatcher.platformBrightnessTestValue = brightness;
+  addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+}
+
+/// L'appli comme au lancement (thème clair, thème sombre, réglage du téléphone) ; vérifie que
+/// l'écran porte bien les couleurs du mode demandé (un oubli ne retombe pas en sombre muet).
+Widget lafleurTestApp(Widget home) => lafleurMaterialApp(home: home);
+
+void expectMode(WidgetTester tester, Brightness brightness) {
+  final ctx = tester.element(find.byType(Navigator).first);
+  expect(
+    Theme.of(ctx).extension<LafleurColors>(),
+    brightness == Brightness.light ? LafleurColors.light : LafleurColors.dark,
+    reason: 'le thème du test ne porte pas les couleurs du mode $brightness',
+  );
 }
 
 /// Le même iPhone couché : 844 × 390, encoche à gauche, barre d'accueil en bas.
@@ -70,8 +90,10 @@ Future<PhoneFixture> pumpPhone(
   bool withAccounts = true,
   PlaylistStore Function(LibraryDb db)? playlists,
   Future<void> Function(LibraryDb db, Accounts accounts)? seed,
+  Brightness brightness = Brightness.dark,
 }) async {
   phoneSize(tester);
+  phoneBrightness(tester, brightness);
   final dir = Directory.systemTemp.createTempSync('phone');
   final files = DemoLibrary.writeCovers(dir);
   final db = LibraryDb(
@@ -128,14 +150,11 @@ Future<PhoneFixture> pumpPhone(
       accounts: accounts,
       playlists: playlists?.call(db),
       downloader: downloader,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: lafleurTheme(),
-        home: home,
-      ),
+      child: lafleurTestApp(home),
     ),
   );
   await settle(tester);
+  expectMode(tester, brightness);
   return PhoneFixture(db, player, files);
 }
 
@@ -147,7 +166,11 @@ Future<void> _precache(WidgetTester tester, Map<String, File> covers) async {
     for (final file in covers.values.toSet()) {
       await precacheImage(FileImage(file), ctx);
     }
-    for (final a in ['assets/fleur-tile.png', 'assets/logo-texte-grand.png']) {
+    for (final a in [
+      'assets/fleur-tile.png',
+      'assets/logo-texte-grand.png',
+      'assets/logo-texte-grand-noir.png',
+    ]) {
       await precacheImage(AssetImage(a), ctx);
     }
   });

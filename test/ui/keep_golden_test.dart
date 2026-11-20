@@ -88,6 +88,21 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('clair : 4 Appui long sur « Night Swim » (maquette 5)', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await pumpKeep(tester, images: true, brightness: Brightness.light);
+    await open(tester);
+    await tester.longPress(find.text('Night Swim'));
+    await done(tester);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/phone-4-light.png'),
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('12 Retirer du téléphone : confirmation', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await pumpKeep(tester, images: true);

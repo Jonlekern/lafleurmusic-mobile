@@ -17,7 +17,6 @@ import 'package:lafleurmusic/offline/local_folder.dart';
 import 'package:lafleurmusic/settings.dart';
 import 'package:lafleurmusic/sources/account_service.dart';
 import 'package:lafleurmusic/sources/accounts.dart';
-import 'package:lafleurmusic/theme/lafleur_theme.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 
 import '../sources/fake_secret_store.dart';
@@ -50,8 +49,10 @@ Future<KeepFixture> pumpKeep(
   VoidCallback? saveSettings,
   AccountService Function(Accounts, LibraryDb)? makeService,
   bool addAccount = true,
+  Brightness brightness = Brightness.dark,
 }) async {
   phoneSize(tester);
+  phoneBrightness(tester, brightness);
   final dir = Directory.systemTemp.createTempSync('keep');
   final files = DemoLibrary.writeCovers(
     dir,
@@ -78,6 +79,7 @@ Future<KeepFixture> pumpKeep(
       for (final a in [
         'assets/fleur-tile.png',
         'assets/logo-texte-grand.png',
+        'assets/logo-texte-grand-noir.png',
       ]) {
         await precacheImage(AssetImage(a), ctx);
       }
@@ -128,13 +130,10 @@ Future<KeepFixture> pumpKeep(
       downloader: fake,
       device: device,
       localFolder: localFolder,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: lafleurTheme(),
-        home: home,
-      ),
+      child: lafleurTestApp(home),
     ),
   );
   await settle(tester);
+  expectMode(tester, brightness);
   return KeepFixture(db, player, fake);
 }

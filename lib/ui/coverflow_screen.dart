@@ -234,7 +234,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
         left: 0,
         right: 0,
         child: Center(
-          child: Image.asset('assets/logo-texte-grand.png', height: 22),
+          child: Image.asset(context.logoAsset, height: 22),
         ),
       ),
       Positioned(
@@ -314,7 +314,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
           left: 0,
           right: 0,
           child: Center(
-            child: Image.asset('assets/logo-texte-grand.png', height: 16),
+            child: Image.asset(context.logoAsset, height: 16),
           ),
         ),
         _stage(size, cover, k, h * 0.12 + pad.top),

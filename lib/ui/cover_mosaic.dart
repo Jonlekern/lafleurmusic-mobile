@@ -40,7 +40,7 @@ class CoverMosaic extends StatelessWidget {
       );
     }
     final half = size / 2;
-    return ClipRRect(
+    final mosaic = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: SizedBox(
         width: size,
@@ -48,10 +48,11 @@ class CoverMosaic extends StatelessWidget {
         child: Wrap(
           children: [
             for (final p in paths)
-              CoverImage(trackPath: p, size: half, radius: 0),
+              CoverImage(trackPath: p, size: half, radius: 0, edge: false),
           ],
         ),
       ),
     );
+    return CoverEdge(radius: radius, child: mosaic);
   }
 }

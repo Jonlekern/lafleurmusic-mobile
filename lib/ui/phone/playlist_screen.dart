@@ -10,6 +10,7 @@ import '../../library/playlist_store.dart';
 import '../../player/player.dart';
 import '../../theme/colors.dart';
 import '../../theme/widgets.dart';
+import '../cover_image.dart' show CoverEdge;
 import '../cover_mosaic.dart';
 import '../keep_actions.dart';
 import '../tablet.dart';
@@ -464,14 +465,17 @@ class _PlaylistCoverState extends State<PlaylistCover> {
           radius: widget.radius,
         );
       }
-      return ClipRRect(
-        key: const Key('chosenCover'),
-        borderRadius: BorderRadius.circular(widget.radius),
-        child: Image.file(
-          f,
-          width: widget.size,
-          height: widget.size,
-          fit: BoxFit.cover,
+      return CoverEdge(
+        radius: widget.radius,
+        child: ClipRRect(
+          key: const Key('chosenCover'),
+          borderRadius: BorderRadius.circular(widget.radius),
+          child: Image.file(
+            f,
+            width: widget.size,
+            height: widget.size,
+            fit: BoxFit.cover,
+          ),
         ),
       );
     },

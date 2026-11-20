@@ -8,6 +8,7 @@ import '../../app_scope.dart';
 import '../../library/models.dart';
 import '../../library/playlist_store.dart';
 import '../../theme/colors.dart';
+import '../cover_image.dart' show CoverEdge;
 import '../keep_actions.dart' show onIphone;
 import '../tablet.dart' show onTablet;
 import 'add_to_playlist_sheet.dart' show askQuestion;
@@ -228,13 +229,16 @@ class _PlaylistEditScreenState extends State<PlaylistEditScreen> {
                       child: Column(
                         children: [
                           _cover != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Image.file(
-                                    _cover!,
-                                    width: 120,
-                                    height: 120,
-                                    fit: BoxFit.cover,
+                              ? CoverEdge(
+                                  radius: 6,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Image.file(
+                                      _cover!,
+                                      width: 120,
+                                      height: 120,
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 )
                               : PlaylistCover(
@@ -393,7 +397,7 @@ class _Bar extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 40),
-          child: Image.asset('assets/logo-texte-grand.png', height: 11),
+          child: Image.asset(context.logoAsset, height: 11),
         ),
         Positioned(
           left: 0,

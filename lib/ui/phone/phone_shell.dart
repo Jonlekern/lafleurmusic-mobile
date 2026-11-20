@@ -448,7 +448,7 @@ class PhoneHeader extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(left: small ? 40 : 0),
             child: Image.asset(
-              'assets/logo-texte-grand.png',
+              context.logoAsset,
               height: small ? 11 : 15,
             ),
           ),

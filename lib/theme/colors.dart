@@ -51,6 +51,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     required this.ok,
     required this.jellyfin,
     required this.plex,
+    required this.coverEdge,
   });
 
   /// Fond de l'écran.
@@ -194,6 +195,9 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
   /// Couleur de la marque Plex.
   final Color plex;
 
+  /// Filet autour des pochettes (transparent : pas de filet).
+  final Color coverEdge;
+
   /// Mode sombre : les valeurs d'origine.
   static const dark = LafleurColors(
     bg: Color(0xFF0D0D0D),
@@ -243,6 +247,59 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     ok: Color(0xFF5FD16F),
     jellyfin: Color(0xFF7AA7FF),
     plex: Color(0xFFE5A00D),
+    coverEdge: Color(0x00000000),
+  );
+
+  /// Mode clair : maquette 5 (fond blanc, texte #111, détails rose).
+  static const light = LafleurColors(
+    bg: Color(0xFFFFFFFF),
+    bar: Color(0xFFF3F3F3),
+    panel: Color(0xFFF3F3F3),
+    line: Color(0xFFE4E4E4),
+    text: Color(0xFF111111),
+    sub: Color(0xFF6E6E6E),
+    pink: Color(0xFFF26EF2),
+    ink: Color(0xFF111111),
+    onPink: Color(0xFF111111),
+    onPinkBlack: Color(0xFF000000),
+    hairline: Color(0xFFE4E4E4),
+    coverBack: Color(0xFFEEEEEE),
+    shadow: Color(0xFF000000),
+    scrim: Color.from(alpha: 0.25, red: 0, green: 0, blue: 0),
+    toastShade: Color(0x33000000),
+    thumb: Color(0xFFFFFFFF),
+    textBright: Color(0xFF222222),
+    textBody: Color(0xFF333333),
+    textLabel: Color(0xFF555555),
+    textMuted: Color(0xFF6E6E6E),
+    textDim: Color(0xFF7A7A7A),
+    textDimmer: Color(0xFF8A8A8A),
+    textFaint: Color(0xFF9A9A9A),
+    textHighlight: Color(0xFF111111),
+    outlineDim: Color(0xFFB8B8B8),
+    border: Color(0xFFCFCFCF),
+    borderSoft: Color(0xFFE4E4E4),
+    divider: Color(0xFFE4E4E4),
+    trackBar: Color(0xFFE4E4E4),
+    raised: Color(0xFFEEEEEE),
+    sheet: Color(0xFFFFFFFF),
+    dialog: Color(0xFFFFFFFF),
+    field: Color(0xFFF3F3F3),
+    inputFill: Color(0xFFF3F3F3),
+    rowHover: Color(0xFFEEEEEE),
+    rule: Color(0xFFEEEEEE),
+    ruleTop: Color(0xFFEEEEEE),
+    pinkTint: Color(0xFFFCE2FC),
+    pinkWash: Color(0xFFFDF0FD),
+    coverGradTop: Color(0xFFF3F3F3),
+    coverGradBottom: Color(0xFFFFFFFF),
+    shine: Color(0x47FFFFFF),
+    shineFade: Color(0x00FFFFFF),
+    danger: Color(0xFFD64545),
+    ok: Color(0xFF2E9E43),
+    jellyfin: Color(0xFF3D74D9),
+    plex: Color(0xFFE5A00D),
+    coverEdge: Color(0xFFE4E4E4),
   );
 
   @override
@@ -294,6 +351,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
     Color? ok,
     Color? jellyfin,
     Color? plex,
+    Color? coverEdge,
   }) {
     return LafleurColors(
       bg: bg ?? this.bg,
@@ -343,6 +401,7 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
       ok: ok ?? this.ok,
       jellyfin: jellyfin ?? this.jellyfin,
       plex: plex ?? this.plex,
+      coverEdge: coverEdge ?? this.coverEdge,
     );
   }
 
@@ -397,12 +456,31 @@ class LafleurColors extends ThemeExtension<LafleurColors> {
       ok: Color.lerp(ok, other.ok, t)!,
       jellyfin: Color.lerp(jellyfin, other.jellyfin, t)!,
       plex: Color.lerp(plex, other.plex, t)!,
+      coverEdge: Color.lerp(coverEdge, other.coverEdge, t)!,
     );
   }
 }
 
 extension LafleurColorsX on BuildContext {
-  /// Les couleurs du mode courant ; le sombre si le thème n'en porte pas.
-  LafleurColors get colors =>
-      Theme.of(this).extension<LafleurColors>() ?? LafleurColors.dark;
+  /// Les couleurs du mode courant. Un `MaterialApp` nu (anciens tests) n'en porte pas : le sombre.
+  /// Un thème LAFLEUR (primaire rose) sans ses couleurs est une erreur : le sombre muet cacherait
+  /// un oubli dans un test clair.
+  LafleurColors get colors {
+    final theme = Theme.of(this);
+    final c = theme.extension<LafleurColors>();
+    if (c != null) return c;
+    assert(
+      theme.colorScheme.primary != LafleurColors.dark.pink,
+      'thème LAFLEUR sans LafleurColors : passer par lafleurTheme()',
+    );
+    return LafleurColors.dark;
+  }
+
+  /// Le mode clair est-il affiché (fond clair) ? Logo noir, barres du système foncées.
+  bool get lightColors => colors.bg.computeLuminance() > .5;
+
+  /// Le logo LAFLEURMUSIC : blanc en sombre, noir en clair.
+  String get logoAsset => lightColors
+      ? 'assets/logo-texte-grand-noir.png'
+      : 'assets/logo-texte-grand.png';
 }

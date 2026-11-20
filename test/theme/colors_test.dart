@@ -10,6 +10,7 @@ const _allowed = <String, String>{
   'lib/ui/classic/classic_menu.dart': 'écran de l\'iPod Classic : look fixe',
   'lib/ui/classic/classic_now.dart': 'écran de l\'iPod Classic : look fixe',
   'lib/ui/classic/click_wheel.dart': 'molette de l\'iPod Classic : look fixe',
+  'lib/theme/colors.dart': 'la définition des jetons',
 };
 
 void main() {
@@ -63,6 +64,7 @@ void main() {
       'ok': c.ok,
       'jellyfin': c.jellyfin,
       'plex': c.plex,
+      'coverEdge': c.coverEdge,
     };
     final expected = <String, Color>{
       'bg': const Color(0xFF0D0D0D),
@@ -112,10 +114,119 @@ void main() {
       'ok': const Color(0xFF5FD16F),
       'jellyfin': const Color(0xFF7AA7FF),
       'plex': const Color(0xFFE5A00D),
+      'coverEdge': const Color(0x00000000),
     };
     expect(actual.keys, expected.keys);
     for (final k in expected.keys) {
       expect(actual[k], expected[k], reason: k);
+    }
+  });
+
+  test('jetons clairs : chaque jeton a sa valeur claire', () {
+    const c = LafleurColors.light;
+    final actual = <String, Color>{
+      'bg': c.bg,
+      'bar': c.bar,
+      'panel': c.panel,
+      'line': c.line,
+      'text': c.text,
+      'sub': c.sub,
+      'pink': c.pink,
+      'ink': c.ink,
+      'onPink': c.onPink,
+      'onPinkBlack': c.onPinkBlack,
+      'hairline': c.hairline,
+      'coverBack': c.coverBack,
+      'shadow': c.shadow,
+      'scrim': c.scrim,
+      'toastShade': c.toastShade,
+      'thumb': c.thumb,
+      'textBright': c.textBright,
+      'textBody': c.textBody,
+      'textLabel': c.textLabel,
+      'textMuted': c.textMuted,
+      'textDim': c.textDim,
+      'textDimmer': c.textDimmer,
+      'textFaint': c.textFaint,
+      'textHighlight': c.textHighlight,
+      'outlineDim': c.outlineDim,
+      'border': c.border,
+      'borderSoft': c.borderSoft,
+      'divider': c.divider,
+      'trackBar': c.trackBar,
+      'raised': c.raised,
+      'sheet': c.sheet,
+      'dialog': c.dialog,
+      'field': c.field,
+      'inputFill': c.inputFill,
+      'rowHover': c.rowHover,
+      'rule': c.rule,
+      'ruleTop': c.ruleTop,
+      'pinkTint': c.pinkTint,
+      'pinkWash': c.pinkWash,
+      'coverGradTop': c.coverGradTop,
+      'coverGradBottom': c.coverGradBottom,
+      'shine': c.shine,
+      'shineFade': c.shineFade,
+      'danger': c.danger,
+      'ok': c.ok,
+      'jellyfin': c.jellyfin,
+      'plex': c.plex,
+      'coverEdge': c.coverEdge,
+    };
+    const expected = <String, int>{
+      'bg': 0xFFFFFFFF,
+      'bar': 0xFFF3F3F3,
+      'panel': 0xFFF3F3F3,
+      'line': 0xFFE4E4E4,
+      'text': 0xFF111111,
+      'sub': 0xFF6E6E6E,
+      'pink': 0xFFF26EF2,
+      'ink': 0xFF111111,
+      'onPink': 0xFF111111,
+      'onPinkBlack': 0xFF000000,
+      'hairline': 0xFFE4E4E4,
+      'coverBack': 0xFFEEEEEE,
+      'shadow': 0xFF000000,
+      'scrim': 0x40000000,
+      'toastShade': 0x33000000,
+      'thumb': 0xFFFFFFFF,
+      'textBright': 0xFF222222,
+      'textBody': 0xFF333333,
+      'textLabel': 0xFF555555,
+      'textMuted': 0xFF6E6E6E,
+      'textDim': 0xFF7A7A7A,
+      'textDimmer': 0xFF8A8A8A,
+      'textFaint': 0xFF9A9A9A,
+      'textHighlight': 0xFF111111,
+      'outlineDim': 0xFFB8B8B8,
+      'border': 0xFFCFCFCF,
+      'borderSoft': 0xFFE4E4E4,
+      'divider': 0xFFE4E4E4,
+      'trackBar': 0xFFE4E4E4,
+      'raised': 0xFFEEEEEE,
+      'sheet': 0xFFFFFFFF,
+      'dialog': 0xFFFFFFFF,
+      'field': 0xFFF3F3F3,
+      'inputFill': 0xFFF3F3F3,
+      'rowHover': 0xFFEEEEEE,
+      'rule': 0xFFEEEEEE,
+      'ruleTop': 0xFFEEEEEE,
+      'pinkTint': 0xFFFCE2FC,
+      'pinkWash': 0xFFFDF0FD,
+      'coverGradTop': 0xFFF3F3F3,
+      'coverGradBottom': 0xFFFFFFFF,
+      'shine': 0x47FFFFFF,
+      'shineFade': 0x00FFFFFF,
+      'danger': 0xFFD64545,
+      'ok': 0xFF2E9E43,
+      'jellyfin': 0xFF3D74D9,
+      'plex': 0xFFE5A00D,
+      'coverEdge': 0xFFE4E4E4,
+    };
+    expect(actual.keys, expected.keys);
+    for (final k in expected.keys) {
+      expect(actual[k]!.toARGB32(), expected[k], reason: k);
     }
   });
 
@@ -146,17 +257,14 @@ void main() {
     expect(seen.bg, const Color(0xFFFFFFFF));
   });
 
-  test('aucune couleur littérale sous lib/ui ni dans theme/widgets.dart', () {
+  test('aucune couleur littérale dans lib/ (hors liste)', () {
     final literal = RegExp(
-      r'Color\(0x|Color\.from|Colors\.(?!transparent\b)\w+',
+      r'Color\(0x|Color\.from|\bColors\.(?!transparent\b)\w+',
     );
-    final files = [
-      ...Directory('lib/ui')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.dart')),
-      File('lib/theme/widgets.dart'),
-    ];
+    final files = Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'));
     final bad = <String>[];
     for (final f in files) {
       final path = f.path.replaceAll('\\', '/');

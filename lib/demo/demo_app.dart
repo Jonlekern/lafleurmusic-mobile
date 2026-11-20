@@ -142,10 +142,7 @@ Future<Widget> demoApp() async {
     downloader: demoDownloader,
     device: DemoDevice(),
     localFolder: null,
-    child: MaterialApp(
-      title: 'LAFLEURMUSIC',
-      debugShowCheckedModeBanner: false,
-      theme: lafleurTheme(),
+    child: lafleurMaterialApp(
       home: AdaptiveHome(
         debugStart: screen == 'greyed'
             ? 'album'

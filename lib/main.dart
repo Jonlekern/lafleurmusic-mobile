@@ -354,10 +354,8 @@ class _LafleurAppState extends State<LafleurApp> with WidgetsBindingObserver {
     device: widget.device,
     localFolder: widget.localFolder,
     home: widget.home,
-    child: MaterialApp(
-      title: 'LAFLEURMUSIC',
-      debugShowCheckedModeBanner: false,
-      theme: lafleurTheme(),
+    // clair ou sombre : le réglage du téléphone, suivi en direct
+    child: lafleurMaterialApp(
       home: const AdaptiveHome(), // téléphone : la vue téléphone ; tablette, ordinateur : les colonnes du Mac
     ),
   );
