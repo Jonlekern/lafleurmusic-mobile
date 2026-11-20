@@ -39,9 +39,14 @@ enum UpdateCheck { newer, upToDate, offline }
 
 /// Annule un téléchargement en cours.
 class CancelToken {
-  bool _c = false;
-  bool get cancelled => _c;
-  void cancel() => _c = true;
+  final _done = Completer<void>();
+  bool get cancelled => _done.isCompleted;
+
+  /// Se termine à l'annulation (pour interrompre une attente en cours).
+  Future<void> get whenCancelled => _done.future;
+  void cancel() {
+    if (!_done.isCompleted) _done.complete();
+  }
 }
 
 List<int>? _parts(String v) {
@@ -139,6 +144,7 @@ class UpdateService {
     required Future<void> Function() saveSettings,
     DateTime Function()? now,
     this.current = appVersion,
+    this.transferTimeout = const Duration(seconds: 30),
   }) : _save = saveSettings,
        _now = now ?? DateTime.now;
 
@@ -148,6 +154,15 @@ class UpdateService {
   final DateTime Function() _now;
   final String current;
 
+  /// Délai max pour la réponse, puis entre deux morceaux du téléchargement.
+  final Duration transferTimeout;
+
+  UpdateInfo? _latest;
+
+  /// La version la plus récente trouvée par la dernière recherche réussie,
+  /// même écartée (la feuille des Réglages s'en sert).
+  UpdateInfo? get latest => _latest;
+
   /// La mise à jour à proposer : plus récente et pas écartée.
   final ValueNotifier<UpdateInfo?> available = ValueNotifier(null);
 
@@ -155,7 +170,9 @@ class UpdateService {
   Future<UpdateInfo?> checkDaily() async {
     final last = settings.lastUpdateCheck;
     final nowMs = _now().millisecondsSinceEpoch;
+    // un dernier essai dans le futur (horloge déréglée) compte comme dû
     if (last != null &&
+        last <= nowMs &&
         nowMs - last < const Duration(hours: 24).inMilliseconds) {
       return available.value;
     }
@@ -165,7 +182,8 @@ class UpdateService {
     } on Object {
       // pas grave
     }
-    final (_, info) = await _fetch();
+    final (ok, info) = await _fetch();
+    if (ok) _latest = info;
     _publish(info);
     return available.value;
   }
@@ -174,14 +192,11 @@ class UpdateService {
   Future<UpdateCheck> checkNow() async {
     final (ok, info) = await _fetch();
     if (!ok) return UpdateCheck.offline;
+    _latest = info;
     final newer = info != null && isNewerVersion(info.version, current);
-    if (newer) {
-      // une recherche manuelle montre la feuille même si le bandeau a été écarté
-      available.value = info;
-      return UpdateCheck.newer;
-    }
     available.value = null;
-    return UpdateCheck.upToDate;
+    _publish(info);
+    return newer ? UpdateCheck.newer : UpdateCheck.upToDate;
   }
 
   void dismiss(UpdateInfo u) {
@@ -218,8 +233,9 @@ class UpdateService {
     }
   }
 
-  /// Télécharge l'APK dans `cacheDir/updates/`, vérifie taille et SHA-256 ;
-  /// en cas d'échec ou d'annulation le fichier est effacé.
+  /// Télécharge l'APK dans `cacheDir/updates/` (fichier temporaire propre à cet appel,
+  /// renommé à la fin), vérifie taille et SHA-256 ; en cas d'échec, de silence réseau
+  /// de plus de [transferTimeout] ou d'annulation, le fichier est effacé.
   Future<File> downloadApk(
     UpdateInfo u,
     Directory cacheDir, {
@@ -230,21 +246,37 @@ class UpdateService {
     if (url == null) throw StateError('pas d\'APK pour cette version');
     final dir = Directory(p.join(cacheDir.path, 'updates'));
     await dir.create(recursive: true);
-    final file = File(p.join(dir.path, _apkName));
-    if (await file.exists()) await file.delete();
-    final sink = file.openWrite();
+    final tmp = File(
+      p.join(
+        dir.path,
+        '$_apkName.${++_seq}.${_now().microsecondsSinceEpoch}.part',
+      ),
+    );
+    final sink = tmp.openWrite();
     var closed = false;
+    StreamIterator<List<int>>? it;
+    // attend [f] mais s'arrête tout de suite si on annule
+    Future<T> guard<T>(Future<T> f) {
+      if (cancel == null) return f;
+      return Future.any<T>([
+        f,
+        cancel.whenCancelled.then<T>((_) => throw const _Cancelled()),
+      ]);
+    }
+
     try {
+      if (cancel?.cancelled ?? false) throw const _Cancelled();
       final req = http.Request('GET', Uri.parse(url))
         ..headers['User-Agent'] = 'LAFLEURMUSIC/$appVersion';
-      final resp = await client.send(req);
+      final resp = await guard(client.send(req).timeout(transferTimeout));
       if (resp.statusCode != 200) {
         throw HttpException('HTTP ${resp.statusCode}');
       }
       final total = u.apkSize ?? resp.contentLength;
       var got = 0;
-      await for (final chunk in resp.stream) {
-        if (cancel?.cancelled ?? false) throw const _Cancelled();
+      it = StreamIterator(resp.stream);
+      while (await guard(it.moveNext().timeout(transferTimeout))) {
+        final chunk = it.current;
         sink.add(chunk);
         got += chunk.length;
         if (total != null && total > 0) {
@@ -259,14 +291,17 @@ class UpdateService {
       }
       final sha = u.apkSha256;
       if (sha != null) {
-        final digest = await sha256.bind(file.openRead()).first;
+        final digest = await sha256.bind(tmp.openRead()).first;
         if (digest.toString() != sha.toLowerCase()) {
           throw const FormatException('empreinte inattendue');
         }
       }
+      if (cancel?.cancelled ?? false) throw const _Cancelled();
+      final file = await tmp.rename(p.join(dir.path, _apkName));
       onProgress?.call(1);
       return file;
     } on Object {
+      if (it != null) unawaited(it.cancel().catchError((Object _) {}));
       if (!closed) {
         try {
           await sink.close();
@@ -274,10 +309,12 @@ class UpdateService {
           // ignoré
         }
       }
-      if (await file.exists()) await file.delete();
+      if (await tmp.exists()) await tmp.delete();
       rethrow;
     }
   }
+
+  static int _seq = 0;
 
   /// Vide `cacheDir/updates/` (au lancement suivant).
   static Future<void> clearDownloads(Directory cacheDir) async {

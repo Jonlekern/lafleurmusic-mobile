@@ -53,14 +53,18 @@ void main() {
   });
   tearDown(() => dir.deleteSync(recursive: true));
 
-  UpdateService make(http.Client c, {String current = '0.10.2'}) =>
-      UpdateService(
-        client: c,
-        settings: settings,
-        saveSettings: () async => saves++,
-        now: () => clock,
-        current: current,
-      );
+  UpdateService make(
+    http.Client c, {
+    String current = '0.10.2',
+    Duration? timeout,
+  }) => UpdateService(
+    transferTimeout: timeout ?? const Duration(seconds: 30),
+    client: c,
+    settings: settings,
+    saveSettings: () async => saves++,
+    now: () => clock,
+    current: current,
+  );
 
   MockClient ok(String body, [void Function(http.Request)? spy]) =>
       MockClient((r) async {
@@ -184,6 +188,27 @@ void main() {
       expect(saves, before + 1);
     });
 
+    test(
+      'checkNow on a dismissed version: newer, latest set, available null',
+      () async {
+        settings.dismissedUpdate = '0.11.0';
+        final s = make(ok(release()));
+        expect(s.latest, isNull);
+        expect(await s.checkNow(), UpdateCheck.newer);
+        expect(s.latest?.version, '0.11.0');
+        expect(s.available.value, isNull);
+      },
+    );
+
+    test('lastUpdateCheck in the future counts as due', () async {
+      settings.lastUpdateCheck = clock
+          .add(const Duration(days: 90))
+          .millisecondsSinceEpoch;
+      final s = make(ok(release()));
+      expect((await s.checkDaily())?.version, '0.11.0');
+      expect(settings.lastUpdateCheck, clock.millisecondsSinceEpoch);
+    });
+
     test('checkNow: newer / upToDate / offline', () async {
       final s = make(ok(release()));
       expect(await s.checkNow(), UpdateCheck.newer);
@@ -273,6 +298,66 @@ void main() {
         throwsA(anything),
       );
       expect(Directory('${dir.path}/updates').listSync(), isEmpty);
+    });
+
+    MockClient stalled({List<int> first = const []}) =>
+        MockClient.streaming((req, _) async {
+          Stream<List<int>> gen() async* {
+            if (first.isNotEmpty) yield first;
+            await Completer<void>().future; // ne rend plus rien
+          }
+
+          return http.StreamedResponse(gen(), 200);
+        });
+
+    test('stalled body times out, file deleted', () async {
+      final s = make(
+        stalled(first: apkBytes.sublist(0, 100)),
+        timeout: const Duration(milliseconds: 100),
+      );
+      await expectLater(
+        s.downloadApk(info(), dir),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(Directory('${dir.path}/updates').listSync(), isEmpty);
+    });
+
+    test('send that never answers times out', () async {
+      final s = make(
+        MockClient.streaming(
+          (r, _) => Completer<http.StreamedResponse>().future,
+        ),
+        timeout: const Duration(milliseconds: 100),
+      );
+      await expectLater(
+        s.downloadApk(info(), dir),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(Directory('${dir.path}/updates').listSync(), isEmpty);
+    });
+
+    test('cancel during a stall stops at once, file deleted', () async {
+      final s = make(stalled(first: [1, 2, 3]));
+      final token = CancelToken();
+      final sw = Stopwatch()..start();
+      final f = s.downloadApk(info(), dir, cancel: token);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      token.cancel();
+      await expectLater(f, throwsA(anything));
+      expect(sw.elapsed, lessThan(const Duration(seconds: 5)));
+      expect(Directory('${dir.path}/updates').listSync(), isEmpty);
+    });
+
+    test('two downloads do not clobber each other', () async {
+      final s = make(streaming(apkBytes));
+      final r = await Future.wait([
+        s.downloadApk(info(), dir),
+        s.downloadApk(info(), dir),
+      ]);
+      for (final f in r) {
+        expect(await f.readAsBytes(), apkBytes);
+      }
+      expect(Directory('${dir.path}/updates').listSync().length, 1);
     });
 
     test('clearDownloads empties updates/', () async {
