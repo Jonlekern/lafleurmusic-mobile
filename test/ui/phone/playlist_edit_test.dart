@@ -166,6 +166,29 @@ void main() {
     expect(find.text('Road Trip'), findsNothing);
   });
 
+  testWidgets('the keyboard up on the Android emulator\'s phone (Pixel 6): '
+      'OK is still there and saves the new name', (tester) async {
+    final s = await _pump(tester);
+    tester.view.physicalSize = const Size(411, 914);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final ref = await _road(s);
+    await s.open(ref);
+    await s.tap(const Key('plEdit'));
+    await tester.tap(find.byKey(const Key('editName')));
+    // the soft keyboard takes the bottom of the screen
+    tester.view.viewInsets = const FakeViewPadding(bottom: 330);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('editName')), 'Trip');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editOk')).hitTestable(), findsOneWidget);
+    await s.tap(const Key('editOk'));
+    final names = await s.run(
+      () async => [for (final l in await s.f.db.watchPlaylists().first) l.name],
+    );
+    expect(names, ['Trip']);
+  });
+
   testWidgets('an empty name at OK: « Donne un nom à ta playlist. », '
       'nothing written, the screen stays', (tester) async {
     final s = await _pump(tester);

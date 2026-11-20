@@ -162,8 +162,12 @@ void main() {
     unawaited(openPlaylist(screen(), made));
     await tapKey(const Key('plEdit'));
     await pumpUntil(tester, find.byKey(const Key('editName')));
-    await tester.enterText(find.byKey(const Key('editName')), 'Plan9 Renamed');
-    await tester.pump(const Duration(milliseconds: 300));
+    // the field already holds the old name: Android's keyboard would put it back (see replaceText)
+    await replaceText(
+      tester,
+      find.byKey(const Key('editName')),
+      'Plan9 Renamed',
+    );
     await tapKey(const Key('editOk'));
     // first the library (the name is saved), then the file that follows it: a failure says which
     await waitFor(

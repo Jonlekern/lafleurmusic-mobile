@@ -82,6 +82,36 @@ Future<void> typeInto(WidgetTester tester, String key, String text) async {
   await tester.pump();
 }
 
+/// Replaces the text of a field that already holds some, then lets go of the keyboard.
+///
+/// `enterText` hands the text to the app as if the keyboard had typed it, but the real keyboard
+/// is never told: it keeps its own copy of the old text. On Android the keyboard takes the word
+/// under the caret back as it opens (« e2e » of the old name) and sends its copy to the app,
+/// which puts the old name back. So: the keyboard is opened and left to settle first, the text
+/// goes in, then the field lets go of the keyboard (nothing the keyboard sends after can reach
+/// it), and the field must hold [text], else it is tried again.
+Future<void> replaceText(WidgetTester tester, Finder field, String text) async {
+  final editable = find.descendant(
+    of: field,
+    matching: find.byType(EditableText),
+    matchRoot: true,
+  );
+  var shown = '';
+  for (var attempt = 0; attempt < 3; attempt++) {
+    await tester.showKeyboard(field);
+    await tester.pump(
+      const Duration(seconds: 1),
+    ); // the keyboard is up and settled
+    await tester.enterText(field, text);
+    await tester.pump(const Duration(milliseconds: 500));
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump(const Duration(milliseconds: 500));
+    shown = tester.widget<EditableText>(editable).controller.text;
+    if (shown == text) return;
+  }
+  throw TestFailure('The field holds « $shown », not « $text »');
+}
+
 /// The phone's real LAFLEURMUSIC folder (iOS: Documents, Android: Music), where copies go.
 Future<Directory> deviceRoot() async => Directory(
   (await const MethodChannel('studio.lafleur/device')
