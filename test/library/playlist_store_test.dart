@@ -84,6 +84,17 @@ void main() {
       expect((await db.watchPlaylists().first).single.kept, isTrue);
     });
 
+    test('a kept playlist of files put by hand has no song « missing a copy » '
+        '(each sync would try to keep them for nothing)', () async {
+      await db.upsertTracks([_t('/music/a.mp3')]);
+      final ref = await store.create(
+        'Mine',
+        songs: ['/music/a.mp3'],
+      ) as PhonePlaylistRef;
+      await db.addKeptPlaylist(phonePlaylistAccount, '${ref.id}');
+      expect(await db.keptPlaylistsMissing(), isEmpty);
+    });
+
     test('create: an empty name is refused', () async {
       await expectLater(store.create('   '), throwsArgumentError);
       expect(await db.watchPlaylists().first, isEmpty);

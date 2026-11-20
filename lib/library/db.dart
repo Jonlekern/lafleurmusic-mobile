@@ -1769,7 +1769,8 @@ class LibraryDb extends _$LibraryDb {
       'SELECT DISTINCT k.account_id AS k_acc, k.playlist_id AS k_id, t.* '
       'FROM kept_playlists k JOIN $_allItems i ON i.acc = k.account_id '
       'AND i.pid = k.playlist_id JOIN tracks t ON t.path = i.path '
-      'WHERE NOT EXISTS (SELECT 1 FROM offline o WHERE o.track_path = t.path) '
+      "WHERE t.account_id <> 'local' "
+      'AND NOT EXISTS (SELECT 1 FROM offline o WHERE o.track_path = t.path) '
       "AND NOT EXISTS (SELECT 1 FROM tracks t2 JOIN offline o2 ON o2.track_path = t2.path "
       "WHERE t.merge_key <> '' AND t2.merge_key = t.merge_key "
       "AND t2.account_id <> t.account_id AND t2.account_id <> 'local') "
