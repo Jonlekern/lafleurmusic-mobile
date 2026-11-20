@@ -156,16 +156,29 @@ class _Phone implements Device {
 class _Db extends LibraryDb {
   _Db() : super(NativeDatabase.memory());
   Future<void>? holdMove;
+
+  /// Completes when a move reaches [holdMove] (the test waits for it, not for a fixed delay).
+  Completer<void> held = Completer<void>();
   @override
   Future<void> applyOfflineMove(
     Map<String, String> newRel,
     List<String> lost,
   ) async {
     final h = holdMove;
-    if (h != null) await h;
+    if (h != null) {
+      if (!held.isCompleted) held.complete();
+      await h;
+    }
     return super.applyOfflineMove(newRel, lost);
   }
 }
+
+/// A hook the app is "killed" at: it never returns. [reached] completes when the move gets
+/// there, so a slow machine is waited for instead of a fixed delay racing the move.
+Future<void> Function() _killedAt(Completer<void> reached) => () {
+  if (!reached.isCompleted) reached.complete();
+  return Completer<void>().future;
+};
 
 Track _t(String id, {int no = 1, int size = 4}) => Track(
   path: 'subsonic://acc/$id',
@@ -491,7 +504,7 @@ void main() {
       final hold = Completer<void>();
       db.holdMove = hold.future;
       final first = d.moveKept(toApp: true);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await db.held.future;
       expect(d.isMoving, isTrue);
       expect(d.movingKeptToApp, isTrue);
       final again = await d.moveKept(toApp: true);
@@ -549,9 +562,10 @@ void main() {
 
       test('$way: after copying, before the rows: rolled back', () async {
         final (d, songs) = await ready();
+        db.held = Completer<void>();
         db.holdMove = Completer<void>().future; // never
         unawaited(d.moveKept(toApp: toApp));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await db.held.future;
         db.holdMove = null;
         await relaunch();
         expect(settings.keepInApp, !toApp);
@@ -560,9 +574,10 @@ void main() {
 
       test('$way: rows written, setting not saved: rolled back', () async {
         final (d, songs) = await ready();
-        phone.before = () => Completer<void>().future;
+        final reached = Completer<void>();
+        phone.before = _killedAt(reached);
         unawaited(d.moveKept(toApp: toApp));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await reached.future;
         phone.before = null;
         await relaunch();
         expect(settings.keepInApp, !toApp);
@@ -571,9 +586,10 @@ void main() {
 
       test('$way: setting saved, originals not yet gone: finished', () async {
         final (d, songs) = await ready();
-        phone.after = () => Completer<void>().future;
+        final reached = Completer<void>();
+        phone.after = _killedAt(reached);
         unawaited(d.moveKept(toApp: toApp));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await reached.future;
         phone.after = null;
         await relaunch();
         expect(settings.keepInApp, toApp);
@@ -583,10 +599,10 @@ void main() {
 
     test('a copy of another size never costs its original', () async {
       final d = await keptSongs();
-      phone.after = () =>
-          Completer<void>().future; // setting saved, then killed
+      final reached = Completer<void>();
+      phone.after = _killedAt(reached); // setting saved, then killed
       unawaited(d.moveKept(toApp: true));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await reached.future;
       phone.after = null;
       File('${private.path}/Art/Alb/01 Song 1.mp3').writeAsBytesSync([1]);
       await make().recoverMove();
@@ -605,9 +621,10 @@ void main() {
       phone.docsKeys = true;
       final d = await keptSongs();
       final songs = _files(byDefault);
-      phone.after = () => Completer<void>().future;
+      final reached = Completer<void>();
+      phone.after = _killedAt(reached);
       unawaited(d.moveKept(toApp: true));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await reached.future;
       phone.after = null;
       // iOS gives the app a new container path: every folder moves with it
       final moved = Directory('${tmp.path}-updated');
@@ -624,9 +641,10 @@ void main() {
 
     test('a journal that cannot be erased is never acted on again', () async {
       final d = await keptSongs();
-      phone.after = () => Completer<void>().future;
+      final reached = Completer<void>();
+      phone.after = _killedAt(reached);
       unawaited(d.moveKept(toApp: true));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await reached.future;
       phone.after = null;
       final journal = File('${private.path}/.move.json');
       expect(journal.existsSync(), isTrue);
@@ -656,9 +674,10 @@ void main() {
         final d = await keptSongs();
         return (d, _files(byDefault));
       }();
+      db.held = Completer<void>();
       db.holdMove = Completer<void>().future;
       unawaited(d.moveKept(toApp: true));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await db.held.future;
       db.holdMove = null;
       File('${private.path}/Art/Alb/01 Song 1.mp3').writeAsBytesSync([1]);
       await relaunch();
@@ -753,9 +772,10 @@ void main() {
 
       test('killed after the rows, before the setting: rolled back', () async {
         final d = await dropped();
-        phone.before = () => Completer<void>().future;
+        final reached = Completer<void>();
+        phone.before = _killedAt(reached);
         unawaited(d.moveKept(toApp: false));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await reached.future;
         phone.before = null;
         final again = make();
         await again.recoverMove();
@@ -770,9 +790,10 @@ void main() {
 
       test('killed after the setting, before the deletes: finished', () async {
         final d = await dropped();
-        phone.after = () => Completer<void>().future;
+        final reached = Completer<void>();
+        phone.after = _killedAt(reached);
         unawaited(d.moveKept(toApp: false));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await reached.future;
         phone.after = null;
         final again = make();
         await again.recoverMove();
@@ -867,9 +888,10 @@ void main() {
         'a move left half done is recovered first, never re-queued',
         () async {
           final d = await keptSongs();
-          phone.after = () => Completer<void>().future;
+          final reached = Completer<void>();
+          phone.after = _killedAt(reached);
           unawaited(d.moveKept(toApp: true));
-          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await reached.future;
           phone.after = null;
           final songs = _files(byDefault)..remove('Playlists/Soirée.m3u8');
           var downloads = 0;
@@ -900,10 +922,13 @@ void main() {
       ..createSync(recursive: true)
       ..writeAsStringSync('mine');
     final hold = Completer<void>();
-    phone.after = () =>
-        hold.future; // setting saved: the songs are on their way
+    final reached = Completer<void>();
+    phone.after = () {
+      if (!reached.isCompleted) reached.complete();
+      return hold.future; // setting saved: the songs are on their way
+    };
     final back = d.moveKept(toApp: false);
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await reached.future;
     // the server renames a song meanwhile: the playlists table changes
     await db.replacePlaylists('acc', [
       (
