@@ -255,15 +255,18 @@ class _ClassicMenuState extends State<ClassicMenu> {
     bool flow = false,
   }) {
     final level = _Level(title, chevron: chevron, empty: empty, flow: flow);
+    // [start] : sur la première liste non vide (une liste vide d'abord ne le perd pas)
+    var started = start == null;
     level.sub = stream.listen((items) {
       if (!mounted) return;
       final was = level.loaded && level.count > 0
           ? level.key(level.selected)
           : null;
       setState(() {
-        var at = !level.loaded && start != null
-            ? start(items)
+        var at = !started && items.isNotEmpty
+            ? start!(items)
             : math.min(level.selected, math.max(0, items.length - 1));
+        if (items.isNotEmpty) started = true;
         if (was != null) {
           // le plus proche de l'ancien rang (un morceau peut revenir deux fois dans une playlist)
           var best = -1;
@@ -389,17 +392,31 @@ class _ClassicMenuState extends State<ClassicMenu> {
       choose: (l, i) => _push(_album(l[i])),
       start: (l) => math.max(0, l.indexWhere((a) => a.key == playing)),
       flow: true,
+      empty: (s) => s.noMusicYet, // comme le mode normal sans musique
     );
   }
 
-  /// ▶︎❙❙ dans le Cover Flow : tout l'album choisi, depuis le début.
+  /// ▶︎❙❙ dans le Cover Flow : l'album choisi depuis le début, seulement les morceaux jouables
+  /// maintenant ; aucun : « rien à jouer hors ligne », comme une ligne de morceau ([_playFrom]).
   Future<void> _playAlbum() async {
     final l = _current;
     if (!l.flow || l.count == 0) return;
     final album = l.item(l.selected)! as Album;
     final app = AppScope.of(context);
     final tracks = await app.library.albumTracks(album.key).first;
-    if (tracks.isNotEmpty) await app.player.playTracks(tracks, 0);
+    if (!mounted) return;
+    final ok = [
+      for (final t in tracks)
+        if (!t.missing && app.playableNow(t)) t,
+    ];
+    if (ok.isEmpty) {
+      say(
+        ScaffoldMessenger.of(context),
+        app.strings.nothingOffline(onIphone, tablet: onTablet),
+      );
+      return;
+    }
+    await app.player.playTracks(ok, 0);
   }
 
   // ---- navigation
@@ -490,6 +507,7 @@ class _ClassicMenuState extends State<ClassicMenu> {
           scroll: _scroll,
           onTap: _tap,
           onMove: _rotate,
+          onOpen: _select,
         ),
         wheel: ClickWheel(
           onRotate: _rotate,
@@ -516,12 +534,15 @@ class _Screen extends StatelessWidget {
     required this.scroll,
     required this.onTap,
     required this.onMove,
+    required this.onOpen,
   });
   final Strings strings;
   final _Level level;
   final ScrollController scroll;
   final void Function(int i) onTap;
   final void Function(int steps) onMove;
+  final VoidCallback
+  onOpen; // la pochette du milieu touchée : comme le bouton du milieu
 
   @override
   Widget build(BuildContext context) {
@@ -568,14 +589,7 @@ class _Screen extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: l.flow
-                ? ClassicCoverflow(
-                    count: l.count,
-                    index: l.selected,
-                    album: (i) => l.item(i)! as Album,
-                    onMove: onMove,
-                  )
-                : l.loaded && l.count == 0 && l.empty != null
+            child: l.loaded && l.count == 0 && l.empty != null
                 ? Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -585,6 +599,14 @@ class _Screen extends StatelessWidget {
                       l.empty!(strings),
                       style: TextStyle(color: context.colors.sub),
                     ),
+                  )
+                : l.flow
+                ? ClassicCoverflow(
+                    count: l.count,
+                    index: l.selected,
+                    album: (i) => l.item(i)! as Album,
+                    onMove: onMove,
+                    onOpen: onOpen,
                   )
                 : ListView.builder(
                     key: ObjectKey(l),

@@ -438,6 +438,94 @@ void main() {
       expect(find.text('Lafleur Surf'), findsOneWidget);
     });
 
+    testWidgets('▶︎❙❙ : seulement les morceaux jouables', (tester) async {
+      final fx = await pumpKeep(tester, home: const ClassicShell());
+      await press(tester, 'select');
+      expect(find.text('Studio Lafleur'), findsOneWidget);
+      await press(tester, 'play');
+      expect(fx.player.calls, ['play']);
+      // Night Swim (Kavinsky) n'est pas sur le téléphone : pas dans la liste jouée
+      final played = fx.player.lastTracks!.map((t) => t.title).toList();
+      expect(played, isNot(contains('Night Swim')));
+      expect(played, contains('Ocean Drive'));
+      expect(fx.player.lastIndex, 0);
+    });
+
+    testWidgets('▶︎❙❙ : album pas sur le téléphone, hors ligne : le dire', (
+      tester,
+    ) async {
+      final fx = await pumpKeep(
+        tester,
+        home: const ClassicShell(),
+        notOnPhone: {for (final t in DemoLibrary.remote) t.path},
+      );
+      await press(tester, 'select');
+      await press(tester, 'play');
+      expect(fx.player.calls, isNot(contains('play')));
+      expect(
+        find.text('Pas sur le téléphone : rien à jouer hors ligne.'),
+        findsOneWidget,
+      );
+      expect(find.byType(ClassicCoverflow), findsOneWidget);
+    });
+
+    testWidgets(
+      'bibliothèque vide : le texte du mode normal ; les albums arrivent : l\'album en cours',
+      (tester) async {
+        final fx = await pumpKeep(
+          tester,
+          home: const ClassicShell(),
+          seed: (_) async {},
+        );
+        await press(tester, 'select');
+        expect(find.text('COVER FLOW'), findsOneWidget);
+        expect(find.text('Pas encore de musique'), findsOneWidget);
+        await press(tester, 'select'); // rien à ouvrir : rien ne casse
+        await press(tester, 'play');
+        expect(fx.player.calls, isEmpty);
+        expect(find.text('COVER FLOW'), findsOneWidget);
+        await tester.runAsync(() => fx.db.upsertTracks(DemoLibrary.tracks));
+        await settle(tester);
+        await tester.pumpAndSettle();
+        expect(find.text('Pas encore de musique'), findsNothing);
+        expect(find.text('Studio Lafleur'), findsOneWidget); // l'album en cours
+      },
+    );
+
+    testWidgets(
+      'toucher la pochette du milieu ouvre l\'album (un bouton pour le lecteur d\'écran)',
+      (tester) async {
+        final h = tester.ensureSemantics();
+        await openFlow(tester);
+        final cover = find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.button == true &&
+              w.properties.label == 'Studio Lafleur',
+        );
+        expect(cover, findsOneWidget);
+        expect(
+          tester.getSemantics(cover),
+          isSemantics(
+            label: 'Studio Lafleur',
+            isButton: true,
+            hasTapAction: true,
+          ),
+        );
+        await tester.tapAt(
+          tester.getCenter(find.byType(ClassicCoverflow)) -
+              Offset(
+                0,
+                tester.getSize(find.byType(ClassicCoverflow)).height / 4,
+              ),
+        );
+        await settle(tester);
+        expect(find.text('STUDIO LAFLEUR'), findsOneWidget);
+        expect(find.byType(ClassicCoverflow), findsNothing);
+        h.dispose();
+      },
+    );
+
     testWidgets('retour d\'Android : du Cover Flow au menu', (tester) async {
       await openFlow(tester);
       await tester.binding.handlePopRoute();

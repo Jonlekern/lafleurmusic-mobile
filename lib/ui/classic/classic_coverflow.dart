@@ -21,6 +21,7 @@ class ClassicCoverflow extends StatefulWidget {
     required this.index,
     required this.album,
     required this.onMove,
+    required this.onOpen,
   });
 
   /// Le nombre d'albums, l'album choisi, et chaque album par son rang.
@@ -30,6 +31,9 @@ class ClassicCoverflow extends StatefulWidget {
 
   /// Un album plus loin (+) ou plus près (−), comme un cran de molette.
   final void Function(int steps) onMove;
+
+  /// La pochette du milieu touchée : l'album s'ouvre, comme au bouton du milieu.
+  final VoidCallback onOpen;
 
   @override
   State<ClassicCoverflow> createState() => _ClassicCoverflowState();
@@ -72,19 +76,17 @@ class _ClassicCoverflowState extends State<ClassicCoverflow> {
                 left: 0,
                 right: 0,
                 height: cover * 1.3,
-                child: ExcludeSemantics(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(end: widget.index.toDouble()),
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, pos, _) => Stack(
-                      alignment: Alignment.topCenter,
-                      clipBehavior: Clip.none,
-                      children: [
-                        for (final i in drawOrder(pos, n))
-                          _cover(layout(pos, i), i, cover, k),
-                      ],
-                    ),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(end: widget.index.toDouble()),
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, pos, _) => Stack(
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (final i in drawOrder(pos, n))
+                        _cover(layout(pos, i), i, cover, k),
+                    ],
                   ),
                 ),
               ),
@@ -135,19 +137,33 @@ class _ClassicCoverflowState extends State<ClassicCoverflow> {
     );
   }
 
-  Widget _cover(CoverSlot slot, int i, double size, double k) => FlowCover(
-    key: ValueKey(i),
-    slot: slot,
-    // maquette 18 : les voisines un peu plus loin que sur le téléphone couché
-    dx: spreadDx(slot.dx) * k * 1.1,
-    size: size,
-    // la perspective suit la taille de la pochette (comme le grand Cover Flow, en petit)
-    perspective: 0.2 / size,
-    reflection: 0.25,
-    image: CoverImage(
-      trackPath: widget.album(i).coverTrackPath,
+  Widget _cover(CoverSlot slot, int i, double size, double k) {
+    final centre = i == widget.index;
+    final album = widget.album(i);
+    final cover = FlowCover(
+      slot: slot,
+      // maquette 18 : les voisines un peu plus loin que sur le téléphone couché
+      dx: spreadDx(slot.dx) * k * 1.1,
       size: size,
-      radius: 0,
-    ),
-  );
+      // la perspective suit la taille de la pochette (comme le grand Cover Flow, en petit)
+      perspective: 0.2 / size,
+      reflection: 0.25,
+      image: CoverImage(trackPath: album.coverTrackPath, size: size, radius: 0),
+      onTap: centre ? widget.onOpen : null,
+    );
+    // celle du milieu : un bouton (ouvrir l'album) ; les autres ne se disent pas
+    return centre
+        ? Semantics(
+            key: ValueKey(i),
+            container: true,
+            button: true,
+            label: album.name.isEmpty
+                ? AppScope.of(context).strings.unknownArtist
+                : album.name,
+            excludeSemantics: true,
+            onTap: widget.onOpen,
+            child: cover,
+          )
+        : ExcludeSemantics(key: ValueKey(i), child: cover);
+  }
 }
