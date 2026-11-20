@@ -111,6 +111,9 @@ Future<Widget> demoApp() async {
   final demoDownloader = DemoDownloader()
     ..current = screen == 'ondevice' ? DemoLibrary.goldenHour.path : null
     ..progress = 12.4 / 19.6;
+  final demoSettings = AppSettings();
+  final demoDevice = DemoDevice(settings: demoSettings);
+  demoDownloader.commitKept = demoDevice.setKeepInApp;
   final dir = await Directory.systemTemp.createTemp('lafleur-demo');
   final player = DemoPlayer(
     PlayerState(
@@ -135,12 +138,12 @@ Future<Widget> demoApp() async {
     ),
     strings: Strings.of(PlatformDispatcher.instance.locale),
     equalizer: ValueNotifier(Equalizer.named('flat')),
-    settings: AppSettings(),
+    settings: demoSettings,
     saveSettings: () {},
     accounts: accounts,
     accountService: service,
     downloader: demoDownloader,
-    device: DemoDevice(),
+    device: demoDevice,
     localFolder: null,
     child: lafleurMaterialApp(
       home: AdaptiveHome(

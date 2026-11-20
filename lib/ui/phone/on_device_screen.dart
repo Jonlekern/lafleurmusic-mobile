@@ -62,7 +62,7 @@ class _Data {
 }
 
 /// « Sur mon iPhone » (maquette 4) : le téléchargement en cours, les albums gardés, les échecs à
-/// réessayer, la place, la limite et le dossier des copies.
+/// réessayer, la place, la limite et où garder les copies (maquette 17).
 class OnDeviceScreen extends StatefulWidget {
   const OnDeviceScreen({super.key});
 
@@ -80,6 +80,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   String?
   _folder; // dossier choisi (deux derniers noms) ; null = celui par défaut
   bool _moving = false; // le déplacement tourne (le bouton le dit)
+  bool? _keepingInApp; // les morceaux gardés partent vers l'appli (vrai) ou en reviennent
   bool _busy = false; // sélecteur ouvert ou déplacement : un seul à la fois
   bool _loadingSpace = false;
 
@@ -521,6 +522,7 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     final gauge = limit <= 0 ? 0.0 : (d.used / limit).clamp(0.0, 1.0);
     final limitGb = math.max(1, (limit / _gib).round());
     final free = _free;
+    final inApp = app.settings?.keepInApp ?? false;
     // la place libre n'abaisse jamais la limite réglée : elle ne fait que borner le curseur
     final knownGb = free == null
         ? (d.used + _gib - 1) ~/
@@ -633,10 +635,10 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
           _hint(s.top100Hint),
           if (app.device != null) ...[
             const SizedBox(height: 10),
-            PhoneSection(s.folderSection),
-            _folderRow(s),
-            _folderButton(s),
-            _hint(s.folderHint(onIphone)),
+            PhoneSection(s.whereToKeepSection),
+            _whereCard(s, inApp: false, chosen: !inApp),
+            _whereCard(s, inApp: true, chosen: inApp),
+            _hint(s.whereToKeepHint, top: 6),
           ],
           const SizedBox(height: 10),
           PhoneSection(s.confirmationsSection),
@@ -929,14 +931,237 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
     ),
   );
 
+  /// Une des deux façons de garder la musique (maquette 17 A) : la choisie a le bord rose et
+  /// son rond plein ; « Choisir le dossier… » n'existe que dans la carte du dossier visible
+  /// quand elle est choisie.
+  Widget _whereCard(Strings s, {required bool inApp, required bool chosen}) {
+    final c = context.colors;
+    final going = _keepingInApp == inApp;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        key: Key(inApp ? 'keepInApp' : 'keepVisible'),
+        color: c.bar,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: chosen ? c.pink : c.line, width: 1.5),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: chosen || _busy ? null : () => _switchKeep(inApp),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: chosen
+                            ? Border.all(color: c.pink, width: 7)
+                            : Border.all(color: c.textFaint, width: 2),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        inApp ? s.keepInApp : s.keepVisible,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(34, 6, 0, 0),
+                  child: Text(
+                    inApp ? s.keepInAppHint : s.keepVisibleHint(onIphone),
+                    style: TextStyle(
+                      color: c.textMuted,
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+                if (going)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(34, 6, 0, 0),
+                    child: Text(
+                      s.moving,
+                      style: TextStyle(
+                        color: c.pink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                if (!inApp && chosen)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(34, 12, 0, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [_folderRow(s), _folderButton(s)],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Changer de façon de garder : la question d'abord (maquette 17 B) ; « Annuler » ne
+  /// déplace rien. Puis les morceaux gardés passent d'un dossier à l'autre.
+  Future<void> _switchKeep(bool toApp) async {
+    if (_busy) return;
+    final app = AppScope.of(context);
+    final downloader = app.downloader;
+    if (downloader == null) return;
+    final s = app.strings;
+    final messenger = ScaffoldMessenger.of(context);
+    final size = s.size(_data.used);
+    final yes = await _askMove(
+      s,
+      toApp ? s.moveIntoAppTitle : s.moveToVisibleTitle,
+      toApp
+          ? s.moveIntoAppBody(size)
+          : s.moveToVisibleBody(
+              size,
+              _folder ?? s.defaultFolder(onIphone, tablet: onTablet),
+            ),
+    );
+    if (!yes || !mounted || _busy) return;
+    setState(() {
+      _busy = true;
+      _keepingInApp = toApp;
+    });
+    try {
+      KeepResult? r;
+      try {
+        r = await downloader.moveKept(toApp: toApp);
+      } on Object {
+        r = null;
+      }
+      if (r != null && r.ok) {
+        // la lecture et la liste des fichiers posés à la main suivent le nouveau dossier
+        await app.accountService?.refreshRoot();
+        unawaited(app.localFolder?.rescan());
+        if (mounted) await _loadFolder();
+        if (mounted) unawaited(_loadSpace(_data.used));
+      } else {
+        say(
+          messenger,
+          r == null
+              ? s.keptMoveFailed
+              : r.neededBytes > 0
+              ? s.notEnoughSpace(s.size(r.neededBytes))
+              : r.folderUnavailable
+              ? s.keptFolderUnavailable
+              : s.keptMoveFailed,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _keepingInApp = null;
+        });
+      }
+    }
+  }
+
+  Future<bool> _askMove(Strings s, String title, String body) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      barrierColor: context.colors.scrim,
+      builder: (ctx) {
+        final c = ctx.colors;
+        Widget pill(String text, bool primary) => Material(
+          color: primary ? c.pink : Colors.transparent,
+          shape: StadiumBorder(
+            side: primary ? BorderSide.none : BorderSide(color: c.outlineDim),
+          ),
+          child: InkWell(
+            key: Key(primary ? 'moveKept' : 'cancelMoveKept'),
+            customBorder: const StadiumBorder(),
+            onTap: () => Navigator.of(ctx).pop(primary),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: primary ? c.onPink : c.textBright,
+                ),
+              ),
+            ),
+          ),
+        );
+        return Dialog(
+          backgroundColor: c.sheet,
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: c.borderSoft),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: c.text,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  body,
+                  style: TextStyle(
+                    color: c.textLabel,
+                    fontSize: 14,
+                    height: 1.55,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    pill(s.cancel, false),
+                    const SizedBox(width: 10),
+                    pill(s.moveAction, true),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    return yes ?? false;
+  }
+
   Widget _folderRow(Strings s) => Material(
-    color: context.colors.bar,
-    borderRadius: BorderRadius.circular(10),
+    color: context.colors.rowHover,
+    borderRadius: BorderRadius.circular(9),
     child: InkWell(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(9),
       onTap: _busy ? null : _chooseFolder,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         child: Row(
           children: [
             Expanded(
@@ -963,21 +1188,21 @@ class _OnDeviceScreenState extends State<OnDeviceScreen> {
   );
 
   Widget _folderButton(Strings s) => Padding(
-    padding: const EdgeInsets.only(top: 10),
+    padding: const EdgeInsets.only(top: 8),
     child: Opacity(
       opacity: _busy ? 0.5 : 1,
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           key: const Key('chooseFolder'),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(20),
           onTap: _busy ? null : _chooseFolder,
           child: Container(
             alignment: Alignment.center,
-            padding: const EdgeInsets.all(11),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              border: Border.all(color: context.colors.border),
-              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: context.colors.outlineDim),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               _moving ? s.moving : s.chooseTheFolder,

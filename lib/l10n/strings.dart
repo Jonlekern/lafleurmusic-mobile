@@ -604,7 +604,52 @@ class Strings {
     "Le Top 100 se garde tout seul à la maison, en Wi-Fi, tant qu'il reste de la place. Ce que tu gardes toi-même n'est jamais retiré tout seul.",
     'The Top 100 keeps itself at home, on Wi-Fi, as long as there is room. What you keep yourself is never removed on its own.',
   );
-  String get folderSection => _t('DOSSIER', 'FOLDER');
+  // plan 10 : où garder la musique (maquette 17)
+  String get whereToKeepSection =>
+      _t('OÙ GARDER LA MUSIQUE', 'WHERE TO KEEP THE MUSIC');
+  String get keepVisible =>
+      _t('Dans un dossier visible', 'In a visible folder');
+  String keepVisibleHint(bool iphone) => iphone
+      ? _t(
+          "Tu la vois dans l'app Fichiers. Elle reste si tu supprimes l'appli.",
+          'You see it in the Files app. It stays if you delete the app.',
+        )
+      : _t(
+          "Tu la vois dans tes fichiers. Elle reste si tu supprimes l'appli.",
+          'You see it in your files. It stays if you delete the app.',
+        );
+  String get keepInApp => _t("Dans l'appli seulement", 'In the app only');
+  String get keepInAppHint => _t(
+    "Cachée. Elle part avec l'appli quand tu la supprimes.",
+    'Hidden. It goes with the app when you delete it.',
+  );
+  String get whereToKeepHint => _t(
+    'En changeant, les morceaux gardés sont déplacés. Les fichiers que tu poses toi-même dans LAFLEURMUSIC jouent toujours.',
+    'When you switch, the kept songs are moved. Files you put in LAFLEURMUSIC yourself always play.',
+  );
+  String get moveIntoAppTitle =>
+      _t("Ranger ta musique dans l'appli ?", 'Put your music in the app?');
+  String moveIntoAppBody(String size) => _t(
+    "Les $size gardés quittent le dossier LAFLEURMUSIC et vont dans l'appli. Si tu supprimes l'appli, ils partent avec.",
+    'The $size kept leave the LAFLEURMUSIC folder and go into the app. If you delete the app, they go with it.',
+  );
+  String get moveToVisibleTitle => _t(
+    'Ranger ta musique dans le dossier visible ?',
+    'Put your music in the visible folder?',
+  );
+  String moveToVisibleBody(String size, String folder) => _t(
+    'Les $size gardés quittent l\'appli et retournent dans $folder.',
+    'The $size kept leave the app and go back to $folder.',
+  );
+  String get moveAction => _t('Déplacer', 'Move');
+  String get keptMoveFailed => _t(
+    "La musique n'a pas pu être déplacée. Rien n'a bougé.",
+    "The music couldn't be moved. Nothing moved.",
+  );
+  String get keptFolderUnavailable => _t(
+    "Le dossier LAFLEURMUSIC ne répond pas. Rien n'a bougé.",
+    "The LAFLEURMUSIC folder isn't answering. Nothing moved.",
+  );
   String defaultFolder(bool iphone, {bool tablet = false}) => iphone
       ? _t(
           '${onDevice(iphone, tablet: tablet)} › LAFLEURMUSIC',
@@ -613,15 +658,6 @@ class Strings {
       : _t('Musique › LAFLEURMUSIC', 'Music › LAFLEURMUSIC');
   String get chooseTheFolder => _t('Choisir le dossier…', 'Choose the folder…');
   String get moving => _t('Déplacement…', 'Moving…');
-  String folderHint(bool iphone) => iphone
-      ? _t(
-          'iCloud Drive marche aussi. En changeant de dossier, les morceaux gardés y sont déplacés.',
-          'iCloud Drive works too. When you change folder, the kept songs are moved there.',
-        )
-      : _t(
-          'Une carte SD marche aussi. En changeant de dossier, les morceaux gardés y sont déplacés.',
-          'An SD card works too. When you change folder, the kept songs are moved there.',
-        );
   String folderUnavailable(bool iphone, {bool tablet = false}) => _t(
     "Le dossier choisi n'est pas disponible. Branche-le ou choisis-en un autre dans ${onDevice(iphone, tablet: tablet)}.",
     "The chosen folder isn't available. Reconnect it or pick another one in ${onDevice(iphone, tablet: tablet)}.",

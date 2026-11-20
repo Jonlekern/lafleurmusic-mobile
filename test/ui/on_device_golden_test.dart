@@ -24,8 +24,9 @@ import 'phone/on_device_screen_test.dart' show pumpOnDevice;
 /// pixels divise environ par deux la part de ces bords ; un libellé ou une icône qui change fait
 /// toujours échouer.
 /// L'écran rendu en 2 pixels par point (même découpe que `matchesGoldenFile(finder)`).
-Future<ui.Image> at2x(WidgetTester tester) {
-  var box = tester.renderObject(find.byType(OnDeviceScreen));
+/// [of] : tout l'écran (`MaterialApp`) pour voir aussi une question posée par-dessus.
+Future<ui.Image> at2x(WidgetTester tester, {Finder? of}) {
+  var box = tester.renderObject(of ?? find.byType(OnDeviceScreen));
   while (!box.isRepaintBoundary) {
     box = box.parent!;
   }
@@ -44,7 +45,7 @@ void main() {
   for (final (mode, sfx) in goldenModes) {
     testWidgets(inMode(mode, '9 Sur mon iPhone, haut'), (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      await pumpOnDevice(tester, brightness: mode,  images: true);
+      await pumpOnDevice(tester, brightness: mode, images: true);
       await done(tester);
       await expectLater(
         at2x(tester),
@@ -55,12 +56,67 @@ void main() {
 
     testWidgets(inMode(mode, '9 Sur mon iPhone, en bas'), (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      await pumpOnDevice(tester, brightness: mode,  images: true);
+      await pumpOnDevice(tester, brightness: mode, images: true);
       await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
       await done(tester);
       await expectLater(
         at2x(tester),
         matchesGoldenFile('goldens/phone-9-bas$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    // maquette 17 : où garder la musique (A comme aujourd'hui, B la question, C après)
+    Future<void> toWhere(WidgetTester tester) async {
+      await tester.scrollUntilVisible(
+        find.text('OÙ GARDER LA MUSIQUE'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      Scrollable.ensureVisible(
+        tester.element(find.text('OÙ GARDER LA MUSIQUE')),
+        alignment: 0.15,
+      );
+      await done(tester);
+    }
+
+    testWidgets(inMode(mode, '17a où garder la musique'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpOnDevice(tester, brightness: mode, images: true);
+      await toWhere(tester);
+      await expectLater(
+        at2x(tester, of: find.byType(MaterialApp)),
+        matchesGoldenFile('goldens/phone-17a$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, '17b la question'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await pumpOnDevice(tester, brightness: mode, images: true);
+      await toWhere(tester);
+      await tester.tap(find.byKey(const Key('keepInApp')));
+      await done(tester);
+      await expectLater(
+        at2x(tester, of: find.byType(MaterialApp)),
+        matchesGoldenFile('goldens/phone-17b$sfx.png'),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, '17c après'), (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final r = await pumpOnDevice(tester, brightness: mode, images: true);
+      await toWhere(tester);
+      await tester.tap(find.byKey(const Key('keepInApp')));
+      await done(tester);
+      await tester.tap(find.byKey(const Key('moveKept')));
+      await done(tester);
+      expect(r.settings.keepInApp, isTrue);
+      await expectLater(
+        at2x(tester, of: find.byType(MaterialApp)),
+        matchesGoldenFile('goldens/phone-17c$sfx.png'),
       );
       debugDefaultTargetPlatformOverride = null;
     });

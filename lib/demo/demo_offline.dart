@@ -89,10 +89,14 @@ class DemoDownloader extends ChangeNotifier implements Downloader {
   /// Les changements demandés à [moveKept] : vrai = dans l'appli.
   final keptMoves = <bool>[];
 
+  /// Ce que fait le vrai téléchargeur quand [moveKept] réussit (le mode est enregistré).
+  Future<void> Function(bool toApp)? commitKept;
+
   @override
   Future<KeepResult> moveKept({required bool toApp}) async {
     keptMoves.add(toApp);
     await moveGate?.future;
+    if (moveResult.ok) await commitKept?.call(toApp);
     return moveResult;
   }
 
