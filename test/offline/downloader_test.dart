@@ -94,6 +94,8 @@ class _Device implements Device {
   int Function()? freeFn;
   @override
   Future<void> announce(String path) async => announced.add(path);
+  @override
+  Future<bool> installApk(String path) async => false;
   bool reachable = true;
   @override
   Future<bool> rootReachable() async {

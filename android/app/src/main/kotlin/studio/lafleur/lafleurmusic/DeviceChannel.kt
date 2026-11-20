@@ -6,6 +6,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.media.MediaScannerConnection
 import android.net.Uri
+import androidx.core.content.FileProvider
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
@@ -75,7 +76,35 @@ class DeviceChannel(private val activity: Activity, messenger: BinaryMessenger) 
                 }
                 result.success(null)
             }
+            "installApk" -> installApk(call.argument<String>("path"), result)
             else -> result.notImplemented()
+        }
+    }
+
+    /**
+     * Ouvre l'installeur sur une mise à jour téléchargée. Seul un fichier existant, dans
+     * `cacheDir/updates` (chemins canoniques : ni `..` ni lien), est confié à l'installeur.
+     */
+    private fun installApk(path: String?, result: MethodChannel.Result) {
+        if (path == null) {
+            result.success(false)
+            return
+        }
+        try {
+            val file = File(path).canonicalFile
+            val dir = File(activity.cacheDir, "updates").canonicalFile
+            if (!file.isFile || file.parentFile != dir) {
+                result.success(false)
+                return
+            }
+            val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.updates", file)
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(intent)
+            result.success(true)
+        } catch (e: Exception) {
+            result.success(false)
         }
     }
 

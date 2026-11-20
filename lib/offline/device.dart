@@ -75,6 +75,10 @@ abstract class Device {
   /// Android : prévient la médiathèque du système d'un nouveau fichier (jamais pour le
   /// dossier privé). iOS : rien.
   Future<void> announce(String path);
+
+  /// Android : ouvre l'installeur du système sur l'APK [path] (dans `<cache>/updates/`).
+  /// Faux si le fichier manque, est hors de ce dossier, ou ailleurs qu'Android.
+  Future<bool> installApk(String path);
 }
 
 /// Un dossier choisi mais pas encore adopté (iOS : [bookmark] garde l'accès).
@@ -103,13 +107,16 @@ class ChannelDevice implements Device {
     required this.saveSettings,
     MethodChannel? channel,
     bool? ios,
+    bool? android,
   }) : _ch = channel ?? const MethodChannel('studio.lafleur/device'),
-       _ios = ios ?? Platform.isIOS;
+       _ios = ios ?? Platform.isIOS,
+       _android = android ?? Platform.isAndroid;
 
   final AppSettings settings;
   final Future<void> Function() saveSettings;
   final MethodChannel _ch;
   final bool _ios;
+  final bool _android;
 
   Directory? _chosen; // dossier choisi, résolu et accessible
   Future<void>? _resolving;
@@ -326,5 +333,12 @@ class ChannelDevice implements Device {
       return; // le dossier privé n'est jamais montré à la médiathèque
     }
     await _ch.invokeMethod<void>('announce', {'path': path});
+  }
+
+  @override
+  Future<bool> installApk(String path) async {
+    if (!_android) return false;
+    return (await _ch.invokeMethod<bool>('installApk', {'path': path})) ??
+        false;
   }
 }

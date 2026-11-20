@@ -142,6 +142,8 @@ class _Phone implements Device {
 
   @override
   Future<void> announce(String path) async => announced.add(path);
+  @override
+  Future<bool> installApk(String path) async => false;
 
   @override
   Future<PickedFolder?> pickFolder() async => null;
