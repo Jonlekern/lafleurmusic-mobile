@@ -4,6 +4,12 @@ An iPod-style music player for Android and iPhone, in the LAFLEURSTUDIO style.
 It plays the music from your own server and keeps a copy of your favourites on the phone.
 The phone sibling of [LAFLEURMUSIC for desktop](https://github.com/Jonlekern/lafleurmusic-desktop).
 
+<p align="center">
+<a href="https://github.com/Jonlekern/lafleurmusic-mobile/releases/latest/download/LAFLEURMUSIC-android.apk"><img src="docs/release/android.png" alt="Download for Android" width="300"></a>&nbsp;&nbsp;
+<a href="https://github.com/Jonlekern/lafleurmusic-mobile/releases/latest/download/LAFLEURMUSIC-iphone-unsigned.ipa"><img src="docs/release/iphone.png" alt="Download for iPhone" width="300"></a>
+</p>
+<p align="center"><sub>Always the latest version · Android 7+ · iPhone (iOS 15+, unsigned IPA) · <a href="https://github.com/Jonlekern/lafleurmusic-mobile/releases/latest">What's new</a></sub></p>
+
 **Status:** early work in progress. Plan 1 (listen to your server), plan 3 (several accounts merged, server playlists, Cover Flow, tablets), plan 4 (Jellyfin), plan 5 (Plex), plan 6 (Classic mode: an iPod-style menu with a click wheel, chosen in Settings), plan 7 (light mode), plan 8 (queue and library), plan 9 (editable playlists) and plan 10 (keep songs inside the app) are done. Plan 2 (offline) is done, with its "On my iPhone" settings screen (space limit, folder choice).
 
 What works now:
