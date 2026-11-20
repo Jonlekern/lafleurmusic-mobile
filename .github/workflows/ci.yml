@@ -125,7 +125,7 @@ jobs:
   android-emulator:
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Free disk space
         run: |
@@ -184,7 +184,7 @@ jobs:
   android-emulator-28:
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Free disk space
         run: |

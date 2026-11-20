@@ -508,6 +508,12 @@ void main() {
       }
     }
     expect(othersCalls('scrobble'), otherScrobbles);
+    // a replay did not reach for a cut server either
+    expect(
+      othersCalls('stream'),
+      otherStreams,
+      reason: 'nothing streamed from the cut servers, replays included',
+    );
     debugPrint(
       'PREUVE écoute Plex : Surf Break lu depuis Plex, écoute reçue par lui '
       '(${plex.playCount('322')}), aucune par les autres',
