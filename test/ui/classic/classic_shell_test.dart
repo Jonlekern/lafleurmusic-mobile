@@ -291,9 +291,7 @@ void main() {
     },
   );
 
-  testWidgets('En cours (Classic), Réglages, Cover Flow', (
-    tester,
-  ) async {
+  testWidgets('En cours (Classic), Réglages, Cover Flow', (tester) async {
     await pumpPhone(tester, home: const ClassicShell());
     await rotateTo(tester, 'En cours');
     await press(tester, 'select');
@@ -318,6 +316,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CoverflowScreen), findsOneWidget);
   });
+
+  // Johnny 20.11 : ouvert depuis le menu, le Cover Flow n'avait aucune sortie sur iPhone
+  // (pas de molette, pas de retour) : bloqué, impossible de rejoindre Réglages.
+  testWidgets(
+    'Cover Flow du menu : « ‹ Retour » ramène au menu et à la molette',
+    (tester) async {
+      await pumpPhone(tester, home: const ClassicShell());
+      await rotateTo(tester, 'Cover Flow');
+      await press(tester, 'select');
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CoverflowScreen), findsOneWidget);
+      expect(find.textContaining('Échap'), findsNothing);
+      await tester.tap(find.text('Retour'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CoverflowScreen), findsNothing);
+      expect(find.byType(ClickWheel), findsOneWidget);
+      await rotateTo(tester, 'Réglages');
+      await press(tester, 'select');
+      await tester.pumpAndSettle();
+      expect(find.byType(AccountsScreen), findsOneWidget);
+    },
+  );
 
   testWidgets('Android : retour remonte d\'un niveau', (tester) async {
     await pumpPhone(tester, home: const ClassicShell());

@@ -53,6 +53,23 @@ void main() {
     expect(find.byType(MiniPlayer), findsOneWidget);
   });
 
+  testWidgets(
+    'Cover Flow de l’Accueil (debout) : « ‹ Retour » revient à l’Accueil',
+    (tester) async {
+      await pumpPhone(tester);
+      await tester.tap(find.text('Cover Flow'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CoverflowScreen), findsOneWidget);
+      await tester.tap(find.text('Retour'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CoverflowScreen), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+    },
+  );
+
   testWidgets('toucher « Studio Lafleur » ouvre l’album', (tester) async {
     await pumpPhone(tester);
     await openStudio(tester);

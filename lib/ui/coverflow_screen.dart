@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -124,6 +125,11 @@ class _CoverflowScreenState extends State<CoverflowScreen>
     if (tracks.isNotEmpty) await app.player.playTracks(tracks, 0);
   }
 
+  /// Un écran tactile (iPhone, iPad, Android) : pas de touche Échap pour sortir.
+  bool get _touch =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
+
   KeyEventResult _onKey(FocusNode _, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -233,18 +239,44 @@ class _CoverflowScreenState extends State<CoverflowScreen>
         top: 28,
         left: 0,
         right: 0,
-        child: Center(
-          child: Image.asset(context.logoAsset, height: 22),
-        ),
+        child: Center(child: Image.asset(context.logoAsset, height: 22)),
       ),
-      Positioned(
-        top: 30,
-        right: 30,
-        child: Text(
-          s.escToQuit,
-          style: TextStyle(color: context.colors.sub, fontSize: 13),
+      // iPhone, iPad, Android : pas de touche Échap, un « ‹ Retour » à toucher (Johnny 20.11 :
+      // ouvert depuis le menu, le Cover Flow n'avait aucune sortie sur iPhone)
+      if (_touch)
+        Positioned(
+          top: MediaQuery.paddingOf(context).top + 10,
+          left: 0,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).maybePop(),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  for (final t in ['‹ ', s.back])
+                    Text(
+                      t,
+                      style: TextStyle(
+                        color: context.colors.pink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        )
+      else
+        Positioned(
+          top: 30,
+          right: 30,
+          child: Text(
+            s.escToQuit,
+            style: TextStyle(color: context.colors.sub, fontSize: 13),
+          ),
         ),
-      ),
       _stage(size, cover, k, size.height * 0.17),
       if (album != null)
         Positioned(
@@ -313,9 +345,7 @@ class _CoverflowScreenState extends State<CoverflowScreen>
           top: h * 0.05 + pad.top,
           left: 0,
           right: 0,
-          child: Center(
-            child: Image.asset(context.logoAsset, height: 16),
-          ),
+          child: Center(child: Image.asset(context.logoAsset, height: 16)),
         ),
         _stage(size, cover, k, h * 0.12 + pad.top),
         if (album != null)
