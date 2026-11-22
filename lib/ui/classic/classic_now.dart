@@ -173,8 +173,10 @@ class _ClassicNowState extends State<ClassicNow> {
   void _seekTo(Duration at) {
     _seekTimer?.cancel();
     _seekTimer = null;
-    setState(_clearTarget);
-    _player?.seek(at);
+    // comme la molette : la barre, les temps et l'arc restent au point choisi jusqu'à ce que
+    // le lecteur y soit, et un cran juste après part de là
+    setState(() => _target = at);
+    _sendSeek();
   }
 
   /// Le temps suit de nouveau la lecture.
@@ -267,7 +269,13 @@ class _ClassicNowState extends State<ClassicNow> {
         semanticIncreasedValue: _wheelValue(1),
         semanticDecreasedValue: _wheelValue(-1),
         // l'arc rose suit la lecture (maquette 20)
-        progress: ClickWheel.progressOf(_st),
+        progress: ClickWheel.progressOf(
+          PlayerState(
+            track: _st.track,
+            position: _target ?? _st.position,
+            duration: _st.duration,
+          ),
+        ),
       ),
     );
   }

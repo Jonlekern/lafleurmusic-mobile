@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lafleurmusic/library/models.dart';
 import 'package:lafleurmusic/player/player.dart';
+import 'package:lafleurmusic/ui/classic/classic_now.dart';
+import 'package:lafleurmusic/ui/format.dart';
 
 import '../fonts.dart';
 import '../phone_fixture.dart';
 import 'classic_now_test.dart' show openClassic, scrubbing;
-import 'classic_shell_test.dart' show press, rotate;
+import 'classic_shell_test.dart' show press, rotate, wheel;
 
 const _bar = Key('classic-now-progress-bar');
 const _knob = Key('classic-now-knob');
@@ -110,10 +112,12 @@ void main() {
     expect(find.text('1:33'), findsNothing);
     await g.up();
     await tester.pump();
-    expect(
-      find.text('1:33'),
-      findsOneWidget,
-    ); // le faux lecteur reste où il était
+    // au lâcher, les temps restent au point choisi le temps que le lecteur y arrive
+    expect(find.text(clock(f.player.lastSeek!)), findsOneWidget);
+    expect(find.text('1:33'), findsNothing);
+    // le faux lecteur n'y arrive jamais : au bout de 2 s, les temps reviennent à la lecture
+    await tester.pump(ClassicNow.seekSettle);
+    expect(find.text('1:33'), findsOneWidget);
   });
 
   testWidgets('durée 0 : la barre ne fait rien', (tester) async {
@@ -185,4 +189,72 @@ void main() {
       expect(scrubbing(tester), isFalse);
     },
   );
+
+  testWidgets(
+    'après un toucher : tout reste au point choisi jusqu\'au lecteur, un cran part de là',
+    (tester) async {
+      final f = await openClassic(tester);
+      final before = f.player.current;
+      final bar = tester.getRect(find.byKey(_bar));
+      await tester.tapAt(Offset(bar.left + bar.width * .6, bar.center.dy));
+      await tester.pump();
+      expect(_seeks(f), 1);
+      _near(f, .6);
+      final at = f.player.lastSeek!;
+      final want = at.inMilliseconds / _total(f);
+      // le faux lecteur dit encore l'ancienne position : rien ne revient en arrière
+      for (var i = 0; i < 3; i++) {
+        f.player.show(before);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(_fill(tester), closeTo(want, 1e-9));
+        expect(find.text(clock(at)), findsOneWidget);
+        expect(wheel(tester).progress, closeTo(want, 1e-9));
+      }
+      // un cran juste après part du point choisi, pas de l'ancienne position
+      await press(tester, 'select');
+      await rotate(tester, 1);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(f.player.lastSeek, at + ClassicNow.seekStep);
+    },
+  );
+
+  testWidgets(
+    'le lecteur arrive au point choisi : la barre suit de nouveau la lecture',
+    (tester) async {
+      final f = await openClassic(tester);
+      final st = f.player.current;
+      final bar = tester.getRect(find.byKey(_bar));
+      await tester.tapAt(Offset(bar.left + bar.width * .6, bar.center.dy));
+      await tester.pump();
+      final at = f.player.lastSeek!;
+      f.player.show(
+        PlayerState(
+          track: st.track,
+          position: at,
+          duration: st.duration,
+          playing: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      final later = at + const Duration(seconds: 10);
+      f.player.show(
+        PlayerState(
+          track: st.track,
+          position: later,
+          duration: st.duration,
+          playing: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text(clock(later)), findsOneWidget);
+      expect(_fill(tester), closeTo(later.inMilliseconds / _total(f), 1e-9));
+    },
+  );
 }
+
+double _fill(WidgetTester tester) => tester
+    .widget<FractionallySizedBox>(find.byKey(const Key('classic-now-progress')))
+    .widthFactor!;

@@ -48,7 +48,8 @@ class ClassicFrame extends StatelessWidget {
                     SizedBox(height: _gap * k),
                     SizedBox.square(
                       dimension: size,
-                      child: FittedBox(child: wheel),
+                      // l'arc suit chaque position : seule la molette se redessine
+                      child: RepaintBoundary(child: FittedBox(child: wheel)),
                     ),
                   ],
                 );
