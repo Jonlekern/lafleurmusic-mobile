@@ -5,6 +5,7 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/ui/phone/mini_player.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 
 import 'fonts.dart';
@@ -64,6 +65,38 @@ void main() {
     await tester.pumpAndSettle();
     await settle(tester);
     await shot('phone-3');
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  /// Maquette 20 C : sur l'album, le doigt glisse le fil du mini-lecteur jusqu'à 2:29.
+  Future<void> seekShot(WidgetTester tester, String name) async {
+    await tester.tap(find.text('Studio Lafleur'));
+    await tester.pumpAndSettle();
+    await settle(tester);
+    final mini = tester.getRect(find.byType(MiniPlayer));
+    final y = mini.top + MiniPlayer.lineHeight / 2;
+    // 2:29 sur 4:05
+    final x = mini.left + mini.width * (149.5 / 245);
+    final g = await tester.startGesture(Offset(mini.left + 40, y));
+    await g.moveBy(const Offset(30, 0));
+    await tester.pump();
+    await g.moveTo(Offset(x, y));
+    await tester.pump();
+    expect(find.text('2:29'), findsOneWidget);
+    await shot(name);
+    await g.up();
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('20 C mini-lecteur, glisser le fil', (tester) async {
+    await start(tester);
+    await seekShot(tester, 'phone-20c');
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('clair : 20 C mini-lecteur, glisser le fil', (tester) async {
+    await start(tester, Brightness.light);
+    await seekShot(tester, 'phone-20c-light');
     debugDefaultTargetPlatformOverride = null;
   });
 

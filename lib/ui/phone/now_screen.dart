@@ -209,10 +209,11 @@ class _NowScreenState extends State<NowScreen> {
               const SizedBox(height: 12),
               SeekArea(
                 key: const Key('now-seek'),
+                track: st.track?.path,
                 total: total,
                 fraction: f,
                 onSeek: app.player.seek,
-                builder: (context, f) => Container(
+                builder: (context, f, _) => Container(
                   height: 12,
                   alignment: Alignment.centerLeft,
                   child: Container(

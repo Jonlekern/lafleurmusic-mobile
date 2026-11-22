@@ -161,10 +161,11 @@ class _PlayerBarState extends State<PlayerBar> {
                           Expanded(
                             child: SeekArea(
                               key: const Key('bar-seek'),
+                              track: st.track?.path,
                               total: total,
                               fraction: f,
                               onSeek: app.player.seek,
-                              builder: (context, f) => LayoutBuilder(
+                              builder: (context, f, _) => LayoutBuilder(
                                 builder: (_, c) => SizedBox(
                                   height: 14,
                                   child: Stack(

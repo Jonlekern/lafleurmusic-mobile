@@ -9,6 +9,7 @@ import '../../theme/colors.dart';
 import '../cover_image.dart';
 import '../format.dart';
 import '../phone/phone_shell.dart';
+import '../seek_area.dart';
 import 'classic_frame.dart';
 import 'click_wheel.dart';
 
@@ -146,6 +147,15 @@ class _ClassicNowState extends State<ClassicNow> {
     });
   }
 
+  /// Le doigt sur la barre de progression (maquette 20 A) : le saut part tout de suite, un
+  /// losange en attente est oublié.
+  void _seekTo(Duration at) {
+    _seekTimer?.cancel();
+    _seekTimer = null;
+    setState(_clearTarget);
+    _player?.seek(at);
+  }
+
   /// Le temps suit de nouveau la lecture.
   void _clearTarget() {
     _target = null;
@@ -216,6 +226,7 @@ class _ClassicNowState extends State<ClassicNow> {
                     : (q.position + 1, q.order.length),
                 volume: _vol / ClassicNow.maxVolume,
                 scrub: _scrub,
+                onSeek: _seekTo,
               ),
             ),
           );
@@ -247,6 +258,7 @@ class _Card extends StatelessWidget {
     required this.where,
     required this.volume,
     required this.scrub,
+    required this.onSeek,
   });
   final Strings strings;
   final PlayerState state;
@@ -254,6 +266,10 @@ class _Card extends StatelessWidget {
   final (int, int)? where; // n sur m dans la file
   final double volume; // 0–1
   final bool scrub;
+  final ValueChanged<Duration> onSeek;
+
+  /// La barre de progression se touche aussi un peu au-dessus (elle n'a que 6 points).
+  static const _seekReach = 11.0;
 
   @override
   Widget build(BuildContext context) {
@@ -327,21 +343,33 @@ class _Card extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 26),
-          // lecteur d'écran : où on en est, dit pendant qu'on tourne
-          Semantics(
-            key: const Key('classic-now-progress-bar'),
-            container: true,
-            label: s.classicTrackPosition,
-            value: '${clock(position)} / ${clock(total)}',
-            child: _Bar(
-              fraction: f,
-              color: context.colors.pink,
-              diamond: scrub,
-              fillKey: const Key('classic-now-progress'),
+          const SizedBox(height: 26 - _seekReach),
+          // toucher saute, glisser fait suivre le rond et saute au lâcher (maquette 20 A)
+          SeekArea(
+            key: const Key('classic-now-seek'),
+            total: total.inMilliseconds,
+            fraction: f,
+            track: t?.path,
+            onSeek: onSeek,
+            builder: (context, f, _) => Padding(
+              padding: const EdgeInsets.only(top: _seekReach, bottom: 6),
+              // lecteur d'écran : où on en est, dit pendant qu'on tourne
+              child: Semantics(
+                key: const Key('classic-now-progress-bar'),
+                container: true,
+                label: s.classicTrackPosition,
+                value: '${clock(position)} / ${clock(total)}',
+                child: _Bar(
+                  fraction: f,
+                  color: context.colors.pink,
+                  diamond: scrub,
+                  // le losange remplace le rond pendant qu'on avance à la molette
+                  knob: t != null && !scrub,
+                  fillKey: const Key('classic-now-progress'),
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 6),
           Row(
             children: [
               Text(clock(position), style: time),
@@ -397,18 +425,23 @@ class _Card extends StatelessWidget {
       Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
 }
 
-/// Une barre de 6 points (progression ou volume) ; [diamond] : le losange rose de la maquette 12 B.
+/// Une barre de 6 points (progression ou volume) ; [diamond] : le losange rose de la maquette 12 B ;
+/// [knob] : le rond rose de 18 points de la maquette 20 A.
 class _Bar extends StatelessWidget {
   const _Bar({
     required this.fraction,
     required this.color,
     required this.fillKey,
     this.diamond = false,
+    this.knob = false,
   });
   final double fraction;
   final Color color;
   final Key fillKey;
   final bool diamond;
+  final bool knob;
+
+  static const _knob = 18.0;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -441,6 +474,27 @@ class _Bar extends StatelessWidget {
               ),
             ),
           ),
+          if (knob)
+            Positioned(
+              key: const Key('classic-now-knob'),
+              left: c.maxWidth * fraction - _knob / 2,
+              top: (6 - _knob) / 2,
+              width: _knob,
+              height: _knob,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.colors.pink,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: context.colors.shadow.withValues(alpha: .35),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (diamond)
             Positioned(
               key: const Key('classic-now-diamond'),
