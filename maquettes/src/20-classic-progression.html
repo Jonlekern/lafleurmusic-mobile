@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:Inter;src:url(Inter-Regular.otf);font-weight:400}
+@font-face{font-family:Inter;src:url(Inter-Bold.otf);font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1340px;height:1000px;background:#2b2b2b;font-family:Inter;color:#111;display:flex;gap:36px;padding:30px 36px;overflow:hidden}
+.col{display:flex;flex-direction:column;align-items:center;gap:12px;justify-content:flex-start}
+.cap{color:#ddd;font-size:15px;font-weight:700}.cap span{color:#F26EF2}
+.note{font-size:13px;color:#bbb;width:390px;line-height:1.5;text-align:center}
+.ph{width:390px;height:844px;background:#fff;border-radius:46px;border:10px solid #000;position:relative;overflow:hidden;display:flex;flex-direction:column;flex:none}
+.sb{height:44px;display:flex;justify-content:space-between;align-items:center;padding:6px 28px 0;font-size:14px;font-weight:700;flex:none}
+.top{height:50px;display:flex;align-items:center;justify-content:center;position:relative;flex:none;background:#F2F2F2;border-bottom:1px solid #ddd}
+.top img{height:15px}.top.bk img{height:11px;margin-left:80px}.top .l{position:absolute;left:14px;color:#F26EF2;font-size:15px;font-weight:700}
+.card{margin:14px 14px 0;background:#F2F2F2;border-radius:10px;padding:12px 14px 16px;position:relative}
+.hd{display:flex;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:1px;color:#777}
+.tr{display:flex;gap:14px;margin-top:14px;align-items:center}
+.cv{width:104px;height:104px;border-radius:6px;background:linear-gradient(135deg,#444,#999);flex:none}
+.t{font-size:17px;font-weight:700}.a{font-size:13px;color:#777;margin-top:6px}.b{font-size:13px;color:#999;margin-top:3px}
+.pb{height:6px;border-radius:3px;background:#CFCFCF;margin-top:24px;position:relative}.pb i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#F26EF2}
+.knob{position:absolute;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#F26EF2;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.times{display:flex;justify-content:space-between;font-size:12px;color:#777;margin-top:7px}
+.vol{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:12px;color:#777;height:16px}
+.vol .bar{flex:1;height:6px;border-radius:3px;background:#CFCFCF;position:relative}.vol .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#555}
+.vol.off{visibility:hidden}
+.finger{position:absolute;width:44px;height:44px;border-radius:50%;background:rgba(242,110,242,.18);border:2px dashed #F26EF2}
+.wheel{width:270px;height:270px;margin:30px auto 0;position:relative}
+.wheel svg{position:absolute;inset:0}
+.k{position:absolute;color:#666;font-weight:700;font-size:14px}
+.menu{top:28px;left:50%;transform:translateX(-50%);letter-spacing:1px}
+.prev{left:26px;top:50%;transform:translateY(-50%)}.next{right:26px;top:50%;transform:translateY(-50%)}.pp{bottom:26px;left:50%;transform:translateX(-50%)}
+.tag{position:absolute;background:#111;color:#fff;font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;white-space:nowrap}
+.list{padding:8px 16px}.row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #eee}
+.n{width:22px;color:#777;font-weight:700;font-size:15px;text-align:right}.row .t{font-size:15px}.row .a{font-size:12px;margin-top:2px}.d{margin-left:auto;color:#777;font-size:13px}
+.mini{position:absolute;left:0;right:0;bottom:0;background:#F2F2F2}
+.mini .line{height:3px;background:#E0E0E0;position:relative}.mini .line i{position:absolute;left:0;top:0;bottom:0;background:#F26EF2}
+.mini .zone{position:absolute;left:0;right:0;top:-14px;height:30px;border:1px dashed #F26EF2;background:rgba(242,110,242,.08)}
+.mini .in{display:flex;align-items:center;gap:12px;padding:10px 16px 26px}.mc{width:44px;height:44px;border-radius:4px;background:linear-gradient(135deg,#c9b38a,#6e8aa3)}
+</style></head><body>
+
+<div class="col">
+<div class="cap">A · <span>En cours</span> (Mode Classic)</div>
+<div class="ph"><div class="sb"><span>17:07</span><span>▮▮▮ ▭</span></div>
+<div class="top"><img src="../../assets/logo-texte-grand-noir.png"></div>
+<div class="card"><div class="hd"><span>EN COURS</span><span>4 sur 43</span></div>
+<div class="tr"><div class="cv"></div><div><div class="t">Émotif (booska 1h)</div><div class="a">PLK</div><div class="b">Rap LUIAN</div></div></div>
+<div class="pb"><i style="width:40%"></i><div class="knob" style="left:40%"></div></div>
+<div class="times"><span>1:04</span><span>−1:37</span></div>
+<div class="vol off"><span>🔈</span><div class="bar"></div><span>🔊</span></div>
+<div class="finger" style="left:118px;top:178px"></div>
+</div>
+<div class="wheel"><svg viewBox="0 0 270 270"><circle cx="135" cy="135" r="133" fill="#F2F2F2" stroke="#CFCFCF" stroke-width="2"/>
+<path d="M135 3 A132 132 0 0 1 260.5 175.8" fill="none" stroke="#F26EF2" stroke-width="5" stroke-linecap="round"/>
+<circle cx="135" cy="135" r="50" fill="#fff" stroke="#CFCFCF" stroke-width="2"/></svg>
+<div class="k menu">MENU</div><div class="k prev">⏮</div><div class="k next">⏭</div><div class="k pp">▶︎❙❙</div></div>
+</div>
+<div class="note">Pas de barre de son au repos. On touche ou glisse la barre rose pour avancer. Le tour rose part de MENU et avance avec le morceau : 40 % du morceau = 40 % du tour.</div>
+</div>
+
+<div class="col">
+<div class="cap">B · <span>En tournant la molette</span></div>
+<div class="ph"><div class="sb"><span>17:07</span><span>▮▮▮ ▭</span></div>
+<div class="top"><img src="../../assets/logo-texte-grand-noir.png"></div>
+<div class="card"><div class="hd"><span>EN COURS</span><span>4 sur 43</span></div>
+<div class="tr"><div class="cv"></div><div><div class="t">Émotif (booska 1h)</div><div class="a">PLK</div><div class="b">Rap LUIAN</div></div></div>
+<div class="pb"><i style="width:40%"></i></div>
+<div class="times"><span>1:04</span><span>−1:37</span></div>
+<div class="vol"><span>🔈</span><div class="bar"><i style="width:65%"></i></div><span>🔊</span></div>
+</div>
+<div class="wheel"><svg viewBox="0 0 270 270"><circle cx="135" cy="135" r="133" fill="#F2F2F2" stroke="#CFCFCF" stroke-width="2"/>
+<path d="M135 3 A132 132 0 0 1 260.5 175.8" fill="none" stroke="#F26EF2" stroke-width="5" stroke-linecap="round"/>
+<circle cx="135" cy="135" r="50" fill="#fff" stroke="#CFCFCF" stroke-width="2"/></svg>
+<div class="k menu">MENU</div><div class="k prev">⏮</div><div class="k next">⏭</div><div class="k pp">▶︎❙❙</div>
+<div class="finger" style="left:218px;top:70px"></div></div>
+</div>
+<div class="note">Tourner la molette règle le son : la barre de son apparaît, puis s'efface 2 secondes après le dernier cran.</div>
+</div>
+
+<div class="col">
+<div class="cap">C · <span>Mini-lecteur</span> (debout et couché)</div>
+<div class="ph"><div class="sb"><span>17:07</span><span>▮▮▮ ▭</span></div>
+<div class="top bk"><span class="l">‹ Albums</span><img src="../../assets/logo-texte-grand-noir.png"></div>
+<div class="list">
+<div class="row"><div class="n">12</div><div><div class="t">I Was Made For Lovin' You</div><div class="a" style="color:#777">KISS</div></div><div class="d">4:31</div></div>
+<div class="row"><div class="n">13</div><div><div class="t">Message In A Bottle</div><div class="a" style="color:#777">The Police</div></div><div class="d">4:24</div></div>
+<div class="row"><div class="n">14</div><div><div class="t">Born To Be Wild</div><div class="a" style="color:#777">Steppenwolf</div></div><div class="d">3:33</div></div>
+<div class="row"><div class="n">15</div><div><div class="t">Sympathy For The Devil</div><div class="a" style="color:#777">The Rolling Stones</div></div><div class="d">6:18</div></div>
+<div class="row"><div class="n">16</div><div><div class="t">The Chain</div><div class="a" style="color:#777">Fleetwood Mac</div></div><div class="d">4:29</div></div>
+</div>
+<div class="mini"><div class="line"><i style="width:55%"></i><div class="zone"></div><div class="knob" style="left:55%;width:14px;height:14px;margin:-7px 0 0 -7px;top:1.5px"></div><div class="tag" style="left:55%;top:-40px;transform:translateX(-50%)">2:29</div></div>
+<div class="in"><div class="mc"></div><div><div class="t" style="font-size:15px">Fly Away</div><div class="a" style="font-size:12px">Lenny Kravitz</div></div><div style="margin-left:auto;font-size:20px">❙❙ &nbsp;⏭</div></div></div>
+</div>
+<div class="note">Le fil rose reste fin. Au-dessus, une bande invisible (pointillés ici) se touche au doigt : toucher saute, glisser fait avancer le fil avec un rond et le temps, la musique saute au lâcher.</div>
+</div>
+</body></html>
