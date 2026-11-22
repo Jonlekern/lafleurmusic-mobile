@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../app_scope.dart';
 import '../../l10n/strings.dart';
+import '../../player/player.dart';
 import '../../theme/colors.dart';
 
 /// La molette du Mode Classic (maquette 6 A) : tourner le doigt sur l'anneau = un cran tous les
@@ -24,7 +25,19 @@ class ClickWheel extends StatefulWidget {
     this.semanticValue,
     this.semanticIncreasedValue,
     this.semanticDecreasedValue,
+    this.progress,
   });
+
+  /// Où en est le morceau, de 0 à 1 : l'arc rose part de MENU (midi) et en couvre autant du
+  /// tour, dans le sens des aiguilles d'une montre (maquette 20). `null` : pas d'arc.
+  final double? progress;
+
+  /// La part jouée du morceau en cours ; `null` sans morceau ou sans durée connue.
+  static double? progressOf(PlayerState st) {
+    final total = st.duration.inMilliseconds;
+    if (st.track == null || total <= 0) return null;
+    return (st.position.inMilliseconds / total).clamp(0.0, 1.0);
+  }
 
   /// VoiceOver / TalkBack : le nom de la molette, et ce qu'elle règle (la ligne choisie, le volume…).
   final String? semanticLabel, semanticValue;
@@ -196,12 +209,13 @@ class _ClickWheelState extends State<ClickWheel> {
           onPointerUp: _onUp,
           onPointerCancel: _onCancel,
           child: CustomPaint(
-            painter: _WheelPainter(
+            painter: WheelPainter(
               ring: context.colors.bar,
               hub: context.colors.bg,
               pink: context.colors.pink,
               edge: context.classicColors.wheelEdge,
               label: context.classicColors.wheelLabel,
+              progress: widget.progress,
             ),
             size: const Size.square(ClickWheel.size),
             child: SizedBox.square(
@@ -264,16 +278,30 @@ class _ClickWheelState extends State<ClickWheel> {
   }
 }
 
-/// L'anneau, le rond du milieu, l'arc rose (décor, de 11 h 40 à 2 h 40) et ⏮ ⏭ ▶︎❙❙.
-class _WheelPainter extends CustomPainter {
-  const _WheelPainter({
+/// L'anneau, le rond du milieu, l'arc rose (la progression du morceau) et ⏮ ⏭ ▶︎❙❙.
+class WheelPainter extends CustomPainter {
+  const WheelPainter({
     required this.ring,
     required this.hub,
     required this.pink,
     required this.edge,
     required this.label,
+    this.progress,
   });
   final Color ring, hub, pink, edge, label;
+
+  /// 0–1, ou `null` : pas d'arc.
+  final double? progress;
+
+  /// Le rectangle de l'arc rose.
+  static final arcRect = Rect.fromCircle(center: _c, radius: _radius - 1.5);
+
+  /// L'arc rose : (départ, angle balayé) en radians, ou `null` s'il n'y a rien à dessiner.
+  static (double, double)? arc(double? progress) {
+    final p = progress;
+    if (p == null || p.isNaN || p <= 0) return null;
+    return (-math.pi / 2, p.clamp(0.0, 1.0) * 2 * math.pi);
+  }
 
   static const _c = Offset(_radius, _radius);
 
@@ -289,18 +317,19 @@ class _WheelPainter extends CustomPainter {
       ..drawCircle(_c, _hubRadius, Paint()..color = hub)
       ..drawCircle(_c, _hubRadius - .5, edge);
 
-    // CSS : bordure haute de 3 px tournée de 35°, soit de -10° à 80° depuis midi
-    const deg = math.pi / 180;
-    canvas.drawArc(
-      Rect.fromCircle(center: _c, radius: _radius - 1.5),
-      -100 * deg,
-      90 * deg,
-      false,
-      Paint()
-        ..color = pink
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
-    );
+    // la progression : de midi (MENU), dans le sens des aiguilles d'une montre
+    if (arc(progress) case (final start, final sweep)) {
+      canvas.drawArc(
+        arcRect,
+        start,
+        sweep,
+        false,
+        Paint()
+          ..color = pink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+    }
 
     final ink = Paint()..color = label;
     // ⏮ / ⏭ : une barre et deux triangles, 14 × 8, à 26 du bord
@@ -346,10 +375,31 @@ class _WheelPainter extends CustomPainter {
   bool hitTest(Offset position) => (position - _c).distance <= _radius;
 
   @override
-  bool shouldRepaint(_WheelPainter old) =>
+  bool shouldRepaint(WheelPainter old) =>
+      old.progress != progress ||
       old.ring != ring ||
       old.hub != hub ||
       old.pink != pink ||
       old.edge != edge ||
       old.label != label;
+}
+
+/// La molette qui suit le morceau du lecteur : seule elle se redessine à chaque position,
+/// pas l'écran autour.
+class PlayerProgress extends StatelessWidget {
+  const PlayerProgress({
+    super.key,
+    required this.player,
+    required this.builder,
+  });
+  final PlayerController player;
+  final Widget Function(BuildContext context, double? progress) builder;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<PlayerState>(
+    stream: player.state,
+    initialData: player.current,
+    builder: (context, snap) =>
+        builder(context, ClickWheel.progressOf(snap.data ?? player.current)),
+  );
 }

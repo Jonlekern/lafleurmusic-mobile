@@ -548,17 +548,22 @@ class _ClassicMenuState extends State<ClassicMenu> {
           onMove: _rotate,
           onOpen: _select,
         ),
-        wheel: ClickWheel(
-          onRotate: _rotate,
-          onSelect: _select,
-          onMenu: _back,
-          onPrevious: player.previous,
-          onNext: player.next,
-          onPlayPause: level.flow ? _playAlbum : player.toggle,
-          semanticLabel: app.strings.wheel,
-          semanticValue: wheelValue(0),
-          semanticIncreasedValue: wheelValue(1),
-          semanticDecreasedValue: wheelValue(-1),
+        // l'arc rose suit le morceau : seule la molette se redessine à chaque position
+        wheel: PlayerProgress(
+          player: player,
+          builder: (_, progress) => ClickWheel(
+            onRotate: _rotate,
+            onSelect: _select,
+            onMenu: _back,
+            onPrevious: player.previous,
+            onNext: player.next,
+            onPlayPause: level.flow ? _playAlbum : player.toggle,
+            semanticLabel: app.strings.wheel,
+            semanticValue: wheelValue(0),
+            semanticIncreasedValue: wheelValue(1),
+            semanticDecreasedValue: wheelValue(-1),
+            progress: progress,
+          ),
         ),
       ),
     );

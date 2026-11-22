@@ -21,7 +21,8 @@ void main() {
             backgroundColor: mode == Brightness.light
                 ? LafleurColors.light.bg
                 : LafleurColors.dark.bg,
-            body: Center(child: ClickWheel(onRotate: (_) {})),
+            // maquette 20 : l'arc rose = 40 % du morceau, depuis MENU
+            body: Center(child: ClickWheel(onRotate: (_) {}, progress: .4)),
           ),
         ),
       );

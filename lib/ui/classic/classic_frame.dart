@@ -17,7 +17,9 @@ const _top = 14.0; // sous la barre du haut
 class ClassicFrame extends StatelessWidget {
   const ClassicFrame({super.key, required this.screen, required this.wheel});
   final Widget screen;
-  final ClickWheel wheel;
+
+  /// La molette ([ClickWheel], au besoin dans un [PlayerProgress]).
+  final Widget wheel;
 
   /// Hauteur de l'écran sans resserrement.
   static const screenHeight = _screenHeight;

@@ -4,7 +4,9 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lafleurmusic/app_scope.dart';
 import 'package:lafleurmusic/demo/demo_offline.dart';
+import 'package:lafleurmusic/player/player.dart';
 import 'package:lafleurmusic/ui/classic/classic_coverflow.dart';
 import 'package:lafleurmusic/ui/classic/classic_now.dart';
 import 'package:lafleurmusic/ui/classic/classic_shell.dart';
@@ -12,6 +14,7 @@ import 'package:lafleurmusic/ui/classic/click_wheel.dart';
 import 'package:lafleurmusic/ui/phone/accounts_screen.dart';
 import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 
+import '../fake_player.dart';
 import '../fonts.dart';
 import '../phone_fixture.dart';
 
@@ -109,6 +112,46 @@ void main() {
       await tester.tapAt(tester.getCenter(find.byType(ClickWheel)));
       await tester.pump();
       await shot('12b-classic-scrub');
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    // Maquette 20 : l'arc rose suit le morceau ; la barre de son seulement en tournant
+    Future<void> at40(WidgetTester tester) async {
+      await openNow(tester);
+      final p = tester.state(find.byType(ClassicNow));
+      final player = AppScope.of(p.context).player as FakePlayer;
+      final st = player.current;
+      player.show(
+        PlayerState(
+          track: st.track,
+          position: st.duration * .4,
+          duration: st.duration,
+          playing: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets(inMode(mode, '20 A : En cours à 40 %, pas de barre de son'), (
+      tester,
+    ) async {
+      await at40(tester);
+      await shot('classic-20a');
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(inMode(mode, '20 B : en tournant, la barre de son se montre'), (
+      tester,
+    ) async {
+      await at40(tester);
+      // deux crans vers le bas : 65 %, comme la maquette
+      for (var i = 0; i < 2; i++) {
+        tester.widget<ClickWheel>(find.byType(ClickWheel)).onRotate(-1);
+      }
+      await tester.pump();
+      await tester.pump(ClassicNow.volumeFade);
+      await shot('classic-20b');
       debugDefaultTargetPlatformOverride = null;
     });
 

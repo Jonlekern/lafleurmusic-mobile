@@ -34,6 +34,13 @@ class ClassicNow extends StatefulWidget {
   static const volumeStep = 5.0;
   static const maxVolume = 100.0;
 
+  /// La barre de son, cachée au repos (maquette 20 A), se montre à chaque cran de volume et
+  /// s'efface ce temps après le dernier (maquette 20 B).
+  static const volumeShown = Duration(seconds: 2);
+
+  /// Le fondu de la barre de son.
+  static const volumeFade = Duration(milliseconds: 250);
+
   /// Un cran en avançant dans le morceau.
   static const seekStep = Duration(seconds: 5);
 
@@ -64,6 +71,8 @@ class _ClassicNowState extends State<ClassicNow> {
   Timer? _idle;
   Timer? _seekTimer; // le seek vers [_target], en attente
   Timer? _settle; // le seek est parti : [_target] ne reste pas plus longtemps
+  bool _volumeVisible = false; // la barre de son, seulement en tournant
+  Timer? _volumeHide;
 
   @override
   void didChangeDependencies() {
@@ -99,6 +108,7 @@ class _ClassicNowState extends State<ClassicNow> {
   @override
   void dispose() {
     _idle?.cancel();
+    _volumeHide?.cancel();
     // MENU juste après un cran : le dernier seek n'est pas perdu
     if (_seekTimer?.isActive ?? false) _sendSeek();
     _seekTimer?.cancel();
@@ -111,6 +121,7 @@ class _ClassicNowState extends State<ClassicNow> {
   void _rotate(int steps) => _scrub ? _seek(steps) : _changeVolume(steps);
 
   void _changeVolume(int steps) {
+    _showVolume();
     final next = (_vol + steps * ClassicNow.volumeStep).clamp(
       0.0,
       ClassicNow.maxVolume,
@@ -118,6 +129,16 @@ class _ClassicNowState extends State<ClassicNow> {
     if (next == _vol) return;
     setState(() => _vol = next);
     _player!.setVolume(next);
+  }
+
+  /// Chaque cran (même en butée) montre la barre de son ; elle s'efface 2 s après le dernier.
+  void _showVolume() {
+    _volumeHide?.cancel();
+    _volumeHide = Timer(ClassicNow.volumeShown, () {
+      _volumeHide = null;
+      if (mounted) setState(() => _volumeVisible = false);
+    });
+    if (!_volumeVisible) setState(() => _volumeVisible = true);
   }
 
   void _seek(int steps) {
@@ -225,6 +246,7 @@ class _ClassicNowState extends State<ClassicNow> {
                     ? null
                     : (q.position + 1, q.order.length),
                 volume: _vol / ClassicNow.maxVolume,
+                volumeVisible: _volumeVisible,
                 scrub: _scrub,
                 onSeek: _seekTo,
               ),
@@ -244,6 +266,8 @@ class _ClassicNowState extends State<ClassicNow> {
         semanticValue: _wheelValue(0),
         semanticIncreasedValue: _wheelValue(1),
         semanticDecreasedValue: _wheelValue(-1),
+        // l'arc rose suit la lecture (maquette 20)
+        progress: ClickWheel.progressOf(_st),
       ),
     );
   }
@@ -257,6 +281,7 @@ class _Card extends StatelessWidget {
     required this.position,
     required this.where,
     required this.volume,
+    required this.volumeVisible,
     required this.scrub,
     required this.onSeek,
   });
@@ -265,6 +290,8 @@ class _Card extends StatelessWidget {
   final Duration position;
   final (int, int)? where; // n sur m dans la file
   final double volume; // 0–1
+  final bool
+  volumeVisible; // la barre de son se voit (en tournant) ; sinon sa place reste
   final bool scrub;
   final ValueChanged<Duration> onSeek;
 
@@ -399,30 +426,41 @@ class _Card extends StatelessWidget {
               ),
             )
           else
-            Row(
-              children: [
-                ExcludeSemantics(
-                  child: Icon(Icons.volume_mute_rounded, size: 14, color: grey),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Semantics(
-                    key: const Key('classic-now-volume-bar'),
-                    container: true,
-                    label: s.classicVolume,
-                    value: '${(volume * 100).round()} %',
-                    child: _Bar(
-                      fraction: volume,
-                      color: classic.volume,
-                      fillKey: const Key('classic-now-volume'),
+            // cachée, la barre garde sa place et le lecteur d'écran la lit toujours
+            AnimatedOpacity(
+              key: const Key('classic-now-volume-row'),
+              opacity: volumeVisible ? 1 : 0,
+              duration: ClassicNow.volumeFade,
+              alwaysIncludeSemantics: true,
+              child: Row(
+                children: [
+                  ExcludeSemantics(
+                    child: Icon(
+                      Icons.volume_mute_rounded,
+                      size: 14,
+                      color: grey,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                ExcludeSemantics(
-                  child: Icon(Icons.volume_up_rounded, size: 14, color: grey),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Semantics(
+                      key: const Key('classic-now-volume-bar'),
+                      container: true,
+                      label: s.classicVolume,
+                      value: '${(volume * 100).round()} %',
+                      child: _Bar(
+                        fraction: volume,
+                        color: classic.volume,
+                        fillKey: const Key('classic-now-volume'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ExcludeSemantics(
+                    child: Icon(Icons.volume_up_rounded, size: 14, color: grey),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
