@@ -29,22 +29,33 @@ double _knobAt(WidgetTester tester) {
 void main() {
   setUpAll(loadFonts);
 
-  testWidgets('maquette 20 A : un rond rose de 18 points sur la position', (
-    tester,
-  ) async {
-    final f = await openClassic(tester);
-    expect(find.byKey(_knob), findsOneWidget);
-    final bar = tester.getRect(find.byKey(_bar));
-    final knob = tester.getRect(find.byKey(_knob));
-    // l'écran Classic se resserre un peu sur les petits téléphones : 18 points à cette échelle
-    final k = bar.height / 6;
-    expect(knob.width / k, closeTo(18, 0.01));
-    expect(knob.height / k, closeTo(18, 0.01));
-    expect(knob.center.dy, closeTo(bar.center.dy, 0.01));
-    final played =
-        f.player.current.position.inMilliseconds / _total(f); // 1:33 sur 4:05
-    expect(_knobAt(tester), closeTo(played, 0.01));
-  });
+  testWidgets(
+    'maquette 20 A / B : le rond rose de 18 points, seulement sous le doigt',
+    (tester) async {
+      await openClassic(tester);
+      // au repos (maquette 20 B) : pas de rond
+      expect(find.byKey(_knob), findsNothing);
+      final bar = tester.getRect(find.byKey(_bar));
+      final g = await tester.startGesture(
+        Offset(bar.left + bar.width * .2, bar.center.dy),
+      );
+      await g.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await g.moveTo(Offset(bar.left + bar.width * .4, bar.center.dy));
+      await tester.pump();
+      // sous le doigt (maquette 20 A) : 18 points à l'échelle de l'écran Classic
+      expect(find.byKey(_knob), findsOneWidget);
+      final knob = tester.getRect(find.byKey(_knob));
+      final k = bar.height / 6;
+      expect(knob.width / k, closeTo(18, 0.01));
+      expect(knob.height / k, closeTo(18, 0.01));
+      expect(knob.center.dy, closeTo(bar.center.dy, 0.01));
+      expect(_knobAt(tester), closeTo(.4, 0.01));
+      await g.up();
+      await tester.pump();
+      expect(find.byKey(_knob), findsNothing);
+    },
+  );
 
   testWidgets('toucher la barre : un seul saut, au bon endroit', (
     tester,
@@ -112,19 +123,19 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Suivant'), findsOneWidget);
-    expect(_knobAt(tester), closeTo(0, 0.01)); // la lecture du nouveau morceau
+    // le glisser est abandonné : plus de rond, la barre suit le nouveau morceau
+    expect(find.byKey(_knob), findsNothing);
     await g.up();
     await tester.pump();
     expect(_seeks(f), 0);
   });
 
   testWidgets(
-    'appui central : le losange remplace le rond, la molette avance comme avant',
+    'appui central : le losange, la molette avance comme avant, le doigt aussi',
     (tester) async {
       final f = await openClassic(tester);
       await press(tester, 'select');
       expect(scrubbing(tester), isTrue);
-      expect(find.byKey(_knob), findsNothing);
       await rotate(tester, 2);
       await tester.pump(const Duration(milliseconds: 200));
       expect(_seeks(f), 1);
@@ -136,7 +147,6 @@ void main() {
       _near(f, .5);
       await press(tester, 'select');
       expect(scrubbing(tester), isFalse);
-      expect(find.byKey(_knob), findsOneWidget);
     },
   );
 }

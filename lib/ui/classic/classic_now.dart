@@ -351,7 +351,7 @@ class _Card extends StatelessWidget {
             fraction: f,
             track: t?.path,
             onSeek: onSeek,
-            builder: (context, f, _) => Padding(
+            builder: (context, f, dragging) => Padding(
               padding: const EdgeInsets.only(top: _seekReach, bottom: 6),
               // lecteur d'écran : où on en est, dit pendant qu'on tourne
               child: Semantics(
@@ -363,8 +363,8 @@ class _Card extends StatelessWidget {
                   fraction: f,
                   color: context.colors.pink,
                   diamond: scrub,
-                  // le losange remplace le rond pendant qu'on avance à la molette
-                  knob: t != null && !scrub,
+                  // le rond, seulement sous le doigt (maquette 20 A ; au repos, 20 B : pas de rond)
+                  knob: dragging,
                   fillKey: const Key('classic-now-progress'),
                 ),
               ),
@@ -426,7 +426,7 @@ class _Card extends StatelessWidget {
 }
 
 /// Une barre de 6 points (progression ou volume) ; [diamond] : le losange rose de la maquette 12 B ;
-/// [knob] : le rond rose de 18 points de la maquette 20 A.
+/// [knob] : le rond rose de 18 points de la maquette 20 A, pendant qu'on glisse la barre.
 class _Bar extends StatelessWidget {
   const _Bar({
     required this.fraction,
