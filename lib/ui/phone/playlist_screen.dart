@@ -851,6 +851,7 @@ class _Rows extends StatelessWidget {
           initialData: app.player.current,
           builder: (context, snap) {
             final playing = snap.data?.track?.path;
+            final width = trackNumberWidth(context, ['${items.length}']);
             var k = 0; // rang dans la liste jouée (sans les absents)
             return Column(
               children: [
@@ -859,6 +860,7 @@ class _Rows extends StatelessWidget {
                     PhoneTrackRow(
                       key: ValueKey('item-$i'),
                       no: '${i + 1}',
+                      numberWidth: width,
                       track: Track(
                         path: path,
                         title: s.missingSong,
@@ -881,6 +883,7 @@ class _Rows extends StatelessWidget {
                       return PhoneTrackRow(
                         key: ValueKey('item-$i'),
                         no: '${i + 1}',
+                        numberWidth: width,
                         track: t,
                         selected: t.path == playing,
                         playable: ok,

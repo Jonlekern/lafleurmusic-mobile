@@ -263,12 +263,18 @@ class PhoneTrackRows extends StatelessWidget {
           initialData: app.player.current,
           builder: (context, snap) {
             final playing = snap.data?.track?.path;
+            final nos = [
+              for (final (i, t) in tracks.indexed)
+                numbered ? '${t.trackNo ?? i + 1}' : '${i + 1}',
+            ];
+            final width = trackNumberWidth(context, nos);
             return Column(
               children: [
                 for (final (i, t) in tracks.indexed)
                   PhoneTrackRow(
                     key: ValueKey(t.path),
-                    no: numbered ? '${t.trackNo ?? i + 1}' : '${i + 1}',
+                    no: nos[i],
+                    numberWidth: width,
                     track: t,
                     selected: t.path == playing,
                     playable: playable[t.path]!,
@@ -293,6 +299,37 @@ class PhoneTrackRows extends StatelessWidget {
   }
 }
 
+const _numberStyle = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
+const _tabular = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
+
+/// Largeur de la colonne des numéros : celle du plus large de [nos] à la taille de texte du
+/// téléphone, au moins 20 points ; la même pour toutes les lignes de la liste.
+/// Tant que 20 points suffisent (texte normal, 1 ou 2 chiffres) la ligne reste telle quelle ;
+/// au-delà (texte agrandi, 3 chiffres) les numéros passent en chiffres de même largeur,
+/// alignés à droite.
+double trackNumberWidth(BuildContext context, Iterable<String> nos) {
+  final scaler = MediaQuery.textScalerOf(context);
+  // la police du thème, comme celle que le Text de la ligne héritera
+  final base = DefaultTextStyle.of(context).style.merge(_numberStyle);
+  double widest(TextStyle style) {
+    var w = 0.0;
+    for (final no in nos) {
+      final p = TextPainter(
+        text: TextSpan(text: no, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      if (p.width > w) w = p.width;
+      p.dispose();
+    }
+    return w;
+  }
+
+  if (widest(base) <= 20) return 20;
+  return widest(base.merge(_tabular)).ceilToDouble();
+}
+
 /// Ne change jamais (pas de service de comptes).
 final _noChange = ChangeNotifier();
 
@@ -307,8 +344,11 @@ class PhoneTrackRow extends StatelessWidget {
     this.sub,
     this.menu = true,
     this.onTap,
+    this.numberWidth,
   });
   final String no;
+  // largeur de la colonne du numéro, commune à la liste ; absent : celle de [no]
+  final double? numberWidth;
   final Track track;
   // sous le titre à la place de l'artiste (playlist : « artiste · album »)
   final String? sub;
@@ -334,6 +374,7 @@ class PhoneTrackRow extends StatelessWidget {
         ? context.colors.border
         : context.colors.textLabel;
     final artist = t.artist.isEmpty ? s.unknownArtist : t.artist;
+    final width = numberWidth ?? trackNumberWidth(context, [no]);
     final row = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
       decoration: BoxDecoration(
@@ -346,14 +387,15 @@ class PhoneTrackRow extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 20,
+            width: width,
             child: Text(
               no,
-              style: TextStyle(
-                color: dim,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
+              maxLines: 1,
+              softWrap: false,
+              textAlign: width > 20 ? TextAlign.right : TextAlign.left,
+              style: _numberStyle
+                  .merge(width > 20 ? _tabular : null)
+                  .copyWith(color: dim),
             ),
           ),
           const SizedBox(width: 12),
