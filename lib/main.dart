@@ -37,10 +37,12 @@ import 'theme/lafleur_theme.dart';
 import 'ui/phone/phone_shell.dart';
 import 'ui/tablet.dart';
 import 'ui/update_sheet.dart' show UpdateHooks;
+import 'ui/error_box.dart';
 import 'update/update_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  installErrorBox();
   // téléphone : debout, ou couché des deux côtés (Cover Flow) ; En cours le remet debout le temps qu'on y est.
   // Tablette : les quatre orientations
   if (isMobilePlatform(defaultTargetPlatform)) {
