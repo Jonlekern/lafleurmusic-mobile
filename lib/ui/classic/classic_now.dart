@@ -279,7 +279,6 @@ class _Card extends StatelessWidget {
     final f = total > Duration.zero
         ? (position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
-    final rest = total - position;
     final classic = context.classicColors;
     final grey = classic.title; // titre, n sur m, temps, haut-parleurs
     final head = TextStyle(
@@ -351,31 +350,40 @@ class _Card extends StatelessWidget {
             fraction: f,
             track: t?.path,
             onSeek: onSeek,
-            builder: (context, f, dragging) => Padding(
-              padding: const EdgeInsets.only(top: _seekReach, bottom: 6),
-              // lecteur d'écran : où on en est, dit pendant qu'on tourne
-              child: Semantics(
-                key: const Key('classic-now-progress-bar'),
-                container: true,
-                label: s.classicTrackPosition,
-                value: '${clock(position)} / ${clock(total)}',
-                child: _Bar(
-                  fraction: f,
-                  color: context.colors.pink,
-                  diamond: scrub,
-                  // le rond, seulement sous le doigt (maquette 20 A ; au repos, 20 B : pas de rond)
-                  knob: dragging,
-                  fillKey: const Key('classic-now-progress'),
+            builder: (context, f, dragging) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: _seekReach, bottom: 6),
+                  // lecteur d'écran : où on en est, dit pendant qu'on tourne
+                  child: Semantics(
+                    key: const Key('classic-now-progress-bar'),
+                    container: true,
+                    label: s.classicTrackPosition,
+                    value: '${clock(position)} / ${clock(total)}',
+                    child: _Bar(
+                      fraction: f,
+                      color: context.colors.pink,
+                      // sous le doigt, le rond seul (pas le losange par-dessus)
+                      diamond: scrub && !dragging,
+                      // le rond, seulement sous le doigt (maquette 20 A ; au repos, 20 B : pas de rond)
+                      knob: dragging,
+                      fillKey: const Key('classic-now-progress'),
+                    ),
+                  ),
                 ),
-              ),
+                // les temps suivent le doigt pendant un glisser
+                _times(
+                  dragging
+                      ? Duration(
+                          milliseconds: (f * total.inMilliseconds).round(),
+                        )
+                      : position,
+                  total,
+                  time,
+                ),
+              ],
             ),
-          ),
-          Row(
-            children: [
-              Text(clock(position), style: time),
-              const Spacer(),
-              Text('−${clock(rest)}', style: time),
-            ],
           ),
           const SizedBox(height: 18),
           if (scrub)
@@ -420,6 +428,14 @@ class _Card extends StatelessWidget {
       ),
     );
   }
+
+  static Widget _times(Duration at, Duration total, TextStyle style) => Row(
+    children: [
+      Text(clock(at), style: style),
+      const Spacer(),
+      Text('−${clock(total - at)}', style: style),
+    ],
+  );
 
   static Widget _line(String text, TextStyle style) =>
       Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);

@@ -22,6 +22,7 @@ class SeekArea extends StatefulWidget {
 
   /// Le morceau en cours (son chemin, par exemple). S'il change pendant un glisser (fin du
   /// morceau), le glisser est abandonné : pas de saut dans le morceau suivant au lâcher.
+  /// (Le même fichier deux fois de suite, ou « répéter un », compte comme le même morceau.)
   final Object? track;
 
   /// Dessine la barre à [fraction] : celle de la lecture, ou celle du doigt pendant un
@@ -56,30 +57,41 @@ class _SeekAreaState extends State<SeekArea> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, c) {
       final on = widget.total > 0;
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapUp: on ? (d) => _seek(_at(d.localPosition.dx, c.maxWidth)) : null,
-        onHorizontalDragStart: on
-            ? (d) => setState(() {
-                _dragTrack = widget.track;
-                _drag = _at(d.localPosition.dx, c.maxWidth);
-              })
-            : null,
-        onHorizontalDragUpdate: on
-            ? (d) {
-                if (!_sameTrack) return;
-                setState(() => _drag = _at(d.localPosition.dx, c.maxWidth));
-              }
-            : null,
-        onHorizontalDragEnd: on
-            ? (_) {
-                final f = _drag;
-                setState(() => _drag = null);
-                if (f != null && _sameTrack) _seek(f);
-              }
-            : null,
-        onHorizontalDragCancel: () => setState(() => _drag = null),
-        child: widget.builder(context, _drag ?? widget.fraction, _drag != null),
+      // rien à chercher (durée encore inconnue, flux sans durée) : les touchers passent
+      // à ce qui est dessous (« En cours », la liste) au lieu de se perdre ici
+      return IgnorePointer(
+        ignoring: !on,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: on
+              ? (d) => _seek(_at(d.localPosition.dx, c.maxWidth))
+              : null,
+          onHorizontalDragStart: on
+              ? (d) => setState(() {
+                  _dragTrack = widget.track;
+                  _drag = _at(d.localPosition.dx, c.maxWidth);
+                })
+              : null,
+          onHorizontalDragUpdate: on
+              ? (d) {
+                  if (!_sameTrack) return;
+                  setState(() => _drag = _at(d.localPosition.dx, c.maxWidth));
+                }
+              : null,
+          onHorizontalDragEnd: on
+              ? (_) {
+                  final f = _drag;
+                  setState(() => _drag = null);
+                  if (f != null && _sameTrack) _seek(f);
+                }
+              : null,
+          onHorizontalDragCancel: () => setState(() => _drag = null),
+          child: widget.builder(
+            context,
+            _drag ?? widget.fraction,
+            _drag != null,
+          ),
+        ),
       );
     },
   );

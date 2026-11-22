@@ -93,6 +93,42 @@ void main() {
     _near(f, .7);
   });
 
+  testWidgets('glisser : les temps suivent le doigt', (tester) async {
+    final f = await openClassic(tester);
+    expect(find.text('1:33'), findsOneWidget);
+    final bar = tester.getRect(find.byKey(_bar));
+    final g = await tester.startGesture(
+      Offset(bar.left + bar.width * .1, bar.center.dy),
+    );
+    await g.moveBy(const Offset(20, 0));
+    await tester.pump();
+    await g.moveTo(Offset(bar.left + bar.width * (149.5 / 245), bar.center.dy));
+    await tester.pump();
+    expect(_total(f), 245000);
+    expect(find.text('2:29'), findsOneWidget);
+    expect(find.text('−1:35'), findsOneWidget);
+    expect(find.text('1:33'), findsNothing);
+    await g.up();
+    await tester.pump();
+    expect(
+      find.text('1:33'),
+      findsOneWidget,
+    ); // le faux lecteur reste où il était
+  });
+
+  testWidgets('durée 0 : la barre ne fait rien', (tester) async {
+    final f = await openClassic(tester);
+    f.player.show(PlayerState(track: f.player.current.track, playing: true));
+    await tester.pump();
+    await tester.pump();
+    final bar = tester.getRect(find.byKey(_bar));
+    await tester.tapAt(Offset(bar.left + bar.width * .5, bar.center.dy));
+    await tester.drag(find.byKey(_bar), const Offset(80, 0));
+    await tester.pump();
+    expect(_seeks(f), 0);
+    expect(find.byKey(_knob), findsNothing);
+  });
+
   testWidgets('le morceau change pendant le glisser : pas de saut au lâcher', (
     tester,
   ) async {

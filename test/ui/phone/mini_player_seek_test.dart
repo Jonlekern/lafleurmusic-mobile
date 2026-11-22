@@ -9,6 +9,9 @@ import 'package:lafleurmusic/ui/phone/phone_shell.dart';
 import '../fonts.dart';
 import '../phone_fixture.dart';
 
+/// Les lignes de la liste touchées.
+final _rows = <int>[];
+
 /// Une liste qui défile au-dessus du mini-lecteur (comme un album ou une playlist).
 const _list = Key('list');
 final _home = PhoneScaffold(
@@ -17,7 +20,11 @@ final _home = PhoneScaffold(
     key: _list,
     itemCount: 100,
     itemExtent: 50,
-    itemBuilder: (_, i) => Text('ligne $i'),
+    itemBuilder: (_, i) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _rows.add(i),
+      child: Text('ligne $i'),
+    ),
   ),
 );
 
@@ -153,6 +160,27 @@ void main() {
       expect(_scroll(tester), greaterThan(0));
     });
   }
+
+  // durée encore inconnue (changement de morceau, flux sans durée, file pas encore chargée) :
+  // la bande ne retient rien, « En cours » et la liste reçoivent leurs touchers
+  testWidgets('durée 0 : la bande laisse passer les touchers', (tester) async {
+    _rows.clear();
+    final f = await pumpPhone(tester, home: _home);
+    f.player.show(PlayerState(track: f.player.current.track, playing: true));
+    await tester.pump(); // le flux du lecteur
+    await tester.pump();
+    final line = _line(tester);
+    // moitié haute de la bande, sur la dernière ligne visible de la liste
+    await tester.tapAt(Offset(line.left + 100, line.top - 8));
+    await tester.pumpAndSettle();
+    expect(_rows, isNotEmpty);
+    expect(find.byType(NowScreen), findsNothing);
+    // moitié basse, sur le mini-lecteur : « En cours »
+    await tester.tapAt(Offset(line.left + 100, line.bottom + 8));
+    await tester.pumpAndSettle();
+    expect(find.byType(NowScreen), findsOneWidget);
+    expect(_seeks(f), 0);
+  });
 
   // Review Focus 3
   testWidgets('le morceau change pendant le glisser : pas de saut au lâcher', (

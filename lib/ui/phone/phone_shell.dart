@@ -544,6 +544,8 @@ class PhoneScaffold extends StatelessWidget {
                 child: body,
               ),
             ),
+            // enfant direct de la colonne : sa bande de toucher déborde au-dessus et ne se touche
+            // que si aucune boîte ne l'enveloppe (voir _OverflowStack)
             if (mini) const MiniPlayer(),
             SizedBox(height: bottom), // barre d'accueil d'iOS
           ],
